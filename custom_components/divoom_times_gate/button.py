@@ -2,53 +2,51 @@
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import TimesGateCoordinator
+from . import DivoomTimesGateConfigEntry
+from .entity import TimesGateEntity
+
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: DivoomTimesGateConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator: TimesGateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up the Times Gate buttons."""
+    coordinator = entry.runtime_data
     async_add_entities(
         [
-            TimesGateRefreshButton(coordinator, entry),
-            TimesGateBuzzerButton(coordinator, entry),
+            TimesGateRefreshButton(coordinator),
+            TimesGateBuzzerButton(coordinator),
         ]
     )
 
 
-class _BaseButton(ButtonEntity):
-    _attr_has_entity_name = True
+class TimesGateRefreshButton(TimesGateEntity, ButtonEntity):
+    """Force an immediate re-render and push of all screens."""
 
-    def __init__(self, coordinator: TimesGateCoordinator, entry: ConfigEntry) -> None:
-        self._coordinator = coordinator
-        self._device = coordinator.device
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
-
-
-class TimesGateRefreshButton(_BaseButton):
     _attr_name = "Refresh screens"
 
-    def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_refresh"
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_refresh"
 
     async def async_press(self) -> None:
-        await self._coordinator.async_refresh_now()
+        await self.coordinator.async_request_refresh()
 
 
-class TimesGateBuzzerButton(_BaseButton):
+class TimesGateBuzzerButton(TimesGateEntity, ButtonEntity):
+    """Play the device buzzer."""
+
     _attr_name = "Buzzer"
 
-    def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_buzzer"
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_buzzer"
 
     async def async_press(self) -> None:
         await self._device.play_buzzer()

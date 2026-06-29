@@ -14,17 +14,20 @@ from .const import (
     CONF_LOCAL_TOKEN,
     CONF_REFRESH_INTERVAL,
     DEFAULT_REFRESH_INTERVAL,
-    DOMAIN,
 )
 from .coordinator import TimesGateCoordinator
 from .device import TimesGate
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.LIGHT, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON]
+
+type DivoomTimesGateConfigEntry = ConfigEntry[TimesGateCoordinator]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: DivoomTimesGateConfigEntry
+) -> bool:
     """Set up Divoom Times Gate from a config entry."""
     session = async_get_clientsession(hass)
     device = TimesGate(
@@ -34,21 +37,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     if not await device.ping():
-        raise ConfigEntryNotReady(f"Times Gate at {entry.data[CONF_IP_ADDRESS]} not reachable")
+        raise ConfigEntryNotReady(
+            f"Times Gate at {entry.data[CONF_IP_ADDRESS]} not reachable"
+        )
 
-    interval = entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL)
-    coordinator = TimesGateCoordinator(hass, device, interval)
+    interval: int = entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL)
+    coordinator = TimesGateCoordinator(hass, entry, device, interval)
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: DivoomTimesGateConfigEntry
+) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

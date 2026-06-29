@@ -1,0 +1,71 @@
+# Progress toward the Home Assistant Integration Quality Scale.
+# Target tier: Platinum. Status values: done | todo | exempt
+rules:
+  # --- Bronze ---
+  config-flow: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+  config-flow-test-coverage: todo
+  runtime-data: done
+  has-entity-name: done
+  entity-unique-id: done
+  entity-event-setup: done
+  dependency-transparency: done
+  common-modules: done
+  appropriate-polling: done
+  action-setup:
+    status: exempt
+    comment: No service actions registered yet.
+  brands: todo
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: todo
+  docs-actions:
+    status: exempt
+    comment: No service actions registered yet.
+
+  # --- Silver ---
+  config-entry-unloading: done
+  integration-owner: done
+  entity-unavailable: done
+  log-when-unavailable: todo
+  parallel-updates: done
+  reauthentication-flow: todo
+  test-coverage: todo
+  action-exceptions:
+    status: exempt
+    comment: No service actions registered yet.
+  docs-configuration-parameters: todo
+  docs-installation-parameters: todo
+
+  # --- Gold ---
+  devices: done
+  diagnostics: done
+  discovery: todo
+  discovery-update-info: todo
+  entity-category: todo
+  entity-device-class: todo
+  entity-translations: todo
+  exception-translations: todo
+  icon-translations: todo
+  reconfiguration-flow: todo
+  repair-issues: todo
+  stale-devices:
+    status: exempt
+    comment: Single device per config entry; no sub-devices.
+  dynamic-devices:
+    status: exempt
+    comment: Single device per config entry.
+  docs-supported-devices: todo
+  docs-supported-functions: todo
+  docs-data-update: todo
+  docs-known-limitations: todo
+  docs-troubleshooting: todo
+  docs-examples: todo
+  docs-use-cases: todo
+
+  # --- Platinum ---
+  async-dependency: done
+  inject-websession: done
+  strict-typing: todo
