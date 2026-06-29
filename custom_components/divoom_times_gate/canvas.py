@@ -8,7 +8,7 @@ nearest-neighbour, keeping pixel art crisp.
 """
 from __future__ import annotations
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from .vendor_pixoo._font import (
     CLOCK,
@@ -35,6 +35,28 @@ def font_by_name(name: str | None):
     return FONTS.get((name or "").lower(), FONT_PICO_8)
 
 
+_SCALABLE_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+
+
+def _scalable_font(size: int) -> ImageFont.FreeTypeFont:
+    """A scalable TrueType font at the given pixel size (for native-128 screens)."""
+    if size not in _SCALABLE_CACHE:
+        try:
+            _SCALABLE_CACHE[size] = ImageFont.load_default(size)
+        except TypeError:  # very old Pillow without size arg
+            _SCALABLE_CACHE[size] = ImageFont.load_default()
+    return _SCALABLE_CACHE[size]
+
+
+def is_scalable_font(spec) -> bool:
+    """True if a component's ``font`` denotes a scalable size (an int / digits)."""
+    if isinstance(spec, bool):
+        return False
+    if isinstance(spec, int):
+        return True
+    return isinstance(spec, str) and spec.isdigit()
+
+
 class PixelCanvas:
     """A small RGB pixel buffer with Pixoo-compatible drawing."""
 
@@ -42,6 +64,18 @@ class PixelCanvas:
         self.size = size
         self._img = Image.new("RGB", (size, size), (0, 0, 0))
         self._px = self._img.load()
+        self._draw = ImageDraw.Draw(self._img)
+
+    def draw_text_scalable(self, text, xy, rgb, size: int, align: str = "left") -> None:
+        """Anti-aliased TrueType text (for native-resolution screens)."""
+        font = _scalable_font(int(size))
+        fill = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        x = xy[0]
+        if align in ("center", "right"):
+            bbox = self._draw.textbbox((0, 0), text, font=font)
+            width = bbox[2] - bbox[0]
+            x = xy[0] - width / 2 if align == "center" else xy[0] - width
+        self._draw.text((x, xy[1]), text, font=font, fill=fill)
 
     def draw_pixel(self, xy: tuple[int, int], rgb) -> None:
         x, y = int(xy[0]), int(xy[1])

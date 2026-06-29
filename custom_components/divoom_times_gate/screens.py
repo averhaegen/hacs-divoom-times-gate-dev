@@ -30,7 +30,7 @@ from PIL import Image
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 
-from .canvas import PixelCanvas, font_by_name
+from .canvas import PixelCanvas, font_by_name, is_scalable_font
 from .const import SCREEN_SIZE
 from .vendor_pixoo._colors import render_color
 
@@ -103,11 +103,16 @@ def _draw_component(
 
     if ctype == "text":
         text = _tpl(hass, component.get("content", ""), variables)
-        font = font_by_name(component.get("font"))
         color = render_color(component.get("color"), hass, variables=variables)
         align = component.get("align", "").lower()
-        # Pixoo uppercases all text; match it for visual parity.
-        canvas.draw_text(text.upper(), tuple(component["position"]), color, font, align)
+        font_spec = component.get("font")
+        if is_scalable_font(font_spec):
+            # Native scalable TrueType: keep original case.
+            canvas.draw_text_scalable(text, tuple(component["position"]), color, int(font_spec), align)
+        else:
+            # Bitmap font: Pixoo uppercases all text — match for visual parity.
+            font = font_by_name(font_spec)
+            canvas.draw_text(text.upper(), tuple(component["position"]), color, font, align)
 
     elif ctype == "image":
         img = _load_image(hass, component, variables)
