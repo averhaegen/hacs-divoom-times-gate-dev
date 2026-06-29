@@ -95,6 +95,21 @@ class TimesGate:
             }
         )
 
+    async def set_clock_face(self, screen: int, clock_id: int) -> dict:
+        """Show a native device clock/face on one screen (0-4).
+
+        Verified to work with ``LcdIndex`` targeting on the Times Gate.
+        """
+        if screen not in range(SCREEN_COUNT):
+            raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
+        return await self._send(
+            {
+                "Command": "Channel/SetClockSelectId",
+                "ClockId": int(clock_id),
+                "LcdIndex": screen,
+            }
+        )
+
     async def send_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
         """Send a 128×128 JPEG image to one screen (0-4).
 

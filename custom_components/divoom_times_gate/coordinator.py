@@ -1,16 +1,18 @@
-"""Coordinator that renders the 5 screens and pushes them to the device."""
+"""Coordinator that renders/pushes the 5 screens based on their config."""
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import CONF_SCREENS, SCREEN_COUNT
+from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
-from .render import SCREEN_RENDERERS
+from .screens import render_black, render_custom_screen
 
 if TYPE_CHECKING:
     from . import DivoomTimesGateConfigEntry
@@ -19,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
-    """Renders screens from HA state and pushes them on an interval."""
+    """Renders screens from config + HA state and pushes them on an interval."""
 
     config_entry: DivoomTimesGateConfigEntry
 
@@ -40,23 +42,45 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self.device = device
         self._first_run = True
 
+    @property
+    def screens(self) -> list[dict[str, Any]]:
+        """The configured screen list (options override, else defaults)."""
+        configured = self.config_entry.options.get(CONF_SCREENS)
+        return configured if configured else DEFAULT_SCREENS
+
     async def _async_update_data(self) -> dict[int, str]:
-        """Render and push all five screens. Raises UpdateFailed if unreachable."""
         if self._first_run:
             await self.device.reset_pic_counter()
             self._first_run = False
 
         results: dict[int, str] = {}
         any_ok = False
-        for screen, renderer in SCREEN_RENDERERS.items():
-            jpeg = await self.hass.async_add_executor_job(renderer, self.hass)
-            resp = await self.device.send_jpeg(jpeg, screen)
-            code = resp.get("error_code", "?")
+        for screen in range(SCREEN_COUNT):
+            cfg = self.screens[screen] if screen < len(self.screens) else {"type": "off"}
+            code = await self._push_screen(screen, cfg)
             results[screen] = code
             if code == 0:
                 any_ok = True
 
         if not any_ok:
             raise UpdateFailed("Device rejected all screen updates")
-
         return results
+
+    async def _push_screen(self, screen: int, cfg: dict[str, Any]) -> Any:
+        """Render+send one screen according to its config. Returns error_code."""
+        stype = cfg.get("type", "custom")
+        try:
+            if stype == "clock":
+                resp = await self.device.set_clock_face(screen, int(cfg.get("clock_id", 0)))
+                return resp.get("error_code", "?")
+            if stype == "off":
+                jpeg = await self.hass.async_add_executor_job(render_black)
+            else:  # custom
+                jpeg = await self.hass.async_add_executor_job(
+                    render_custom_screen, self.hass, cfg
+                )
+            resp = await self.device.send_jpeg(jpeg, screen)
+            return resp.get("error_code", "?")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception("Screen %s (%s) failed: %s", screen, stype, err)
+            return "error"

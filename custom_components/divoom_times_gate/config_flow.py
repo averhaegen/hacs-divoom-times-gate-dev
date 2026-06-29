@@ -1,23 +1,34 @@
-"""Config flow for Divoom Times Gate."""
+"""Config and options flow for Divoom Times Gate."""
 from __future__ import annotations
 
-import voluptuous as vol
+from typing import Any
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+import voluptuous as vol
+import yaml
+
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
     CONF_REFRESH_INTERVAL,
+    CONF_SCREENS,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
+from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
 
 
 class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Divoom Times Gate."""
+    """Handle the initial config flow."""
 
     VERSION = 1
 
@@ -27,9 +38,7 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             session = async_get_clientsession(self.hass)
             device = TimesGate(
-                user_input[CONF_IP_ADDRESS],
-                int(user_input[CONF_LOCAL_TOKEN]),
-                session,
+                user_input[CONF_IP_ADDRESS], int(user_input[CONF_LOCAL_TOKEN]), session
             )
             if await device.ping():
                 await self.async_set_unique_id(user_input[CONF_IP_ADDRESS])
@@ -50,3 +59,46 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return DivoomTimesGateOptionsFlow()
+
+
+class DivoomTimesGateOptionsFlow(OptionsFlow):
+    """Edit the per-screen configuration as YAML."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                screens = yaml.safe_load(user_input[CONF_SCREENS]) or []
+                if not isinstance(screens, list):
+                    raise ValueError("screens must be a YAML list")
+            except (yaml.YAMLError, ValueError):
+                errors["base"] = "invalid_yaml"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_SCREENS: screens,
+                        CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
+                    },
+                )
+
+        current = self.config_entry.options.get(CONF_SCREENS) or DEFAULT_SCREENS
+        screens_yaml = yaml.safe_dump(current, sort_keys=False, allow_unicode=True)
+        interval = self.config_entry.options.get(
+            CONF_REFRESH_INTERVAL,
+            self.config_entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_REFRESH_INTERVAL, default=interval): int,
+                vol.Optional(CONF_SCREENS, default=screens_yaml): str,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

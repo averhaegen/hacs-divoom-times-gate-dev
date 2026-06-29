@@ -17,5 +17,20 @@
     "abort": {
       "already_configured": "This Times Gate is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Times Gate screens",
+        "description": "Edit the 5 screens as a YAML list. Each screen has a 'type' (custom/clock/off). 'custom' screens use a 'layout' (big/dual/bar) and Jinja2 templates for values.",
+        "data": {
+          "refresh_interval": "Refresh interval (seconds)",
+          "screens": "Screens (YAML)"
+        }
+      }
+    },
+    "error": {
+      "invalid_yaml": "The screens YAML could not be parsed. It must be a list of screen configs."
+    }
   }
 }
