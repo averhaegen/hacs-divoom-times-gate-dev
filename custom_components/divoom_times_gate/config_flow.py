@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-import yaml
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -14,6 +13,12 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    ObjectSelector,
+)
 
 from .const import (
     CONF_IP_ADDRESS,
@@ -67,29 +72,25 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class DivoomTimesGateOptionsFlow(OptionsFlow):
-    """Edit the per-screen configuration as YAML."""
+    """Edit the per-screen configuration via a structured object (YAML) editor."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                screens = yaml.safe_load(user_input[CONF_SCREENS]) or []
-                if not isinstance(screens, list):
-                    raise ValueError("screens must be a YAML list")
-            except (yaml.YAMLError, ValueError):
-                errors["base"] = "invalid_yaml"
+            screens = user_input.get(CONF_SCREENS)
+            if not isinstance(screens, list):
+                errors["base"] = "invalid_screens"
             else:
                 return self.async_create_entry(
                     title="",
                     data={
                         CONF_SCREENS: screens,
-                        CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
+                        CONF_REFRESH_INTERVAL: int(user_input[CONF_REFRESH_INTERVAL]),
                     },
                 )
 
-        current = self.config_entry.options.get(CONF_SCREENS) or DEFAULT_SCREENS
-        screens_yaml = yaml.safe_dump(current, sort_keys=False, allow_unicode=True)
+        current_screens = self.config_entry.options.get(CONF_SCREENS) or DEFAULT_SCREENS
         interval = self.config_entry.options.get(
             CONF_REFRESH_INTERVAL,
             self.config_entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
@@ -97,8 +98,10 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Optional(CONF_REFRESH_INTERVAL, default=interval): int,
-                vol.Optional(CONF_SCREENS, default=screens_yaml): str,
+                vol.Required(CONF_REFRESH_INTERVAL, default=interval): NumberSelector(
+                    NumberSelectorConfig(min=5, max=3600, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Required(CONF_SCREENS, default=current_screens): ObjectSelector(),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
