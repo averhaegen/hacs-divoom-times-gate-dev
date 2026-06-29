@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Divoom Times Gate",
+        "description": "Enter your Times Gate's IP address and the LocalToken shown in the Divoom app (Device settings).",
+        "data": {
+          "ip_address": "IP address",
+          "local_token": "LocalToken",
+          "refresh_interval": "Refresh interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the device, or the LocalToken was rejected. Check the IP and token."
+    },
+    "abort": {
+      "already_configured": "This Times Gate is already configured."
+    }
+  }
+}

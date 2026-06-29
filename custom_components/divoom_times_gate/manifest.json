@@ -1,0 +1,13 @@
+{
+  "domain": "divoom_times_gate",
+  "name": "Divoom Times Gate",
+  "version": "0.1.0",
+  "codeowners": ["@averhaegen"],
+  "documentation": "https://github.com/averhaegen/hacs-divoom-times-gate-dev",
+  "issue_tracker": "https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "config_flow": true,
+  "requirements": ["Pillow>=10.1.0"],
+  "dependencies": []
+}

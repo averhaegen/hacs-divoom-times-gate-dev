@@ -1,0 +1,12 @@
+DOMAIN = "divoom_times_gate"
+
+CONF_IP_ADDRESS = "ip_address"
+CONF_LOCAL_TOKEN = "local_token"
+CONF_REFRESH_INTERVAL = "refresh_interval"
+
+DEFAULT_REFRESH_INTERVAL = 60
+DEFAULT_BRIGHTNESS = 100
+SCREEN_COUNT = 5
+SCREEN_SIZE = 128
+
+SCREENS = [0, 1, 2, 3, 4]
