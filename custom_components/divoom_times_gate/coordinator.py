@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import CONF_SCREENS, SCREEN_COUNT
 from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
-from .screens import render_black, render_custom_screen
+from .screens import is_enabled, render_black, render_page
 
 if TYPE_CHECKING:
     from . import DivoomTimesGateConfigEntry
@@ -68,19 +68,24 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def _push_screen(self, screen: int, cfg: dict[str, Any]) -> Any:
         """Render+send one screen according to its config. Returns error_code."""
-        stype = cfg.get("type", "custom")
+        # Accept both `page_type` (Pixoo-compatible) and `type` as the key.
+        ptype = (cfg.get("page_type") or cfg.get("type") or "components").lower()
         try:
-            if stype == "clock":
-                resp = await self.device.set_clock_face(screen, int(cfg.get("clock_id", 0)))
-                return resp.get("error_code", "?")
-            if stype == "off":
-                jpeg = await self.hass.async_add_executor_job(render_black)
-            else:  # custom
-                jpeg = await self.hass.async_add_executor_job(
-                    render_custom_screen, self.hass, cfg
+            if ptype == "clock":
+                resp = await self.device.set_clock_face(
+                    screen, int(cfg.get("clock_id", cfg.get("id", 0)))
                 )
+                return resp.get("error_code", "?")
+
+            if ptype == "off":
+                jpeg = await self.hass.async_add_executor_job(render_black)
+            else:  # components / custom
+                if not is_enabled(self.hass, cfg):
+                    return "disabled"  # leave the screen's current content
+                jpeg = await self.hass.async_add_executor_job(render_page, self.hass, cfg)
+
             resp = await self.device.send_jpeg(jpeg, screen)
             return resp.get("error_code", "?")
         except Exception as err:  # noqa: BLE001
-            _LOGGER.exception("Screen %s (%s) failed: %s", screen, stype, err)
+            _LOGGER.exception("Screen %s (%s) failed: %s", screen, ptype, err)
             return "error"

@@ -1,158 +1,160 @@
-"""Config-driven screen rendering for the Times Gate.
+"""Render a Times Gate screen from a Pixoo-compatible page config.
 
-A screen config is a dict. The 5 screens are configured as a list under the
-``screens`` option. Each screen has a ``type``:
+A screen is a "page" dict using the same schema as
+gickowtf/pixoo-homeassistant, so configs are portable between the two devices:
 
-  * ``custom`` (default) — render a layout from templated values (Jinja2).
-  * ``clock``            — show a native device clock face (``clock_id``).
-  * ``off``              — black screen.
+    page_type: components        # components | clock | off
+    size: 64                     # canvas size; 64 (Pixoo-native, default) or 128
+    enabled: "{{ ... }}"         # optional template; if false the screen is skipped
+    variables: {name: "{{ ... }}"}
+    components:
+      - type: text       # content, position [x,y], color, font, align
+      - type: image      # image_path | image_url | image_data, position, width/height
+      - type: rectangle  # position [x,y], size [w,h], color, filled
+      - type: templatable# template -> list of component dicts
 
-``custom`` screens pick a ``layout`` and supply Jinja2 ``{{ ... }}`` templates
-for the text fields. Colors may be a ``[r,g,b]`` list, a ``#RRGGBB`` string, a
-CSS color name, or ``"auto"`` (the layout decides based on the value).
-
-This is intentionally close to the gickowtf/pixoo-homeassistant (MIT) approach:
-templated component values rendered to an image.
+Pixoo pages are designed for 64x64; we render at ``size`` then scale to the
+device's 128 with nearest-neighbour, so a copied Pixoo page looks identical
+(just pixel-doubled). Set ``size: 128`` for native-resolution screens.
 """
 from __future__ import annotations
 
+import base64
 import logging
+import urllib.request
 from io import BytesIO
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import template as template_helper
+from homeassistant.helpers.template import Template
 
-from .const import SCREEN_SIZE as S
+from .canvas import PixelCanvas, font_by_name
+from .const import SCREEN_SIZE
+from .vendor_pixoo._colors import render_color
 
 _LOGGER = logging.getLogger(__name__)
 
-_FONT_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
-
-_CSS_COLORS = {
-    "white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0),
-    "green": (0, 255, 0), "blue": (96, 165, 250), "yellow": (250, 204, 21),
-    "orange": (255, 140, 0), "cyan": (0, 200, 255), "grey": (170, 170, 170),
-    "gray": (170, 170, 170),
+_RESAMPLE = {
+    "nearest": Image.NEAREST, "pixel_art": Image.NEAREST, "box": Image.BOX,
+    "bilinear": Image.BILINEAR, "hamming": Image.HAMMING, "bicubic": Image.BICUBIC,
+    "lanczos": Image.LANCZOS, "antialias": Image.LANCZOS,
 }
 
 
-def _font(size: int) -> ImageFont.FreeTypeFont:
-    if size not in _FONT_CACHE:
-        try:
-            _FONT_CACHE[size] = ImageFont.load_default(size)
-        except TypeError:
-            _FONT_CACHE[size] = ImageFont.load_default()
-    return _FONT_CACHE[size]
+def _tpl(hass: HomeAssistant, value: Any, variables: dict[str, Any]) -> str:
+    return str(Template(str(value), hass).async_render(variables=variables))
 
 
-def _render_template(hass: HomeAssistant, value: Any) -> str:
-    """Render a Jinja2 template string against HA state. Non-strings pass through."""
-    if not isinstance(value, str) or "{{" not in value and "{%" not in value:
-        return "" if value is None else str(value)
+def is_enabled(hass: HomeAssistant, page: dict[str, Any]) -> bool:
     try:
-        tpl = template_helper.Template(value, hass)
-        return str(tpl.async_render())
+        rendered = _tpl(hass, page.get("enabled", "true"), {}).lower()
+        return rendered in ("true", "yes", "1", "on")
     except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Template error in screen value %r: %s", value, err)
-        return "ERR"
-
-
-def _color(value: Any, default=(255, 255, 255)) -> tuple[int, int, int]:
-    if isinstance(value, (list, tuple)) and len(value) == 3:
-        return (int(value[0]), int(value[1]), int(value[2]))
-    if isinstance(value, str):
-        v = value.strip().lower()
-        if v in _CSS_COLORS:
-            return _CSS_COLORS[v]
-        if v.startswith("#") and len(v) == 7:
-            return (int(v[1:3], 16), int(v[3:5], 16), int(v[5:7], 16))
-    return default
-
-
-def _ctext(d: ImageDraw.ImageDraw, cx: int, y: int, text: str, size: int, fill) -> None:
-    f = _font(size)
-    bbox = d.textbbox((0, 0), text, font=f)
-    d.text((cx - (bbox[2] - bbox[0]) / 2, y), text, font=f, fill=fill)
-
-
-def _to_jpeg(img: Image.Image) -> bytes:
-    buf = BytesIO()
-    img.save(buf, "JPEG", quality=95)
-    return buf.getvalue()
-
-
-# --- layouts ----------------------------------------------------------------
-
-def _layout_big(hass, cfg, d, color) -> None:
-    """title (top) + big value (middle) + sub (bottom)."""
-    title = _render_template(hass, cfg.get("title", ""))
-    value = _render_template(hass, cfg.get("value", ""))
-    sub = _render_template(hass, cfg.get("sub", ""))
-    if title:
-        _ctext(d, S // 2, 8, title, 13, (170, 170, 170))
-    _ctext(d, S // 2, 40, value, int(cfg.get("value_size", 42)), color)
-    if sub:
-        _ctext(d, S // 2, 100, sub, 13, (255, 255, 255))
-
-
-def _layout_dual(hass, cfg, d, color) -> None:
-    """title + two labeled rows (label1/value1, label2/value2)."""
-    title = _render_template(hass, cfg.get("title", ""))
-    if title:
-        _ctext(d, S // 2, 6, title, 13, (170, 170, 170))
-    _ctext(d, S // 2, 26, _render_template(hass, cfg.get("value", "")), 22, (255, 255, 255))
-    _ctext(d, S // 2, 52, _render_template(hass, cfg.get("sub", "")), 13, (170, 170, 170))
-    d.line([16, 74, S - 16, 74], fill=(51, 51, 51))
-    _ctext(d, S // 2, 80, _render_template(hass, cfg.get("value2", "")), 22, color)
-    _ctext(d, S // 2, 108, _render_template(hass, cfg.get("sub2", "")), 12, (170, 170, 170))
-
-
-def _layout_bar(hass, cfg, d, color) -> None:
-    """title + big value + progress bar + sub. bar_pct is a template -> 0..100."""
-    title = _render_template(hass, cfg.get("title", ""))
-    value = _render_template(hass, cfg.get("value", ""))
-    sub = _render_template(hass, cfg.get("sub", ""))
-    if title:
-        _ctext(d, S // 2, 8, title, 13, (170, 170, 170))
-    _ctext(d, S // 2, 30, value, 46, color)
-    try:
-        pct = max(0.0, min(100.0, float(_render_template(hass, cfg.get("bar_pct", "0")))))
-    except ValueError:
-        pct = 0.0
-    bx, by, bw, bh = 20, 84, 88, 12
-    d.rectangle([bx, by, bx + bw, by + bh], outline=(85, 85, 85))
-    d.rectangle([bx + 1, by + 1, bx + 1 + int((bw - 2) * pct / 100), by + bh - 1], fill=color)
-    if sub:
-        _ctext(d, S // 2, 102, sub, 13, (255, 255, 255))
-
-
-_LAYOUTS = {"big": _layout_big, "dual": _layout_dual, "bar": _layout_bar}
-
-
-def render_custom_screen(hass: HomeAssistant, cfg: dict[str, Any]) -> bytes:
-    """Render one ``custom`` screen config to JPEG bytes."""
-    color = cfg.get("border", "white")
-    color = _color(color) if color != "auto" else _auto_color(hass, cfg)
-
-    img = Image.new("RGB", (S, S), (0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rectangle([2, 2, S - 3, S - 3], outline=color, width=3)
-
-    layout = _LAYOUTS.get(cfg.get("layout", "big"), _layout_big)
-    layout(hass, cfg, d, color)
-    return _to_jpeg(img)
+        _LOGGER.error("Error rendering 'enabled' for screen: %s", err)
+        return False
 
 
 def render_black() -> bytes:
-    """A black 128x128 JPEG (for ``off`` screens)."""
-    return _to_jpeg(Image.new("RGB", (S, S), (0, 0, 0)))
+    buf = BytesIO()
+    Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), (0, 0, 0)).save(buf, "JPEG", quality=95)
+    return buf.getvalue()
 
 
-def _auto_color(hass: HomeAssistant, cfg: dict[str, Any]) -> tuple[int, int, int]:
-    """Optional ``color_template`` -> color name/hex; else white."""
-    if "color_template" in cfg:
-        return _color(_render_template(hass, cfg["color_template"]))
-    return (255, 255, 255)
+def render_page(hass: HomeAssistant, page: dict[str, Any]) -> bytes:
+    """Render a components page to a 128x128 JPEG (scaled from its canvas size)."""
+    size = int(page.get("size", 64))
+    canvas = PixelCanvas(size)
+
+    variables: dict[str, Any] = {}
+    for name, expr in (page.get("variables") or {}).items():
+        try:
+            variables[name] = Template(str(expr), hass).async_render()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Variable %s template error: %s", name, err)
+            variables[name] = ""
+
+    components: list[dict[str, Any]] = list(page.get("components", []))
+    index = 0
+    while index < len(components):
+        component = components[index]
+        try:
+            _draw_component(hass, canvas, component, variables, components, index)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error drawing component %s: %s", component.get("type"), err)
+        index += 1
+
+    image = canvas.to_image(SCREEN_SIZE)
+    buf = BytesIO()
+    image.save(buf, "JPEG", quality=95)
+    return buf.getvalue()
+
+
+def _draw_component(
+    hass: HomeAssistant,
+    canvas: PixelCanvas,
+    component: dict[str, Any],
+    variables: dict[str, Any],
+    components: list[dict[str, Any]],
+    index: int,
+) -> None:
+    ctype = component.get("type")
+
+    if ctype == "text":
+        text = _tpl(hass, component.get("content", ""), variables)
+        font = font_by_name(component.get("font"))
+        color = render_color(component.get("color"), hass, variables=variables)
+        align = component.get("align", "").lower()
+        # Pixoo uppercases all text; match it for visual parity.
+        canvas.draw_text(text.upper(), tuple(component["position"]), color, font, align)
+
+    elif ctype == "image":
+        img = _load_image(hass, component, variables)
+        if img is None:
+            return
+        resample = _RESAMPLE.get(
+            _tpl(hass, component.get("resample_mode", "box"), variables).lower(), Image.BOX
+        )
+        width, height = component.get("width"), component.get("height")
+        if width and height:
+            img = img.resize((int(width), int(height)), resample)
+        elif width or height:
+            img.thumbnail((int(width or 100), int(height or 100)), resample)
+        canvas.draw_image(img, tuple(component["position"]))
+
+    elif ctype == "rectangle":
+        color = render_color(component.get("color"), hass, variables=variables)
+        pos = [int(_tpl(hass, p, variables)) for p in component["position"]]
+        size = [int(_tpl(hass, s, variables)) for s in component["size"]]
+        size = (size[0] - 1, size[1] - 1)
+        filled = str(_tpl(hass, component.get("filled", True), variables)).lower() in (
+            "true", "yes", "1", "on",
+        )
+        if filled:
+            canvas.draw_filled_rectangle(pos, (pos[0] + size[0], pos[1] + size[1]), color)
+        else:
+            canvas.draw_line(pos, (pos[0] + size[0], pos[1]), color)
+            canvas.draw_line((pos[0] + size[0], pos[1]), (pos[0] + size[0], pos[1] + size[1]), color)
+            canvas.draw_line((pos[0] + size[0], pos[1] + size[1]), (pos[0], pos[1] + size[1]), color)
+            canvas.draw_line((pos[0], pos[1] + size[1]), pos, color)
+
+    elif ctype == "templatable":
+        rendered = list(
+            Template(str(component.get("template", [])), hass).async_render(variables=variables)
+        )
+        for item in rendered[::-1]:
+            components.insert(index + 1, item)
+
+
+def _load_image(hass, component, variables) -> Image.Image | None:
+    if "image_path" in component:
+        return Image.open(_tpl(hass, component["image_path"], variables))
+    if "image_url" in component:
+        url = _tpl(hass, component["image_url"], variables)
+        with urllib.request.urlopen(url, timeout=9) as resp:  # noqa: S310 - user-configured URL
+            return Image.open(BytesIO(resp.read()))
+    if "image_data" in component:
+        data = _tpl(hass, component["image_data"], variables)
+        return Image.open(BytesIO(base64.b64decode(data)))
+    return None
