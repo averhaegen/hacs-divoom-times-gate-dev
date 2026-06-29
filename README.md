@@ -5,9 +5,9 @@ A custom [Home Assistant](https://www.home-assistant.io/) integration for the
 It renders your Home Assistant sensor data across the 5 screens and exposes
 device controls (brightness, on/off, refresh, buzzer).
 
-> ⚠️ **Development repo.** This is a proof-of-concept under active development.
-> The five screens and their entity IDs are currently hard-coded; configurable
-> screens are planned.
+> ⚠️ **Development repo.** Under active development. The default screens use the
+> author's entity IDs as worked examples — edit them via **Configure** to match
+> your own sensors.
 
 ## How it works
 
@@ -33,27 +33,27 @@ this integration relies on (reverse-engineered + confirmed against the
 
 ## Configuring screens
 
-Each of the 5 screens is a "page" using the **same component schema as
-[pixoo-homeassistant](https://github.com/gickowtf/pixoo-homeassistant)**, so a
-page can be copied between a Pixoo 64 and a Times Gate. Edit them via
-**Configure** (options) as YAML:
+Each of the 5 screens is a "page" rendered from a list of components. Edit them
+via **Configure** (options) as YAML. The schema matches
+[pixoo-homeassistant](https://github.com/gickowtf/pixoo-homeassistant), so pages
+are portable between a Pixoo 64 and a Times Gate.
 
 ```yaml
 - page_type: components
-  size: 64            # 64 = Pixoo-native (scaled to the Gate's 128); or 128
+  size: 128            # 128 = native (default); 64 = Pixoo canvas, scaled up
   enabled: "{{ true }}"
   variables:
     soc: "{{ states('sensor.battery')|int }}"
   components:
     - type: text
       content: "{{ soc }}%"
-      position: [32, 14]
+      position: [64, 26]
       align: center        # left | center | right
-      font: pix24          # pico_8 | gicko | five_pix | eleven_pix | clock | pix24
+      font: 42             # see "Fonts" below
       color: "{% if soc|int < 20 %}red{% else %}green{% endif %}"
     - type: rectangle
-      position: [10, 44]
-      size: [44, 7]
+      position: [20, 84]
+      size: [88, 12]
       color: [80, 80, 80]
       filled: false
     - type: image
@@ -61,9 +61,25 @@ page can be copied between a Pixoo 64 and a Times Gate. Edit them via
       position: [0, 0]
 ```
 
-Other page types: `page_type: clock` (`clock_id: 61`, a native device face) and
-`page_type: off` (black). Pages render on a 64×64 canvas by default and scale to
-128 with nearest-neighbour, so copied Pixoo pages look identical.
+### Fonts — two modes
+
+- **Scalable (native, recommended):** set `font` to a **number** (the pixel
+  size), e.g. `font: 42`. Smooth anti-aliased text, mixed case. Best on the
+  Times Gate's full 128×128.
+- **Bitmap (Pixoo-compatible):** set `font` to a **name** — `pico_8`, `gicko`,
+  `five_pix`, `eleven_pix`, `clock`, `pix24`. These match the Pixoo's pixel
+  fonts (text is uppercased, like the Pixoo). Use with `size: 64` so a page
+  copied from a Pixoo config renders identically (it's scaled up to 128 with
+  nearest-neighbour).
+
+### Other page types
+
+- `page_type: clock` with `clock_id: 61` — a native device clock/face.
+- `page_type: off` — black screen.
+- `enabled: "{{ ... }}"` — if it renders false, that screen is left unchanged.
+
+Colors accept an `[r, g, b]` list, a `#RRGGBB` string, a CSS color name, or a
+Jinja2 template returning any of those.
 
 ## Credits
 
