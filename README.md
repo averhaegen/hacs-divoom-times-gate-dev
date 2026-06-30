@@ -196,6 +196,21 @@ Adjust the `variables` to your own sensors:
 - **`divoom_times_gate.show_message`** — `screen`, `text`, optional `duration`
   and `color`. Flash a message, then revert to normal content.
 
+## RGB lighting
+
+Two independent RGB light entities, matching the Divoom app's zones:
+- **Surround lights** — the curved edge strips
+- **Back lights** — the lighting behind the 5 screens
+
+Each supports **colour + brightness**, plus an **effect** list:
+- **Solid** — static chosen colour (default)
+- **Rainbow** — auto colour-cycle (ignores the chosen colour)
+- **Colour 4 / 6 / 7 / 9** — animations that honour the chosen colour
+- **Party 0 / 1 / 2 / 5 / 8 / 10 / 11** — fixed multicolour animations (ignore the
+  chosen colour)
+
+The two zones are independent (e.g. blue surround + green back at the same time).
+
 ## Credits
 
 Rendering approach and overall design are informed by

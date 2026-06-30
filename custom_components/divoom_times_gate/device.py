@@ -97,18 +97,30 @@ class TimesGate:
         await self._send({"Command": "Channel/OnOffScreen", "OnOff": 0})
 
     async def set_rgb(
-        self, light_index: int, on: bool, color_hex: str, brightness: int
+        self,
+        light_index: int,
+        on: bool,
+        color_hex: str,
+        brightness: int,
+        effect: int = 3,
+        color_cycle: bool = False,
     ) -> dict:
-        """Control the RGB lighting. light_index: 0=all, 1=edge strip, 2=backlight."""
+        """Control the RGB lighting (Channel/SetRGBInfo).
+
+        light_index: 1=Surround lights (edge strips), 2=Back lights (behind the
+        screens). ``effect`` is the SelectEffect; only some effects honour
+        ``color_hex`` (3/4/6/7/9). ``color_cycle`` auto-cycles a rainbow instead
+        of the fixed colour. OnOff is 1=on/0=off (the docs say the opposite).
+        """
         return await self._send(
             {
                 "Command": "Channel/SetRGBInfo",
                 "OnOff": 1 if on else 0,
                 "Color": color_hex,
-                "ColorCycle": 0,
+                "ColorCycle": 1 if color_cycle else 0,
                 "Brightness": max(0, min(100, int(brightness))),
                 "SelectLightIndex": int(light_index),
-                "LightList": [{"SelectEffect": 0}, {"SelectEffect": 0}, {"SelectEffect": 0}],
+                "LightList": [{"SelectEffect": int(effect)}] * 3,
             }
         )
 

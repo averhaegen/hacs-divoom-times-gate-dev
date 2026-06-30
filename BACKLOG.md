@@ -33,9 +33,12 @@ options-flow YAML editor, diagnostics).
 
 ## Device controls (Phase B)
 
-- [x] **Edge-RGB light entities** — `Channel/SetRGBInfo` exposed as two RGB
-  lights (Edge RGB, Backlight) with color + brightness. (Effects/ColorCycle not
-  yet exposed.)
+- [x] **RGB light entities** — `Channel/SetRGBInfo` as two independent lights
+  (Surround lights, Back lights) with colour + brightness + **effects**
+  (Solid/Rainbow/colour animations/party). Colour only applies on SelectEffect
+  3/4/6/7/9; ColorCycle = Rainbow; OnOff 1=on/0=off. Possible future: a
+  `KeyOnOff` switch for the button light, per-screen back-light colours, friendly
+  effect names from the app.
 - [ ] **Rotation / mirror controls** — select/switch entities.
 
 ## Efficiency
