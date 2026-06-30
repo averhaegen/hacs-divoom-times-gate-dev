@@ -22,7 +22,16 @@
     "step": {
       "init": {
         "title": "Times Gate configuration",
-        "description": "Pick a screen to edit its content, manage your favorite faces, or change settings. Choose 'Save & close' to apply."
+        "menu_options": {
+          "screen_0": "Screen 1",
+          "screen_1": "Screen 2",
+          "screen_2": "Screen 3",
+          "screen_3": "Screen 4",
+          "screen_4": "Screen 5",
+          "faces": "Faces (favorites)",
+          "settings": "Settings",
+          "save": "Save & close"
+        }
       },
       "screen_0": {
         "title": "Screen 1",

@@ -143,16 +143,16 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         self._ensure()
         return self.async_show_menu(
             step_id="init",
-            menu_options={
-                "screen_0": "Screen 1",
-                "screen_1": "Screen 2",
-                "screen_2": "Screen 3",
-                "screen_3": "Screen 4",
-                "screen_4": "Screen 5",
-                "faces": "Faces (favorites)",
-                "settings": "Settings",
-                "save": "Save & close",
-            },
+            menu_options=[
+                "screen_0",
+                "screen_1",
+                "screen_2",
+                "screen_3",
+                "screen_4",
+                "faces",
+                "settings",
+                "save",
+            ],
         )
 
     async def _screen_step(self, index: int, user_input: dict[str, Any] | None):
