@@ -45,6 +45,15 @@ options-flow YAML editor, diagnostics).
   translations/categories/device-classes, extensive docs.
 - [ ] **Platinum** — strict typing across the codebase, enforced by mypy in CI.
 
+## Notes / dead ends
+
+- **No diagnostic sensors planned.** Device internal temperature is NOT available
+  over the local HTTP API (`Device/GetDeviceTemp` → "Request data illegal json";
+  it's a Bluetooth-only command). `Device/GetWeatherInfo` works but returns
+  cloud weather for the configured location (CurTemp/Pressure/Humidity/WindSpeed)
+  — redundant with users' own weather sensors, so intentionally not exposed.
+  `GetAllConf` is settings-only (exposed as controls, not sensors).
+
 ## i18n
 
 - [ ] Translations (de, pt, …) once the strings stabilise.
