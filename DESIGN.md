@@ -49,8 +49,18 @@ redundant.)
 
 - **Device-level Select — "Display source":**
   `HA Dashboard` (push custom to all 5) | `Whole face: <name>` (spanning face via
-  `Set5LcdWholeClockId`) | `Independent` (each screen its own per-screen select).
-  When not `HA Dashboard`, the coordinator **stops pushing** so native faces persist.
+  `Set5LcdWholeClockId`) | `Independent: <preset>` (a native scene, see below) |
+  `Off`. When not `HA Dashboard`, the coordinator **stops pushing** so native
+  faces persist.
+
+  **Independent Display presets:** the device stores up to 5 native scenes
+  (the app's "Independent Displays", `Control1`..`Control5`), each a set of 5
+  per-screen faces. Switching is `Channel/Set5LcdChannelType{ChannelType:1,
+  LcdIndependence:<id>}`. So users build scenes in the app and switch them from
+  HA. This unit's presets (example): Control1=840167, Control2=841103,
+  Control3=841105, Control4=841107, Control5=841109. (`0` in a preset = an unset
+  screen.) The integration reads these via cloud `Get5LcdInfoV2` to build the
+  Select options.
 - **Per-screen Select (independent mode):** `Custom` | `Off` | `<favorite faces>`.
   A face calls `SetClockSelectId` for that LCD (independence group); `Custom`
   hands the screen back to its rendered config; `Off` = black.
