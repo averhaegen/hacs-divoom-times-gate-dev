@@ -10,9 +10,11 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
+    CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
     CONF_REFRESH_INTERVAL,
+    DEFAULT_HARDWARE,
     DEFAULT_REFRESH_INTERVAL,
 )
 from .coordinator import TimesGateCoordinator
@@ -34,6 +36,7 @@ async def async_setup_entry(
         entry.data[CONF_IP_ADDRESS],
         int(entry.data[CONF_LOCAL_TOKEN]),
         session,
+        entry.data.get(CONF_HARDWARE, DEFAULT_HARDWARE),
     )
 
     if not await device.ping():

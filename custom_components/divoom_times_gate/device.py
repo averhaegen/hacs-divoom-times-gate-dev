@@ -29,11 +29,22 @@ _LOGGER = logging.getLogger(__name__)
 class TimesGate:
     """Async client for the Divoom Times Gate local HTTP API."""
 
-    def __init__(self, ip: str, local_token: int, session: aiohttp.ClientSession) -> None:
+    def __init__(
+        self,
+        ip: str,
+        local_token: int,
+        session: aiohttp.ClientSession,
+        hardware: int = 400,
+    ) -> None:
         self._ip = ip
         self._local_token = int(local_token)
         self._session = session
-        self._url = f"http://{ip}/post"
+        # Hardware revision selects the endpoint (official docs): 402 uses port
+        # 9000 / divoom_api; everything else (400) uses port 80 / post.
+        if int(hardware) == 402:
+            self._url = f"http://{ip}:9000/divoom_api"
+        else:
+            self._url = f"http://{ip}/post"
         self._pic_id = 0
 
     async def _send(self, command: dict) -> dict:

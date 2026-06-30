@@ -25,10 +25,12 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
     CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
+    DEFAULT_HARDWARE,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
@@ -52,9 +54,10 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             ip = str(user_input[CONF_IP_ADDRESS]).strip()
-            device = TimesGate(ip, int(user_input[CONF_LOCAL_TOKEN]), session)
+            match = next((d for d in self._discovered if d.ip == ip), None)
+            hardware = match.hardware if match else DEFAULT_HARDWARE
+            device = TimesGate(ip, int(user_input[CONF_LOCAL_TOKEN]), session, hardware)
             if await device.ping():
-                match = next((d for d in self._discovered if d.ip == ip), None)
                 # Prefer the stable MAC as the unique id; fall back to the IP.
                 await self.async_set_unique_id((match.mac if match else "") or ip)
                 self._abort_if_unique_id_configured()
@@ -64,6 +67,7 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_IP_ADDRESS: ip,
                         CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
+                        CONF_HARDWARE: hardware,
                         CONF_REFRESH_INTERVAL: user_input.get(
                             CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
                         ),
