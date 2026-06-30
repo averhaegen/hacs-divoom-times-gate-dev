@@ -20,7 +20,7 @@ from .const import (
 )
 from .coordinator import TimesGateCoordinator
 from .device import TimesGate
-from .discovery import async_get_independent_presets
+from .discovery import async_discover_devices, async_get_independent_presets
 from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,11 +53,22 @@ async def async_setup_entry(
     )
     coordinator = TimesGateCoordinator(hass, entry, device, interval)
 
+    # Resolve the DeviceId (needed for cloud reads). Older entries may not have
+    # it stored, so fall back to discovering it by IP.
+    device_id = int(entry.data.get(CONF_DEVICE_ID, 0))
+    if not device_id:
+        ip = entry.data[CONF_IP_ADDRESS]
+        for found in await async_discover_devices(session):
+            if found.ip == ip:
+                device_id = found.device_id
+                hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_DEVICE_ID: device_id}
+                )
+                break
+
     # Best-effort: load the device's Independent Display presets (cloud) so the
     # Display source select can offer them. Failure is non-fatal.
-    coordinator.presets = await async_get_independent_presets(
-        session, int(entry.data.get(CONF_DEVICE_ID, 0))
-    )
+    coordinator.presets = await async_get_independent_presets(session, device_id)
 
     await coordinator.async_config_entry_first_refresh()
 
