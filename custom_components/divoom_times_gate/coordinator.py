@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
@@ -146,8 +147,23 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             # state and lets our JPEGs overlay cleanly.
             if prev_kind == "off":
                 await self.device.turn_on()
+            # Optional: switch the underlying preset to a configured "base" so our
+            # JPEGs overlay onto static faces, not live ones (live clock/weather
+            # faces reload periodically and flash a loading spinner under us).
+            if (base := self._dashboard_base_id()) is not None:
+                await self.device.set_independent_preset(base)
             await self._reassert_faces()
             await self.async_request_refresh()
+
+    def _dashboard_base_id(self) -> int | None:
+        """Resolve the configured dashboard-base preset position to its id."""
+        pos = self.config_entry.options.get(CONF_DASHBOARD_BASE)
+        if pos in (None, ""):
+            return None
+        for preset in self.presets:
+            if preset.position == int(pos):
+                return preset.independence_id
+        return None
 
     async def async_set_screen(self, screen: int, kind: str, value: Any) -> None:
         """Set a per-screen mode (only acts now if in dashboard mode)."""

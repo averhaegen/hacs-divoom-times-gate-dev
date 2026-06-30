@@ -25,6 +25,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_FACES,
     CONF_HARDWARE,
@@ -131,6 +132,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         self._data = {
             CONF_SCREENS: screens[:SCREEN_COUNT],
             CONF_FACES: opts.get(CONF_FACES) or DEFAULT_FACES,
+            CONF_DASHBOARD_BASE: opts.get(CONF_DASHBOARD_BASE, ""),
             CONF_REFRESH_INTERVAL: opts.get(
                 CONF_REFRESH_INTERVAL,
                 self.config_entry.data.get(
@@ -193,15 +195,33 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         assert self._data is not None
         if user_input is not None:
             self._data[CONF_REFRESH_INTERVAL] = int(user_input[CONF_REFRESH_INTERVAL])
+            self._data[CONF_DASHBOARD_BASE] = user_input.get(CONF_DASHBOARD_BASE, "")
             if isinstance(user_input.get(CONF_FACES), dict):
                 self._data[CONF_FACES] = user_input[CONF_FACES]
             return await self.async_step_init()
+
+        # Build the base-preset options from the device's presets.
+        coordinator = self.config_entry.runtime_data
+        presets = getattr(coordinator, "presets", []) if coordinator else []
+        base_options = [SelectOptionDict(value="", label="Leave device as-is")]
+        base_options += [
+            SelectOptionDict(value=str(p.position), label=p.name) for p in presets
+        ]
+
         schema = vol.Schema(
             {
                 vol.Required(
                     CONF_REFRESH_INTERVAL, default=self._data[CONF_REFRESH_INTERVAL]
                 ): NumberSelector(
                     NumberSelectorConfig(min=5, max=3600, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Optional(
+                    CONF_DASHBOARD_BASE,
+                    default=str(self._data.get(CONF_DASHBOARD_BASE, "")),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=base_options, mode=SelectSelectorMode.DROPDOWN
+                    )
                 ),
                 vol.Required(
                     CONF_FACES, default=self._data[CONF_FACES]

@@ -8,6 +8,7 @@ CONF_FACES = "faces"
 CONF_HARDWARE = "hardware"
 CONF_MAC = "mac"
 CONF_DEVICE_ID = "device_id"
+CONF_DASHBOARD_BASE = "dashboard_base"  # preset position (0-4) used as overlay base
 
 DEFAULT_HARDWARE = 400
 DEFAULT_REFRESH_INTERVAL = 60

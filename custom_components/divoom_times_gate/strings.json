@@ -59,9 +59,10 @@
       },
       "settings": {
         "title": "Settings & faces",
-        "description": "Refresh interval, and your favorite device faces ({overall: [...], per_screen: [...]} with name + clock_id) shown in the Display source and Screen selects.",
+        "description": "Refresh interval; the dashboard base preset (HA overlays its content onto this preset — pick one with static faces, or a blank one, to avoid native faces reloading under the overlay); and favorite faces ({overall: [...], per_screen: [...]} with name + clock_id).",
         "data": {
           "refresh_interval": "Refresh interval (seconds)",
+          "dashboard_base": "Dashboard base preset",
           "faces": "Faces (favorites)"
         }
       }
