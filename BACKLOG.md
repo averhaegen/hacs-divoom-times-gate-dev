@@ -40,7 +40,8 @@ options-flow YAML editor, diagnostics).
   config-flow test coverage.
 - [ ] **Silver** — reauthentication flow (LocalToken can change → catch
   `"DeviceToken is err"`), log-when-unavailable, test coverage.
-- [ ] **Gold** — discovery, reconfiguration flow, repair issues, entity
+- [~] **Gold** — discovery **done** (cloud LAN lookup picker in the config
+  flow, MAC as unique id); still: reconfiguration flow, repair issues, entity
   translations/categories/device-classes, extensive docs.
 - [ ] **Platinum** — strict typing across the codebase, enforced by mypy in CI.
 

@@ -18,6 +18,10 @@ from homeassistant.helpers.selector import (
     NumberSelectorConfig,
     NumberSelectorMode,
     ObjectSelector,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
 )
 
 from .const import (
@@ -30,33 +34,63 @@ from .const import (
 )
 from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
+from .discovery import DiscoveredDevice, async_discover_devices
 
 
 class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the initial config flow."""
 
     VERSION = 1
+    _discovered: list[DiscoveredDevice] = []
 
     async def async_step_user(self, user_input=None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        session = async_get_clientsession(self.hass)
+
+        if not self._discovered:
+            self._discovered = await async_discover_devices(session)
 
         if user_input is not None:
-            session = async_get_clientsession(self.hass)
-            device = TimesGate(
-                user_input[CONF_IP_ADDRESS], int(user_input[CONF_LOCAL_TOKEN]), session
-            )
+            ip = str(user_input[CONF_IP_ADDRESS]).strip()
+            device = TimesGate(ip, int(user_input[CONF_LOCAL_TOKEN]), session)
             if await device.ping():
-                await self.async_set_unique_id(user_input[CONF_IP_ADDRESS])
+                match = next((d for d in self._discovered if d.ip == ip), None)
+                # Prefer the stable MAC as the unique id; fall back to the IP.
+                await self.async_set_unique_id((match.mac if match else "") or ip)
                 self._abort_if_unique_id_configured()
+                title = f"{match.name} ({ip})" if match else f"Times Gate ({ip})"
                 return self.async_create_entry(
-                    title=f"Times Gate ({user_input[CONF_IP_ADDRESS]})",
-                    data=user_input,
+                    title=title,
+                    data={
+                        CONF_IP_ADDRESS: ip,
+                        CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
+                        CONF_REFRESH_INTERVAL: user_input.get(
+                            CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
+                        ),
+                    },
                 )
             errors["base"] = "cannot_connect"
 
+        # Discovered devices become a dropdown (still allows typing an IP manually).
+        if self._discovered:
+            ip_field = SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(value=d.ip, label=f"{d.name} ({d.ip})")
+                        for d in self._discovered
+                    ],
+                    custom_value=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+            ip_default = self._discovered[0].ip
+        else:
+            ip_field = str
+            ip_default = ""
+
         schema = vol.Schema(
             {
-                vol.Required(CONF_IP_ADDRESS): str,
+                vol.Required(CONF_IP_ADDRESS, default=ip_default): ip_field,
                 vol.Required(CONF_LOCAL_TOKEN): int,
                 vol.Optional(
                     CONF_REFRESH_INTERVAL, default=DEFAULT_REFRESH_INTERVAL

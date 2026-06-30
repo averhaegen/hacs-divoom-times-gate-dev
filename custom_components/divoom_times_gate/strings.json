@@ -3,9 +3,9 @@
     "step": {
       "user": {
         "title": "Divoom Times Gate",
-        "description": "Enter your Times Gate's IP address and the LocalToken shown in the Divoom app (Device settings).",
+        "description": "Pick your device (auto-discovered on your network) or type its IP, then enter the LocalToken shown in the Divoom app under Device settings.",
         "data": {
-          "ip_address": "IP address",
+          "ip_address": "Device / IP address",
           "local_token": "LocalToken",
           "refresh_interval": "Refresh interval (seconds)"
         }
