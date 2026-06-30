@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import urllib.request
 from io import BytesIO
 from typing import Any
@@ -173,6 +174,10 @@ def _draw_component(
 
 
 def _load_image(hass, component, variables) -> Image.Image | None:
+    if "image_asset" in component:
+        # A bundled icon, e.g. image_asset: sunpower.png (see img/).
+        name = _tpl(hass, component["image_asset"], variables)
+        return Image.open(os.path.join(os.path.dirname(__file__), "img", name))
     if "image_path" in component:
         return Image.open(_tpl(hass, component["image_path"], variables))
     if "image_url" in component:

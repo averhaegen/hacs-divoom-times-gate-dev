@@ -140,6 +140,49 @@ Give a screen multiple pages to rotate through them:
 
 A single page = a static screen. `enabled: "{{ ... }}"` skips a page in rotation.
 
+## Bundled icons & the PV (solar) card
+
+The integration bundles the pixoo-homeassistant icon set (sun, battery levels,
+house, industry, trash, weather). Reference them in an `image` component with
+`image_asset:` (no install path needed):
+
+```yaml
+- type: image
+  image_asset: sunpower.png        # see custom_components/.../img/
+  position: [2, 1]
+```
+
+The **PV / solar card** is a `components` page using these icons + bitmap fonts.
+Use `size: 64` so it renders at the original (Pixoo) scale and is upscaled to 128.
+Adjust the `variables` to your own sensors:
+
+```yaml
+- page_type: components
+  size: 64
+  variables:
+    power: "{{ states('sensor.solaredge_i1_ac_power')|int }}"
+    storage: "{{ states('sensor.YOUR_BATTERY_SOC')|int }}"          # percentage
+    discharge: "{{ states('sensor.YOUR_BATTERY_POWER')|int }}"
+    powerhousetotal: "{{ states('sensor.YOUR_HOUSE_POWER')|int }}"
+    gridpower: "{{ states('sensor.YOUR_GRID_POWER')|int }}"
+    time: "{{ now().strftime('%H:%M') }}"
+  components:
+    - { type: image, image_asset: sunpower.png, position: [2, 1] }
+    - { type: text, content: "{{ power }}", font: gicko, position: [17, 8],
+        color: "{{ [255,175,0] if power|int >= 1 else [131,131,131] }}" }
+    - type: image
+      position: [2, 17]
+      image_asset: "{{ 'akku80-100.png' if storage|int >= 80 else 'akku60-80.png' if storage|int >= 60 else 'akku40-60.png' if storage|int >= 40 else 'akku20-40.png' if storage|int >= 20 else 'akku00-20.png' }}"
+    - { type: text, content: "{{ discharge }}", font: gicko, position: [17, 18],
+        color: "{{ [255,0,68] if discharge|int <= 0 else [4,204,2] }}" }
+    - { type: text, content: "{{ storage }}%", color: white, font: pico_8, position: [17, 25] }
+    - { type: image, image_asset: haus.png, position: [2, 33] }
+    - { type: text, content: "{{ powerhousetotal }}", color: [0,123,255], font: gicko, position: [17, 40] }
+    - { type: image, image_asset: industry.png, position: [2, 49] }
+    - { type: text, content: "{{ gridpower }}", color: [131,131,131], font: gicko, position: [17, 56] }
+    - { type: text, content: "{{ time }}", color: white, font: pico_8, position: [44, 1] }
+```
+
 ## Services
 
 - **`divoom_times_gate.set_clock_face`** — `screen` (0–4), `clock_id`. Show any
