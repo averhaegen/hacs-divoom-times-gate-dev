@@ -210,6 +210,10 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             idx = (idx + 1) % len(pages)
             self._rot_index[screen] = idx
             self._rot_elapsed[screen] = 0
+            # New page in the rotation: force a repaint (its image may hash the
+            # same as an earlier custom page, and a clock/off page may have left
+            # native content on the panel).
+            self.invalidate(screen)
 
         page = pages[idx]
         ptype = (page.get("page_type") or page.get("type") or "components").lower()
