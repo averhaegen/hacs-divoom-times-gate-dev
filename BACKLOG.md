@@ -12,8 +12,13 @@ options-flow YAML editor, diagnostics).
   then revert.
 - [ ] **`play_buzzer` service** — buzzer with configurable cycle/total times
   (we have a buzzer button; a parameterised service is still TODO).
-- [ ] **Prebuilt layout page types** — ship `progress_bar` / `solar` / `fuel`
-  ready-made pages for quick polished screens without hand-building components.
+- [x] **PV / solar layout** — works as a `components` page; pixoo icon assets
+  vendored under `img/` with an `image_asset:` shorthand. (progress_bar / fuel
+  not shipped as prebuilt types — buildable from components.)
+- [x] **`gif` page type** — `Device/PlayGif` (per-screen, net GIF URLs).
+- [x] **`visualizer` page type** — `Channel/SetEqPosition` (per-screen).
+- [ ] **`channel` page type** — n/a per-screen on Times Gate (channels derive
+  from the assigned face); whole-device channels via the Display source select.
 - [ ] **`current_page` sensor** — exposes the active page index per screen.
 
 ## Display modes & faces (built)

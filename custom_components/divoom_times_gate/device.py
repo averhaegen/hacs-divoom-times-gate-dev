@@ -137,6 +137,27 @@ class TimesGate:
             payload["LcdIndependence"] = int(independence_id)
         return await self._send(payload)
 
+    async def play_gif(self, screen: int, urls: list[str]) -> dict:
+        """Play one or more net GIFs on a screen (sizes 16/32/64/128)."""
+        lcd_array = [0] * SCREEN_COUNT
+        lcd_array[screen] = 1
+        return await self._send(
+            {"Command": "Device/PlayGif", "LcdArray": lcd_array, "FileName": list(urls)}
+        )
+
+    async def set_visualizer(
+        self, screen: int, eq_position: int, independence_id: int | None = None
+    ) -> dict:
+        """Show an audio visualizer on a screen."""
+        payload: dict = {
+            "Command": "Channel/SetEqPosition",
+            "EqPosition": int(eq_position),
+            "LcdIndex": screen,
+        }
+        if independence_id:
+            payload["LcdIndependence"] = int(independence_id)
+        return await self._send(payload)
+
     async def set_whole_face(self, clock_id: int) -> dict:
         """Overall Display: one face spanning all 5 screens."""
         return await self._send(

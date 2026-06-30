@@ -219,11 +219,24 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         ptype = (page.get("page_type") or page.get("type") or "components").lower()
         try:
             if ptype == "clock":
-                resp = await self.device.set_clock_face(
-                    screen, int(page.get("clock_id", page.get("id", 0))),
-                    self._active_independence(),
+                cid = int(page.get("clock_id", page.get("id", 0)))
+                return await self._apply_native(
+                    screen, f"clock:{cid}",
+                    lambda: self.device.set_clock_face(screen, cid, self._active_independence()),
                 )
-                return resp.get("error_code", "?")
+            if ptype == "gif":
+                urls = page.get("gif_url") or page.get("gif_urls") or []
+                if isinstance(urls, str):
+                    urls = [urls]
+                return await self._apply_native(
+                    screen, f"gif:{urls}", lambda: self.device.play_gif(screen, urls)
+                )
+            if ptype == "visualizer":
+                eq = int(page.get("id", page.get("eq_position", 0)))
+                return await self._apply_native(
+                    screen, f"viz:{eq}",
+                    lambda: self.device.set_visualizer(screen, eq, self._active_independence()),
+                )
             if ptype == "off":
                 jpeg = await self.hass.async_add_executor_job(render_black)
             else:
@@ -232,3 +245,12 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Screen %s render failed: %s", screen, err)
             return "error"
+
+    async def _apply_native(self, screen: int, signature: str, apply) -> Any:
+        """Apply a native page command once; skip if already applied (no flicker)."""
+        if self._last_hashes.get(screen) == signature:
+            return "unchanged"
+        resp = await apply()
+        if resp.get("error_code") == 0:
+            self._last_hashes[screen] = signature
+        return resp.get("error_code", "?")

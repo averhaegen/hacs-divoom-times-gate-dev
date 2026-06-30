@@ -116,9 +116,15 @@ are portable between a Pixoo 64 and a Times Gate.
 
 ### Other page types
 
-- `page_type: clock` with `clock_id: 61` — a native device clock/face.
+- `page_type: clock` — a native device face. `clock_id: 61`.
+- `page_type: gif` — play animated GIF(s) on the screen (device-native, sizes
+  16/32/64/128). `gif_url: "https://…/x.gif"` (or `gif_urls: [url, url]`).
+- `page_type: visualizer` — an audio visualizer. `id: 0` (visualizer index).
 - `page_type: off` — black screen.
 - `enabled: "{{ ... }}"` — if it renders false, that screen is left unchanged.
+
+> Device channels (Faces/Cloud/Visualizer/Custom) for the *whole* device are
+> selected with the **Display source** entity, not a per-screen page type.
 
 Colors accept an `[r, g, b]` list, a `#RRGGBB` string, a CSS color name, or a
 Jinja2 template returning any of those.
