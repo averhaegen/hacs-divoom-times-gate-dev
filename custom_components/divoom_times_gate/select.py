@@ -22,7 +22,7 @@ from .const import (
 )
 from .coordinator import TimesGateCoordinator
 from .defaults import DEFAULT_FACES
-from .entity import TimesGateEntity, screen_device_info
+from .entity import TimesGateEntity
 
 PARALLEL_UPDATES = 1
 
@@ -87,10 +87,7 @@ class ScreenSelect(TimesGateEntity, SelectEntity, RestoreEntity):
     def __init__(self, coordinator: TimesGateCoordinator, entry, screen: int) -> None:
         super().__init__(coordinator)
         self._screen = screen
-        # This select lives on its own per-screen child device; with
-        # has_entity_name + name=None it becomes that device's primary entity.
-        self._attr_name = None
-        self._attr_device_info = screen_device_info(entry, screen)
+        self._attr_name = f"Screen {screen + 1}"
         self._attr_unique_id = f"{entry.entry_id}_screen_{screen}"
 
         self._map: dict[str, tuple[str, Any]] = {
