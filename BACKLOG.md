@@ -35,9 +35,25 @@ options-flow YAML editor, diagnostics).
 
 ## Efficiency
 
-- [ ] **Two-layer rendering** — static background via `Draw/SendHttpGif` + live
-  values via `Draw/SendHttpItemList` text overlays (cheaper refreshes, crisper
-  text, free native time/weather). See API notes.
+- [ ] **Two-layer rendering / native self-updating overlays** — static background
+  via `Draw/SendHttpGif` + live values via `Draw/SendHttpItemList`. The big prize
+  is **type 23 ("net text")**: the device polls a URL every `update_time` secs and
+  renders `{"DispData": "..."}` itself — so the integration registers a small HTTP
+  view returning a templated value, and the device self-updates with **zero push**
+  (smooth native text, near-zero traffic, survives HA hiccups).
+  - **Tested on device:** `SendHttpItemList` IS accepted (`error_code 0`) — unlike
+    `SendHttpText` which returns "illegal json". BUT a background+itemlist push to
+    one screen while the device was in Overall/whole-face mode left the screen
+    **stuck on "Loading"**. Recovery: `Draw/ClearHttpText {LcdId, TextId:-1}` +
+    `Draw/ResetHttpGifId` + restore a mode.
+  - **Open questions before building:** does it need the screen in independent/
+    custom mode first (mode prerequisite)? Is the "Loading" the type-23 net-text
+    hanging on the URL, or a stuck panel? Test type 22 alone in a clean per-screen
+    state, then type 23 against a known-good local URL. Item fields: TextId(<40),
+    type, x, y, dir, font(0-7), TextWidth, Textheight, TextString, speed, color
+    (#RRGGBB), align(1/2/3), update_time; TimeGate adds LcdIndex, NewFlag.
+  - Needs an HA-served endpoint returning `{"DispData": ...}` + device→HA
+    reachability + a path secret for light auth.
 
 ## Quality scale → Platinum (parked)
 
