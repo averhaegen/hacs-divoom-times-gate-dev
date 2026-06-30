@@ -40,6 +40,11 @@ pages:
 Migration from Pixoo: paste a Pixoo `pages_data` into one screen → that screen
 rotates exactly like the old Pixoo.
 
+Page types are just `components`, `clock`, `off`. There is **no** `playlist`
+type — rotation is implicit in a screen's multi-page config + `duration`, exactly
+like Pixoo's `pages_data`. (Decided: the config split makes a playlist wrapper
+redundant.)
+
 ## Control entities
 
 - **Device-level Select — "Display source":**
@@ -56,10 +61,34 @@ rotates exactly like the old Pixoo.
 
 ## Favorites (face IDs)
 
-A user-curated `faces` list in options: `{name, clock_id}` for per-screen faces
-and whole-device faces (e.g. Neon = 1040). IDs come from the Divoom app. The
-per-screen and device selects build their option lists from this. Optional later:
-seed from the device (cloud read), but it only reflects app state.
+A `faces` list in options drives the Select option lists: `{name, clock_id}`
+entries for whole-device spanning faces and per-screen faces. IDs come from the
+Divoom app.
+
+We ship a **small fixed default list** (editable in options), e.g.:
+
+```yaml
+whole_faces:                 # device-level "Display source" options
+  - name: Neon
+    clock_id: 1040
+  - name: Clock face
+    clock_id: 581
+  - name: City Time
+    clock_id: 697
+per_screen_faces:            # per-screen Select options
+  - name: ...
+    clock_id: ...
+```
+
+These are just a starting point — the "best 5 default full-screen faces" are TBD
+(to be curated later). Users add their own IDs (grabbed from the app) to extend.
+Optional later: seed from the device's cloud read, but it only reflects app state.
+
+### Docs requirement
+The README must include a **"Updating the faces list"** section that:
+- explains the integration ships only a **few defaults** on purpose,
+- shows how to find a face's `clock_id` (from the Divoom app) and add it,
+- distinguishes whole-device (spanning) faces from per-screen faces.
 
 ## Coordinator behaviour
 
