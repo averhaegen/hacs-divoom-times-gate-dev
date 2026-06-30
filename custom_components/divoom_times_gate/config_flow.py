@@ -28,6 +28,7 @@ from .const import (
     CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
+    CONF_MAC,
     CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
     DEFAULT_HARDWARE,
@@ -68,6 +69,7 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_IP_ADDRESS: ip,
                         CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
                         CONF_HARDWARE: hardware,
+                        CONF_MAC: match.mac if match else "",
                         CONF_REFRESH_INTERVAL: user_input.get(
                             CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
                         ),

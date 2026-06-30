@@ -5,6 +5,7 @@ CONF_LOCAL_TOKEN = "local_token"
 CONF_REFRESH_INTERVAL = "refresh_interval"
 CONF_SCREENS = "screens"
 CONF_HARDWARE = "hardware"
+CONF_MAC = "mac"
 
 DEFAULT_HARDWARE = 400
 
