@@ -128,6 +128,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def async_set_display(self, kind: str, value: Any) -> None:
         """Set the device-level Display source and apply it immediately."""
+        prev_kind = self.display[0]
         self.display = (kind, value)
         # Native modes change the panels outside our control; force a repaint
         # of custom screens when we next return to dashboard.
@@ -139,7 +140,12 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         elif kind == "off":
             await self.device.turn_off()
         else:  # dashboard
-            await self.device.turn_on()
+            # Only power on when coming back from Off. Calling turn_on otherwise
+            # makes the device flash its native preset before our content paints,
+            # and resets which preset is active. Leaving it alone keeps the last
+            # state and lets our JPEGs overlay cleanly.
+            if prev_kind == "off":
+                await self.device.turn_on()
             await self._reassert_faces()
             await self.async_request_refresh()
 
