@@ -122,18 +122,34 @@ class TimesGate:
             }
         )
 
-    async def set_clock_face(self, screen: int, clock_id: int) -> dict:
-        """Show a native device clock/face on one screen (0-4).
-
-        Verified to work with ``LcdIndex`` targeting on the Times Gate.
-        """
+    async def set_clock_face(
+        self, screen: int, clock_id: int, independence_id: int | None = None
+    ) -> dict:
+        """Show a native face on one screen (0-4), in Independent Display mode."""
         if screen not in range(SCREEN_COUNT):
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
+        payload: dict = {
+            "Command": "Channel/SetClockSelectId",
+            "ClockId": int(clock_id),
+            "LcdIndex": screen,
+        }
+        if independence_id:
+            payload["LcdIndependence"] = int(independence_id)
+        return await self._send(payload)
+
+    async def set_whole_face(self, clock_id: int) -> dict:
+        """Overall Display: one face spanning all 5 screens."""
+        return await self._send(
+            {"Command": "Channel/Set5LcdWholeClockId", "ClockId": int(clock_id)}
+        )
+
+    async def set_independent_preset(self, independence_id: int) -> dict:
+        """Independent Display: activate a native preset (ControlN)."""
         return await self._send(
             {
-                "Command": "Channel/SetClockSelectId",
-                "ClockId": int(clock_id),
-                "LcdIndex": screen,
+                "Command": "Channel/Set5LcdChannelType",
+                "ChannelType": 1,
+                "LcdIndependence": int(independence_id),
             }
         )
 

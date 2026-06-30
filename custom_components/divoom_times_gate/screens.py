@@ -47,6 +47,22 @@ def _tpl(hass: HomeAssistant, value: Any, variables: dict[str, Any]) -> str:
     return str(Template(str(value), hass).async_render(variables=variables))
 
 
+def normalize_pages(screen_cfg: Any) -> list[dict[str, Any]]:
+    """A screen config is a list of pages; a bare dict is a single static page."""
+    if isinstance(screen_cfg, dict):
+        return [screen_cfg]
+    if isinstance(screen_cfg, list):
+        return [p for p in screen_cfg if isinstance(p, dict)]
+    return []
+
+
+def page_duration(page: dict[str, Any], default: int) -> int:
+    try:
+        return max(1, int(page.get("duration", default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def is_enabled(hass: HomeAssistant, page: dict[str, Any]) -> bool:
     try:
         rendered = _tpl(hass, page.get("enabled", "true"), {}).lower()

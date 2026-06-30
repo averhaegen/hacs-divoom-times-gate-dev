@@ -10,6 +10,19 @@ from __future__ import annotations
 
 from typing import Any
 
+# Favorite faces shown in the Select dropdowns. A small starting set — users
+# edit these in the options, and grab clock_ids from the Divoom app.
+DEFAULT_FACES: dict[str, list[dict]] = {
+    "overall": [  # Overall Display (one face spanning all 5 screens)
+        {"name": "Neon", "clock_id": 1040},
+        {"name": "Clock face", "clock_id": 581},
+        {"name": "City Time", "clock_id": 697},
+    ],
+    "per_screen": [  # single-screen faces (Screen N -> Face: ...)
+        {"name": "Weather", "clock_id": 182},
+    ],
+}
+
 _HAME = "sensor.hame_energy_hmg_50_acd929a74998"
 _NETATMO = "sensor.netatmo_weather_station"
 _OUT = f"{_NETATMO}_netatmo_outdoor_module_temperatuur"

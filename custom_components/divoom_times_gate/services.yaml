@@ -1,0 +1,63 @@
+set_clock_face:
+  name: Set clock face
+  description: Show a native device face on one screen (Independent Display).
+  fields:
+    screen:
+      name: Screen
+      description: Screen index 0-4 (left to right).
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: box
+    clock_id:
+      name: Face ID
+      description: The Divoom face (ClockId), found in the Divoom app.
+      required: true
+      example: 182
+      selector:
+        number:
+          min: 0
+          mode: box
+
+show_message:
+  name: Show message
+  description: Flash a text message on one screen for a few seconds, then revert.
+  fields:
+    screen:
+      name: Screen
+      description: Screen index 0-4 (left to right).
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: box
+    text:
+      name: Text
+      description: The message to display.
+      required: true
+      example: "Doorbell!"
+      selector:
+        text:
+    duration:
+      name: Duration
+      description: Seconds to show the message before reverting.
+      required: false
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 600
+          unit_of_measurement: seconds
+          mode: box
+    color:
+      name: Color
+      description: Text colour as #RRGGBB.
+      required: false
+      example: "#FF0000"
+      selector:
+        text:

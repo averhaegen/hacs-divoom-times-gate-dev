@@ -25,6 +25,8 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_DEVICE_ID,
+    CONF_FACES,
     CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
@@ -35,7 +37,7 @@ from .const import (
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
-from .defaults import DEFAULT_SCREENS
+from .defaults import DEFAULT_FACES, DEFAULT_SCREENS
 from .device import TimesGate
 from .discovery import DiscoveredDevice, async_discover_devices
 
@@ -70,6 +72,7 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
                         CONF_HARDWARE: hardware,
                         CONF_MAC: match.mac if match else "",
+                        CONF_DEVICE_ID: match.device_id if match else 0,
                         CONF_REFRESH_INTERVAL: user_input.get(
                             CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
                         ),
@@ -119,19 +122,25 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
 
         if user_input is not None:
             screens = user_input.get(CONF_SCREENS)
+            faces = user_input.get(CONF_FACES)
             if not isinstance(screens, list):
                 errors["base"] = "invalid_screens"
+            elif not isinstance(faces, dict):
+                errors["base"] = "invalid_faces"
             else:
                 return self.async_create_entry(
                     title="",
                     data={
                         CONF_SCREENS: screens,
+                        CONF_FACES: faces,
                         CONF_REFRESH_INTERVAL: int(user_input[CONF_REFRESH_INTERVAL]),
                     },
                 )
 
-        current_screens = self.config_entry.options.get(CONF_SCREENS) or DEFAULT_SCREENS
-        interval = self.config_entry.options.get(
+        opts = self.config_entry.options
+        current_screens = opts.get(CONF_SCREENS) or DEFAULT_SCREENS
+        current_faces = opts.get(CONF_FACES) or DEFAULT_FACES
+        interval = opts.get(
             CONF_REFRESH_INTERVAL,
             self.config_entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
         )
@@ -142,6 +151,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                     NumberSelectorConfig(min=5, max=3600, mode=NumberSelectorMode.BOX)
                 ),
                 vol.Required(CONF_SCREENS, default=current_screens): ObjectSelector(),
+                vol.Required(CONF_FACES, default=current_faces): ObjectSelector(),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

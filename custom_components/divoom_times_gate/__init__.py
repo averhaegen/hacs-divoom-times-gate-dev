@@ -10,6 +10,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
+    CONF_DEVICE_ID,
     CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
@@ -19,10 +20,12 @@ from .const import (
 )
 from .coordinator import TimesGateCoordinator
 from .device import TimesGate
+from .discovery import async_get_independent_presets
+from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON, Platform.SELECT]
 
 type DivoomTimesGateConfigEntry = ConfigEntry[TimesGateCoordinator]
 
@@ -49,12 +52,20 @@ async def async_setup_entry(
         entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
     )
     coordinator = TimesGateCoordinator(hass, entry, device, interval)
+
+    # Best-effort: load the device's Independent Display presets (cloud) so the
+    # Display source select can offer them. Failure is non-fatal.
+    coordinator.presets = await async_get_independent_presets(
+        session, int(entry.data.get(CONF_DEVICE_ID, 0))
+    )
+
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+    async_register_services(hass)
     return True
 
 

@@ -21,16 +21,18 @@
   "options": {
     "step": {
       "init": {
-        "title": "Times Gate screens",
-        "description": "Edit the screens (a list of pages). Each page has a 'page_type' (components/clock/off). 'components' pages use Jinja2-templated text/image/rectangle components. See the README for the schema.",
+        "title": "Times Gate screens & faces",
+        "description": "Screens: a list of 5 entries; each is a page or a list of pages (which rotate by 'duration'). Faces: your favorite device faces ({overall, per_screen}) shown in the Display source / Screen selects. See the README.",
         "data": {
           "refresh_interval": "Refresh interval (seconds)",
-          "screens": "Screens"
+          "screens": "Screens",
+          "faces": "Faces (favorites)"
         }
       }
     },
     "error": {
-      "invalid_screens": "Screens must be a list of page configs."
+      "invalid_screens": "Screens must be a list of page configs.",
+      "invalid_faces": "Faces must be an object with 'overall' and 'per_screen' lists."
     }
   }
 }
