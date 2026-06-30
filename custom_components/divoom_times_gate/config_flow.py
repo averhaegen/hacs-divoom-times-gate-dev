@@ -170,7 +170,9 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                 ): ObjectSelector()
             }
         )
-        return self.async_show_form(step_id=f"screen_{index}", data_schema=schema)
+        return self.async_show_form(
+            step_id=f"screen_{index}", data_schema=schema, last_step=False
+        )
 
     async def async_step_screen_0(self, user_input=None):
         return await self._screen_step(0, user_input)
@@ -196,7 +198,9 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {vol.Required(CONF_FACES, default=self._data[CONF_FACES]): ObjectSelector()}
         )
-        return self.async_show_form(step_id="faces", data_schema=schema)
+        return self.async_show_form(
+            step_id="faces", data_schema=schema, last_step=False
+        )
 
     async def async_step_settings(self, user_input=None):
         self._ensure()
@@ -213,7 +217,9 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                 )
             }
         )
-        return self.async_show_form(step_id="settings", data_schema=schema)
+        return self.async_show_form(
+            step_id="settings", data_schema=schema, last_step=False
+        )
 
     async def async_step_save(self, user_input=None):
         self._ensure()
