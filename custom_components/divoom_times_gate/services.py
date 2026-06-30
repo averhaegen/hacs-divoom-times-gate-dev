@@ -77,6 +77,9 @@ def async_register_services(hass: HomeAssistant) -> None:
         )
         for coord in _coordinators(hass):
             await coord.device.send_jpeg(jpeg, screen)
+            # The temporary message bypassed the hash cache; invalidate so the
+            # screen repaints its normal content when we revert.
+            coord.invalidate(screen)
 
             async def _restore(_now, c=coord) -> None:
                 await c.async_request_refresh()

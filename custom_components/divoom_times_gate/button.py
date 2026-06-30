@@ -36,7 +36,7 @@ class TimesGateRefreshButton(TimesGateEntity, ButtonEntity):
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_refresh"
 
     async def async_press(self) -> None:
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_force_refresh()
 
 
 class TimesGateBuzzerButton(TimesGateEntity, ButtonEntity):

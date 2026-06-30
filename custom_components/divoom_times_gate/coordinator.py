@@ -13,6 +13,7 @@ every tick (with page rotation); "face"/"off" screens are set once on change.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -27,6 +28,7 @@ from .const import (
     CONF_SCREENS,
     DEFAULT_DURATION,
     DEFAULT_REFRESH_INTERVAL,
+    DOMAIN,
     SCREEN_COUNT,
 )
 from .defaults import DEFAULT_SCREENS
@@ -69,6 +71,13 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self._tick = interval
         self.presets: list = []  # IndependentPreset list, filled at setup
 
+        # Last-sent JPEG hash per screen, persisted across entry reloads so that
+        # editing config only re-pushes (flashes) the screens that changed, and
+        # periodic ticks skip unchanged screens.
+        self._last_hashes: dict[int, str] = hass.data.setdefault(
+            f"{DOMAIN}_hashes", {}
+        ).setdefault(entry.entry_id, {})
+
         # Control state (defaults; overridden by restored Select states).
         self.display: tuple[str, Any] = ("dashboard", None)
         self.screen_modes: list[tuple[str, Any]] = [("custom", None)] * SCREEN_COUNT
@@ -95,9 +104,34 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     # --- control API (called by Select entities) ---------------------------
 
+    def invalidate(self, screen: int | None = None) -> None:
+        """Forget the last-sent hash so the next render re-pushes."""
+        if screen is None:
+            self._last_hashes.clear()
+        else:
+            self._last_hashes.pop(screen, None)
+
+    async def async_force_refresh(self) -> None:
+        """Refresh button / service: re-push everything regardless of hashes."""
+        self.invalidate()
+        await self.async_request_refresh()
+
+    async def _send_jpeg(self, screen: int, jpeg: bytes) -> Any:
+        """Send a JPEG only if it differs from the last one sent to this screen."""
+        digest = hashlib.md5(jpeg).hexdigest()
+        if self._last_hashes.get(screen) == digest:
+            return "unchanged"
+        resp = await self.device.send_jpeg(jpeg, screen)
+        if resp.get("error_code") == 0:
+            self._last_hashes[screen] = digest
+        return resp.get("error_code", "?")
+
     async def async_set_display(self, kind: str, value: Any) -> None:
         """Set the device-level Display source and apply it immediately."""
         self.display = (kind, value)
+        # Native modes change the panels outside our control; force a repaint
+        # of custom screens when we next return to dashboard.
+        self.invalidate()
         if kind == "overall":
             await self.device.set_whole_face(int(value))
         elif kind == "independent":
@@ -114,6 +148,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self.screen_modes[screen] = (kind, value)
         self._rot_index[screen] = 0
         self._rot_elapsed[screen] = 0
+        self.invalidate(screen)
         if self.display[0] != "dashboard":
             return
         if kind == "face":
@@ -136,7 +171,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def _push_black(self, screen: int) -> None:
         jpeg = await self.hass.async_add_executor_job(render_black)
-        await self.device.send_jpeg(jpeg, screen)
+        await self._send_jpeg(screen, jpeg)
 
     # --- periodic render/push ---------------------------------------------
 
@@ -183,8 +218,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 jpeg = await self.hass.async_add_executor_job(render_black)
             else:
                 jpeg = await self.hass.async_add_executor_job(render_page, self.hass, page)
-            resp = await self.device.send_jpeg(jpeg, screen)
-            return resp.get("error_code", "?")
+            return await self._send_jpeg(screen, jpeg)
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Screen %s render failed: %s", screen, err)
             return "error"
