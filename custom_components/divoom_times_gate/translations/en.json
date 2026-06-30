@@ -21,18 +21,43 @@
   "options": {
     "step": {
       "init": {
-        "title": "Times Gate screens & faces",
-        "description": "Screens: a list of 5 entries; each is a page or a list of pages (which rotate by 'duration'). Faces: your favorite device faces ({overall, per_screen}) shown in the Display source / Screen selects. See the README.",
-        "data": {
-          "refresh_interval": "Refresh interval (seconds)",
-          "screens": "Screens",
-          "faces": "Faces (favorites)"
-        }
+        "title": "Times Gate configuration",
+        "description": "Pick a screen to edit its content, manage your favorite faces, or change settings. Choose 'Save & close' to apply."
+      },
+      "screen_0": {
+        "title": "Screen 1",
+        "description": "This screen's content: a single page, or a list of pages that rotate (by each page's 'duration'). See the README for the page schema.",
+        "data": { "screens": "Pages" }
+      },
+      "screen_1": {
+        "title": "Screen 2",
+        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "data": { "screens": "Pages" }
+      },
+      "screen_2": {
+        "title": "Screen 3",
+        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "data": { "screens": "Pages" }
+      },
+      "screen_3": {
+        "title": "Screen 4",
+        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "data": { "screens": "Pages" }
+      },
+      "screen_4": {
+        "title": "Screen 5",
+        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "data": { "screens": "Pages" }
+      },
+      "faces": {
+        "title": "Faces (favorites)",
+        "description": "Favorite device faces shown in the Display source and Screen selects, as {overall: [...], per_screen: [...]} with name + clock_id.",
+        "data": { "faces": "Faces" }
+      },
+      "settings": {
+        "title": "Settings",
+        "data": { "refresh_interval": "Refresh interval (seconds)" }
       }
-    },
-    "error": {
-      "invalid_screens": "Screens must be a list of page configs.",
-      "invalid_faces": "Faces must be an object with 'overall' and 'per_screen' lists."
     }
   }
 }

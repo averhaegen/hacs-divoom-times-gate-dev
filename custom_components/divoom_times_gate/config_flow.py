@@ -36,6 +36,7 @@ from .const import (
     DEFAULT_HARDWARE,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    SCREEN_COUNT,
 )
 from .defaults import DEFAULT_FACES, DEFAULT_SCREENS
 from .device import TimesGate
@@ -115,43 +116,105 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class DivoomTimesGateOptionsFlow(OptionsFlow):
-    """Edit the per-screen configuration via a structured object (YAML) editor."""
+    """Per-screen config split into a menu: each screen edited on its own."""
+
+    _data: dict[str, Any] | None = None
+
+    def _ensure(self) -> None:
+        """Load a working copy of the options once."""
+        if self._data is not None:
+            return
+        opts = self.config_entry.options
+        screens = list(opts.get(CONF_SCREENS) or DEFAULT_SCREENS)
+        while len(screens) < SCREEN_COUNT:
+            screens.append({"page_type": "off"})
+        self._data = {
+            CONF_SCREENS: screens[:SCREEN_COUNT],
+            CONF_FACES: opts.get(CONF_FACES) or DEFAULT_FACES,
+            CONF_REFRESH_INTERVAL: opts.get(
+                CONF_REFRESH_INTERVAL,
+                self.config_entry.data.get(
+                    CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
+                ),
+            ),
+        }
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            screens = user_input.get(CONF_SCREENS)
-            faces = user_input.get(CONF_FACES)
-            if not isinstance(screens, list):
-                errors["base"] = "invalid_screens"
-            elif not isinstance(faces, dict):
-                errors["base"] = "invalid_faces"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        CONF_SCREENS: screens,
-                        CONF_FACES: faces,
-                        CONF_REFRESH_INTERVAL: int(user_input[CONF_REFRESH_INTERVAL]),
-                    },
-                )
-
-        opts = self.config_entry.options
-        current_screens = opts.get(CONF_SCREENS) or DEFAULT_SCREENS
-        current_faces = opts.get(CONF_FACES) or DEFAULT_FACES
-        interval = opts.get(
-            CONF_REFRESH_INTERVAL,
-            self.config_entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
+        self._ensure()
+        return self.async_show_menu(
+            step_id="init",
+            menu_options={
+                "screen_0": "Screen 1",
+                "screen_1": "Screen 2",
+                "screen_2": "Screen 3",
+                "screen_3": "Screen 4",
+                "screen_4": "Screen 5",
+                "faces": "Faces (favorites)",
+                "settings": "Settings",
+                "save": "Save & close",
+            },
         )
 
+    async def _screen_step(self, index: int, user_input: dict[str, Any] | None):
+        self._ensure()
+        assert self._data is not None
+        if user_input is not None:
+            pages = user_input.get(CONF_SCREENS)
+            if isinstance(pages, (list, dict)):
+                self._data[CONF_SCREENS][index] = pages
+                return await self.async_step_init()
         schema = vol.Schema(
             {
-                vol.Required(CONF_REFRESH_INTERVAL, default=interval): NumberSelector(
-                    NumberSelectorConfig(min=5, max=3600, mode=NumberSelectorMode.BOX)
-                ),
-                vol.Required(CONF_SCREENS, default=current_screens): ObjectSelector(),
-                vol.Required(CONF_FACES, default=current_faces): ObjectSelector(),
+                vol.Required(
+                    CONF_SCREENS, default=self._data[CONF_SCREENS][index]
+                ): ObjectSelector()
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id=f"screen_{index}", data_schema=schema)
+
+    async def async_step_screen_0(self, user_input=None):
+        return await self._screen_step(0, user_input)
+
+    async def async_step_screen_1(self, user_input=None):
+        return await self._screen_step(1, user_input)
+
+    async def async_step_screen_2(self, user_input=None):
+        return await self._screen_step(2, user_input)
+
+    async def async_step_screen_3(self, user_input=None):
+        return await self._screen_step(3, user_input)
+
+    async def async_step_screen_4(self, user_input=None):
+        return await self._screen_step(4, user_input)
+
+    async def async_step_faces(self, user_input=None):
+        self._ensure()
+        assert self._data is not None
+        if user_input is not None and isinstance(user_input.get(CONF_FACES), dict):
+            self._data[CONF_FACES] = user_input[CONF_FACES]
+            return await self.async_step_init()
+        schema = vol.Schema(
+            {vol.Required(CONF_FACES, default=self._data[CONF_FACES]): ObjectSelector()}
+        )
+        return self.async_show_form(step_id="faces", data_schema=schema)
+
+    async def async_step_settings(self, user_input=None):
+        self._ensure()
+        assert self._data is not None
+        if user_input is not None:
+            self._data[CONF_REFRESH_INTERVAL] = int(user_input[CONF_REFRESH_INTERVAL])
+            return await self.async_step_init()
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_REFRESH_INTERVAL, default=self._data[CONF_REFRESH_INTERVAL]
+                ): NumberSelector(
+                    NumberSelectorConfig(min=5, max=3600, mode=NumberSelectorMode.BOX)
+                )
+            }
+        )
+        return self.async_show_form(step_id="settings", data_schema=schema)
+
+    async def async_step_save(self, user_input=None):
+        self._ensure()
+        return self.async_create_entry(title="", data=self._data)
