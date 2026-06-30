@@ -1,5 +1,24 @@
 # Design: screens, modes, and controls
 
+## Terminology (locked to Divoom's own wording)
+
+Match the Divoom app verbatim so users don't have to translate between app and
+HA (the app's English is machine-translated and a bit awkward, but consistency
+with what the user sees wins).
+
+- **Overall Display** — one face spanning all 5 screens (`ChannelType 0`,
+  `Set5LcdWholeClockId`). App term: "Overall display".
+- **Independent Display** — five separate faces, one per screen (`ChannelType 1`,
+  `LcdIndependence`). App term: "Independent display".
+- **Control1 … Control5** — the Independent Display presets (`IndependenceName`).
+  Fixed/unrenamable, used verbatim.
+- **Face** — a single screen's content (the app's "Faces" menu). Preferred over
+  "Clock"/"Dial" since many faces aren't clocks. (`ClockId` is the API field.)
+- **HA Dashboard** — our custom-rendered mode (not a Divoom term).
+- **Off** — black screen.
+
+
+
 Target architecture for managing the 5 screens. Agreed during design; not all
 implemented yet (see BACKLOG.md for status).
 
