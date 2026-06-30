@@ -3,7 +3,8 @@
 A custom [Home Assistant](https://www.home-assistant.io/) integration for the
 **Divoom Times Gate**, the desk clock with five independent 128×128 screens.
 It renders your Home Assistant sensor data across the 5 screens and exposes
-device controls (brightness, on/off, refresh, buzzer).
+device controls: display brightness/on-off, two RGB lights (edge strip +
+backlight, with colour), a refresh button, and a buzzer button.
 
 > ⚠️ **Development repo.** Under active development. The default screens use the
 > author's entity IDs as worked examples — edit them via **Configure** to match

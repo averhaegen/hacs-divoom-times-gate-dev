@@ -20,8 +20,9 @@ options-flow YAML editor, diagnostics).
 
 ## Device controls (Phase B)
 
-- [ ] **Edge-RGB light entity** — expose `Channel/SetRGBInfo` (edge RGB +
-  backlight, color, effects).
+- [x] **Edge-RGB light entities** — `Channel/SetRGBInfo` exposed as two RGB
+  lights (Edge RGB, Backlight) with color + brightness. (Effects/ColorCycle not
+  yet exposed.)
 - [ ] **Rotation / mirror controls** — select/switch entities.
 - [ ] **Per-screen native faces** — `page_type: clock` exists; add a friendly
   picker (needs the cloud dial list / `Get5LcdInfoV2`).

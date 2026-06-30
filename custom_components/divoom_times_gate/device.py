@@ -85,6 +85,22 @@ class TimesGate:
     async def turn_off(self) -> None:
         await self._send({"Command": "Channel/OnOffScreen", "OnOff": 0})
 
+    async def set_rgb(
+        self, light_index: int, on: bool, color_hex: str, brightness: int
+    ) -> dict:
+        """Control the RGB lighting. light_index: 0=all, 1=edge strip, 2=backlight."""
+        return await self._send(
+            {
+                "Command": "Channel/SetRGBInfo",
+                "OnOff": 1 if on else 0,
+                "Color": color_hex,
+                "ColorCycle": 0,
+                "Brightness": max(0, min(100, int(brightness))),
+                "SelectLightIndex": int(light_index),
+                "LightList": [{"SelectEffect": 0}, {"SelectEffect": 0}, {"SelectEffect": 0}],
+            }
+        )
+
     async def play_buzzer(self, active_ms: int = 500, off_ms: int = 500, total_ms: int = 3000) -> None:
         await self._send(
             {
