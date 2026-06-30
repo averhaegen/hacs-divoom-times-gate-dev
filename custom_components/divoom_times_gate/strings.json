@@ -28,8 +28,7 @@
           "screen_2": "Screen 3",
           "screen_3": "Screen 4",
           "screen_4": "Screen 5",
-          "faces": "Faces (favorites)",
-          "settings": "Settings",
+          "settings": "Settings & faces",
           "save": "Save & close"
         }
       },
@@ -58,14 +57,13 @@
         "description": "This screen's content: a single page, or a list of pages that rotate.",
         "data": { "screens": "Pages" }
       },
-      "faces": {
-        "title": "Faces (favorites)",
-        "description": "Favorite device faces shown in the Display source and Screen selects, as {overall: [...], per_screen: [...]} with name + clock_id.",
-        "data": { "faces": "Faces" }
-      },
       "settings": {
-        "title": "Settings",
-        "data": { "refresh_interval": "Refresh interval (seconds)" }
+        "title": "Settings & faces",
+        "description": "Refresh interval, and your favorite device faces ({overall: [...], per_screen: [...]} with name + clock_id) shown in the Display source and Screen selects.",
+        "data": {
+          "refresh_interval": "Refresh interval (seconds)",
+          "faces": "Faces (favorites)"
+        }
       }
     }
   }

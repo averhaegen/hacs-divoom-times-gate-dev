@@ -149,7 +149,6 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                 "screen_2",
                 "screen_3",
                 "screen_4",
-                "faces",
                 "settings",
                 "save",
             ],
@@ -189,24 +188,13 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
     async def async_step_screen_4(self, user_input=None):
         return await self._screen_step(4, user_input)
 
-    async def async_step_faces(self, user_input=None):
-        self._ensure()
-        assert self._data is not None
-        if user_input is not None and isinstance(user_input.get(CONF_FACES), dict):
-            self._data[CONF_FACES] = user_input[CONF_FACES]
-            return await self.async_step_init()
-        schema = vol.Schema(
-            {vol.Required(CONF_FACES, default=self._data[CONF_FACES]): ObjectSelector()}
-        )
-        return self.async_show_form(
-            step_id="faces", data_schema=schema, last_step=False
-        )
-
     async def async_step_settings(self, user_input=None):
         self._ensure()
         assert self._data is not None
         if user_input is not None:
             self._data[CONF_REFRESH_INTERVAL] = int(user_input[CONF_REFRESH_INTERVAL])
+            if isinstance(user_input.get(CONF_FACES), dict):
+                self._data[CONF_FACES] = user_input[CONF_FACES]
             return await self.async_step_init()
         schema = vol.Schema(
             {
@@ -214,7 +202,10 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                     CONF_REFRESH_INTERVAL, default=self._data[CONF_REFRESH_INTERVAL]
                 ): NumberSelector(
                     NumberSelectorConfig(min=5, max=3600, mode=NumberSelectorMode.BOX)
-                )
+                ),
+                vol.Required(
+                    CONF_FACES, default=self._data[CONF_FACES]
+                ): ObjectSelector(),
             }
         )
         return self.async_show_form(
