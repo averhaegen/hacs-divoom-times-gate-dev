@@ -107,8 +107,12 @@ def _draw_component(
         align = component.get("align", "").lower()
         font_spec = component.get("font")
         if is_scalable_font(font_spec):
-            # Native scalable TrueType: keep original case.
-            canvas.draw_text_scalable(text, tuple(component["position"]), color, int(font_spec), align)
+            # Native scalable TrueType: keep original case, auto-fit to width.
+            max_width = component.get("max_width")
+            canvas.draw_text_scalable(
+                text, tuple(component["position"]), color, int(font_spec), align,
+                int(max_width) if max_width else None,
+            )
         else:
             # Bitmap font: Pixoo uppercases all text — match for visual parity.
             font = font_by_name(font_spec)

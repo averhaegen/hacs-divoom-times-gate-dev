@@ -66,9 +66,23 @@ class PixelCanvas:
         self._px = self._img.load()
         self._draw = ImageDraw.Draw(self._img)
 
-    def draw_text_scalable(self, text, xy, rgb, size: int, align: str = "left") -> None:
-        """Anti-aliased TrueType text (for native-resolution screens)."""
-        font = _scalable_font(int(size))
+    def draw_text_scalable(
+        self, text, xy, rgb, size: int, align: str = "left", max_width: int | None = None
+    ) -> None:
+        """Anti-aliased TrueType text. ``size`` is the target size; the font is
+        auto-shrunk so the text fits ``max_width`` (default: canvas width minus a
+        small margin), so long sensor values never overflow the screen."""
+        if max_width is None:
+            max_width = self.size - 4
+        s = int(size)
+        font = _scalable_font(s)
+        while s > 6:
+            bbox = self._draw.textbbox((0, 0), text, font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                break
+            s -= 1
+            font = _scalable_font(s)
+
         fill = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
         x = xy[0]
         if align in ("center", "right"):
