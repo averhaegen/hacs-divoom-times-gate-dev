@@ -76,10 +76,10 @@ redundant.)
   (the app's "Independent Displays", `Control1`..`Control5`), each a set of 5
   per-screen faces. Switching is `Channel/Set5LcdChannelType{ChannelType:1,
   LcdIndependence:<id>}`. So users build scenes in the app and switch them from
-  HA. This unit's presets (example): Control1=840167, Control2=841103,
-  Control3=841105, Control4=841107, Control5=841109. (`0` in a preset = an unset
-  screen.) The integration reads these via cloud `Get5LcdInfoV2` to build the
-  Select options.
+  HA. Each preset has its own `LcdIndependence` id (a server-assigned handle,
+  different per device) — the integration reads them via cloud `Get5LcdInfoV2` at
+  runtime and references presets by their stable position (`Control1`..`Control5`).
+  (`0` in a preset = an unset screen.)
 - **Per-screen Select (independent mode):** `Custom` | `Off` | `<favorite faces>`.
   A face calls `SetClockSelectId` for that LCD (independence group); `Custom`
   hands the screen back to its rendered config; `Off` = black.
@@ -142,6 +142,8 @@ Per tick (refresh interval):
 
 ## Confirmed device facts
 
-- This unit: DeviceId 300405795, independence group 840167, Neon whole-face 1040.
+- The DeviceId, independence-group ids, and per-device face ids are read live
+  from the device/cloud — never hard-code a specific unit's ids (or the
+  LocalToken) into this repo.
 - `Set5LcdWholeClockId` (local) and `SetClockSelectId` (local) both work.
 - Cloud `Get5LcdInfoV2` mirrors **app** changes, not local-API changes.
