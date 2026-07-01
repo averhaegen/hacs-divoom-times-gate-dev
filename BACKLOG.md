@@ -87,11 +87,26 @@ options-flow YAML editor, diagnostics).
   Sends one `Draw/SendHttpItemList` (`NewFlag: 1`) setup call per screen when
   the page's config changes (signature-based, like other native page types),
   then never pushes again — the device self-polls each item independently.
-  See `docs/DISPDATA.md` §3 for the YAML and field defaults.
-  **Not yet tested on a real device.**
-- [ ] **Batch `dispdata_text` (and other native pages) across screens into one
-  `Draw/CommandList` call**, per [[feedback-multi-screen-calls]] — currently each
-  screen still sends its own `Draw/SendHttpItemList` POST.
+  See `docs/DISPDATA.md` §3 for the YAML and field defaults. Confirmed on a
+  real device (temp + solar sensors).
+- [x] **Fixed: single-page screens were invalidated every `duration` seconds
+  for no reason.** `coordinator._build_custom` (formerly `_render_custom`) was
+  calling `self.invalidate(screen)` whenever elapsed time crossed the page
+  duration, even with only one page (nothing to rotate to) — this forced a
+  full repaint/resend every ~15s, visible as a periodic reload on
+  `dispdata_text` pages (which resend their whole `NewFlag: 1` setup on every
+  invalidate). Now only invalidates when there's more than one page to rotate
+  between.
+- [x] **Batch all changed screens into one `Draw/CommandList` call per tick.**
+  Per [[feedback-multi-screen-calls]]. `device.py` gained `build_*` variants
+  (`build_jpeg`, `build_clock_face`, `build_play_gif`, `build_visualizer`,
+  `build_item_list`) that construct a sub-command payload without sending, plus
+  `send_command_list()` wrapping `Draw/CommandList`. `coordinator._async_update_data`
+  now builds every screen's pending command first, then sends them all in a
+  single POST (instead of one POST per screen) — same for `_reassert_faces`.
+  On-demand single-screen actions (`async_set_screen`, native face pushes)
+  still send immediately, since batching only pays off when multiple screens
+  change in the same update.
 
 ## Quality scale → Platinum (parked)
 

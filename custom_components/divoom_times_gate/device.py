@@ -136,13 +136,13 @@ class TimesGate:
             }
         )
 
-    async def send_item_list(
+    def build_item_list(
         self,
         screen: int,
         items: list[dict],
         background_gif: str | None = None,
     ) -> dict:
-        """Draw/SendHttpItemList — rich on-device text items for one screen.
+        """Build a Draw/SendHttpItemList payload without sending it.
 
         ``background_gif`` triggers a ``NewFlag: 1`` setup call (full repaint,
         slower — required the first time or after the panel left this mode);
@@ -161,7 +161,27 @@ class TimesGate:
             payload["BackgroudGif"] = background_gif
         else:
             payload["NewFlag"] = 0
-        return await self._send(payload)
+        return payload
+
+    async def send_item_list(
+        self,
+        screen: int,
+        items: list[dict],
+        background_gif: str | None = None,
+    ) -> dict:
+        """Draw/SendHttpItemList — rich on-device text items for one screen."""
+        return await self._send(self.build_item_list(screen, items, background_gif))
+
+    async def send_command_list(self, commands: list[dict]) -> dict:
+        """Draw/CommandList — batch several commands into one POST.
+
+        ``commands`` are sub-command payloads as built by this class's
+        ``build_*`` methods (no ``LocalToken`` — that belongs on the outer
+        wrapper only). See docs/API.md §5.1 and [[feedback-multi-screen-calls]]:
+        prefer this over sequential per-screen POSTs whenever more than one
+        screen changes in the same update.
+        """
+        return await self._send({"Command": "Draw/CommandList", "CommandList": commands})
 
     async def set_key_backlight(self, on: bool) -> dict:
         """Toggle the physical button backlight (KeyOnOff, via Channel/SetRGBInfo)."""
@@ -179,10 +199,10 @@ class TimesGate:
             }
         )
 
-    async def set_clock_face(
+    def build_clock_face(
         self, screen: int, clock_id: int, independence_id: int | None = None
     ) -> dict:
-        """Show a native face on one screen (0-4), in Independent Display mode."""
+        """Build a Channel/SetClockSelectId payload without sending it."""
         if screen not in range(SCREEN_COUNT):
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
         payload: dict = {
@@ -192,20 +212,28 @@ class TimesGate:
         }
         if independence_id:
             payload["LcdIndependence"] = int(independence_id)
-        return await self._send(payload)
+        return payload
+
+    async def set_clock_face(
+        self, screen: int, clock_id: int, independence_id: int | None = None
+    ) -> dict:
+        """Show a native face on one screen (0-4), in Independent Display mode."""
+        return await self._send(self.build_clock_face(screen, clock_id, independence_id))
+
+    def build_play_gif(self, screen: int, urls: list[str]) -> dict:
+        """Build a Device/PlayGif payload without sending it."""
+        lcd_array = [0] * SCREEN_COUNT
+        lcd_array[screen] = 1
+        return {"Command": "Device/PlayGif", "LcdArray": lcd_array, "FileName": list(urls)}
 
     async def play_gif(self, screen: int, urls: list[str]) -> dict:
         """Play one or more net GIFs on a screen (sizes 16/32/64/128)."""
-        lcd_array = [0] * SCREEN_COUNT
-        lcd_array[screen] = 1
-        return await self._send(
-            {"Command": "Device/PlayGif", "LcdArray": lcd_array, "FileName": list(urls)}
-        )
+        return await self._send(self.build_play_gif(screen, urls))
 
-    async def set_visualizer(
+    def build_visualizer(
         self, screen: int, eq_position: int, independence_id: int | None = None
     ) -> dict:
-        """Show an audio visualizer on a screen."""
+        """Build a Channel/SetEqPosition payload without sending it."""
         payload: dict = {
             "Command": "Channel/SetEqPosition",
             "EqPosition": int(eq_position),
@@ -213,7 +241,13 @@ class TimesGate:
         }
         if independence_id:
             payload["LcdIndependence"] = int(independence_id)
-        return await self._send(payload)
+        return payload
+
+    async def set_visualizer(
+        self, screen: int, eq_position: int, independence_id: int | None = None
+    ) -> dict:
+        """Show an audio visualizer on a screen."""
+        return await self._send(self.build_visualizer(screen, eq_position, independence_id))
 
     async def set_whole_face(self, clock_id: int) -> dict:
         """Overall Display: one face spanning all 5 screens."""
@@ -231,11 +265,12 @@ class TimesGate:
             }
         )
 
-    async def send_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
-        """Send a 128×128 JPEG image to one screen (0-4).
+    def build_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
+        """Build a Draw/SendHttpGif payload without sending it.
 
         ``jpeg_bytes`` is the raw bytes of a JPEG file (e.g. from
-        ``PIL.Image.save(buf, "JPEG")``). PicID auto-increments monotonically.
+        ``PIL.Image.save(buf, "JPEG")``). PicID auto-increments monotonically
+        on every call, whether or not the built payload is actually sent.
         """
         if screen not in range(SCREEN_COUNT):
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
@@ -245,15 +280,17 @@ class TimesGate:
 
         self._pic_id += 1
 
-        return await self._send(
-            {
-                "Command": "Draw/SendHttpGif",
-                "LcdArray": lcd_array,
-                "PicNum": 1,
-                "PicWidth": SCREEN_SIZE,
-                "PicOffset": 0,
-                "PicID": self._pic_id,
-                "PicSpeed": 1000,
-                "PicData": base64.b64encode(jpeg_bytes).decode("ascii"),
-            }
-        )
+        return {
+            "Command": "Draw/SendHttpGif",
+            "LcdArray": lcd_array,
+            "PicNum": 1,
+            "PicWidth": SCREEN_SIZE,
+            "PicOffset": 0,
+            "PicID": self._pic_id,
+            "PicSpeed": 1000,
+            "PicData": base64.b64encode(jpeg_bytes).decode("ascii"),
+        }
+
+    async def send_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
+        """Send a 128×128 JPEG image to one screen (0-4)."""
+        return await self._send(self.build_jpeg(jpeg_bytes, screen))

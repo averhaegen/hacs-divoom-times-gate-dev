@@ -191,11 +191,22 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         return self.config_entry.options.get("active_independence")
 
     async def _reassert_faces(self) -> None:
+        """Re-apply face/off state on every screen in one batched call.
+
+        See [[feedback-multi-screen-calls]] — always batch multi-screen updates
+        into a single Draw/CommandList rather than one POST per screen.
+        """
+        commands = []
         for screen, (kind, value) in enumerate(self.screen_modes):
             if kind == "face":
-                await self.device.set_clock_face(screen, int(value), self._active_independence())
+                commands.append(
+                    self.device.build_clock_face(screen, int(value), self._active_independence())
+                )
             elif kind == "off":
-                await self._push_black(screen)
+                jpeg = await self.hass.async_add_executor_job(render_black)
+                commands.append(self.device.build_jpeg(jpeg, screen))
+        if commands:
+            await self.device.send_command_list(commands)
 
     async def _push_black(self, screen: int) -> None:
         jpeg = await self.hass.async_add_executor_job(render_black)
@@ -213,68 +224,104 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             return {"display": self.display[0]}
 
         results: dict[int, str] = {}
+        pending: dict[int, tuple[dict, str]] = {}
         for screen in range(SCREEN_COUNT):
             kind = self.screen_modes[screen][0]
-            if kind == "custom":
-                results[screen] = await self._render_custom(screen)
-            # face / off were set on change; nothing to do each tick.
+            if kind != "custom":
+                continue  # face / off were set on change; nothing to do each tick.
+            status, command, signature = await self._build_custom(screen)
+            if command is not None:
+                pending[screen] = (command, signature)
+            else:
+                results[screen] = status
+
+        if pending:
+            # Batch every screen that actually changed this tick into one
+            # Draw/CommandList POST instead of one per screen — see
+            # [[feedback-multi-screen-calls]] and docs/API.md §5.1.
+            resp = await self.device.send_command_list([cmd for cmd, _ in pending.values()])
+            status = resp.get("error_code", "?")
+            if status == 0:
+                for screen, (_, signature) in pending.items():
+                    self._last_hashes[screen] = signature
+            for screen in pending:
+                results[screen] = status
         return results
 
-    async def _render_custom(self, screen: int) -> Any:
+    async def _build_custom(self, screen: int) -> tuple[str, dict | None, str | None]:
+        """Build the pending command for one screen's current page, if any.
+
+        Returns ``(status, command, signature)``. ``command`` is ``None`` when
+        there's nothing to send this tick (status is "empty"/"unchanged"/"error");
+        otherwise ``command`` is a Draw/CommandList sub-command payload and
+        ``status`` is "pending" (the caller fills in the real status once the
+        batched call actually completes).
+        """
         pages = [p for p in self._pages_for(screen) if is_enabled(self.hass, p)]
         if not pages:
-            return "empty"
+            return "empty", None, None
 
-        # Advance rotation based on the current page's duration.
+        # Advance rotation based on the current page's duration. With a single
+        # page there is nothing to rotate to, so skip the elapsed-time bookkeeping
+        # entirely — otherwise every `duration` seconds we'd invalidate the hash
+        # and force a full repaint/resend for no reason (visible as a reload on
+        # native pages like dispdata_text, which resend their whole setup call).
         idx = self._rot_index[screen] % len(pages)
-        self._rot_elapsed[screen] += self._tick
-        if self._rot_elapsed[screen] >= page_duration(pages[idx], DEFAULT_DURATION):
-            idx = (idx + 1) % len(pages)
-            self._rot_index[screen] = idx
-            self._rot_elapsed[screen] = 0
-            # New page in the rotation: force a repaint (its image may hash the
-            # same as an earlier custom page, and a clock/off page may have left
-            # native content on the panel).
-            self.invalidate(screen)
+        if len(pages) > 1:
+            self._rot_elapsed[screen] += self._tick
+            if self._rot_elapsed[screen] >= page_duration(pages[idx], DEFAULT_DURATION):
+                idx = (idx + 1) % len(pages)
+                self._rot_index[screen] = idx
+                self._rot_elapsed[screen] = 0
+                # New page in the rotation: force a repaint (its image may hash the
+                # same as an earlier custom page, and a clock/off page may have left
+                # native content on the panel).
+                self.invalidate(screen)
 
         page = pages[idx]
         ptype = (page.get("page_type") or page.get("type") or "components").lower()
         try:
             if ptype == "clock":
                 cid = int(page.get("clock_id", page.get("id", 0)))
-                return await self._apply_native(
-                    screen, f"clock:{cid}",
-                    lambda: self.device.set_clock_face(screen, cid, self._active_independence()),
-                )
+                command = self.device.build_clock_face(screen, cid, self._active_independence())
+                return self._pending(screen, f"clock:{cid}", command)
             if ptype == "gif":
                 urls = page.get("gif_url") or page.get("gif_urls") or []
                 if isinstance(urls, str):
                     urls = [urls]
-                return await self._apply_native(
-                    screen, f"gif:{urls}", lambda: self.device.play_gif(screen, urls)
-                )
+                command = self.device.build_play_gif(screen, urls)
+                return self._pending(screen, f"gif:{urls}", command)
             if ptype == "visualizer":
                 eq = int(page.get("id", page.get("eq_position", 0)))
-                return await self._apply_native(
-                    screen, f"viz:{eq}",
-                    lambda: self.device.set_visualizer(screen, eq, self._active_independence()),
-                )
+                command = self.device.build_visualizer(screen, eq, self._active_independence())
+                return self._pending(screen, f"viz:{eq}", command)
             if ptype == "dispdata_text":
-                return await self._apply_dispdata_text(screen, page)
+                return await self._build_dispdata_text(screen, page)
             if ptype == "off":
                 jpeg = await self.hass.async_add_executor_job(render_black)
             else:
                 jpeg = await self.hass.async_add_executor_job(render_page, self.hass, page)
-            return await self._send_jpeg(screen, jpeg)
+            digest = hashlib.md5(jpeg).hexdigest()
+            if self._last_hashes.get(screen) == digest:
+                return "unchanged", None, None
+            return "pending", self.device.build_jpeg(jpeg, screen), digest
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Screen %s render failed: %s", screen, err)
-            return "error"
+            return "error", None, None
+
+    def _pending(self, screen: int, signature: str, command: dict) -> tuple[str, dict | None, str | None]:
+        """Skip building a duplicate command if the signature hasn't changed."""
+        if self._last_hashes.get(screen) == signature:
+            return "unchanged", None, None
+        return "pending", command, signature
 
     _DISPDATA_ROW_Y = (8, 40, 70, 100)  # default y per row, up to 4 sensors, evenly spaced
     _DISPDATA_MAX_SENSORS = 4
 
-    async def _apply_dispdata_text(self, screen: int, page: dict[str, Any]) -> Any:
-        """Set up up to 4 type-23 net-text items once; the device then self-polls
+    async def _build_dispdata_text(
+        self, screen: int, page: dict[str, Any]
+    ) -> tuple[str, dict | None, str | None]:
+        """Build up to 4 type-23 net-text items once; the device then self-polls
         each independently.
 
         See docs/DISPDATA.md. ``page`` fields:
@@ -289,7 +336,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             sensors = [{"entity_id": page["entity_id"]}]
         if not sensors:
             _LOGGER.error("dispdata_text page on screen %s has no sensors configured", screen)
-            return "error"
+            return "error", None, None
         if len(sensors) > self._DISPDATA_MAX_SENSORS:
             _LOGGER.warning(
                 "dispdata_text page on screen %s has %d sensors, only the first %d are shown",
@@ -300,7 +347,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         secret = self.config_entry.data.get(CONF_DISPDATA_SECRET)
         if not secret:
             _LOGGER.error("dispdata_text: no DispData secret set up yet for this entry")
-            return "error"
+            return "error", None, None
 
         try:
             base_url = get_url(self.hass, allow_external=False, prefer_cloud=False)
@@ -308,14 +355,14 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             _LOGGER.error(
                 "dispdata_text: could not resolve a local HA URL for the device to poll"
             )
-            return "error"
+            return "error", None, None
 
         items = []
         for row, sensor in enumerate(sensors):
             entity_id = sensor.get("entity_id")
             if not entity_id:
                 _LOGGER.error("dispdata_text: sensor #%d on screen %s is missing entity_id", row, screen)
-                return "error"
+                return "error", None, None
 
             label = sensor.get("name")
             if label is None:
@@ -345,22 +392,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             )
 
         signature = f"dispdata:{screen}:{items}"
-        if self._last_hashes.get(screen) == signature:
-            return "unchanged"
-
         background_gif = page.get(
             "background_gif", "https://dummyimage.com/128x128/000000/000000.gif"
         )
-        resp = await self.device.send_item_list(screen, items, background_gif=background_gif)
-        if resp.get("error_code") == 0:
-            self._last_hashes[screen] = signature
-        return resp.get("error_code", "?")
-
-    async def _apply_native(self, screen: int, signature: str, apply) -> Any:
-        """Apply a native page command once; skip if already applied (no flicker)."""
-        if self._last_hashes.get(screen) == signature:
-            return "unchanged"
-        resp = await apply()
-        if resp.get("error_code") == 0:
-            self._last_hashes[screen] = signature
-        return resp.get("error_code", "?")
+        command = self.device.build_item_list(screen, items, background_gif=background_gif)
+        return self._pending(screen, signature, command)
