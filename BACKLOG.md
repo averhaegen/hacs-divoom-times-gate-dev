@@ -63,6 +63,21 @@ options-flow YAML editor, diagnostics).
   - Needs an HA-served endpoint returning `{"DispData": ...}` + device→HA
     reachability + a path secret for light auth.
 
+## API-driven work (from `docs/API.md`)
+
+- [x] **Split face catalogs into two documents.** `scripts/get_face_ids.py` now
+  writes `docs/FACES_OVERALL.md` (Overall Display / whole dial, 27) and
+  `docs/FACES_INDEPENDENT.md` (Independent Display / per-screen, 537) from their
+  two disjoint cloud sources; combined `FACES.md` removed.
+- [ ] **Investigate push-free text via `SendHttpItemList` type 23 (`DispData`).**
+  The device polls a URL every `update_time`s expecting `{"DispData": "<value>"}`.
+  Host a per-value responder on HA's `http` component so the device self-updates
+  text natively — no per-tick JPEG push, no PicID churn, crisp text. Most
+  promising replacement for the JPEG overlay on text-based screens.
+  - [ ] First resolve the open ❓: how does `SendHttpItemList` target one of the
+    5 screens (no `LcdArray`/`LcdIndex` in its docs)? Test `LcdIndex`/`LcdArray`
+    after a valid `SendHttpGif`; confirm the "stuck loading" was sequencing.
+
 ## Quality scale → Platinum (parked)
 
 - [ ] **CI** — GitHub Actions: hassfest, HACS validation, ruff, mypy --strict.
