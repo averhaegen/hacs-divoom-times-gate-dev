@@ -433,6 +433,9 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 |-------|------|-------|
 | `Command` | string | `Draw/SendHttpItemList` |
 | `LocalToken` | int | required |
+| `LcdIndex` | int | 0–4, target screen ✅ |
+| `NewFlag` | int | **`1` = overwrite** existing items (required to make it work) ✅ |
+| `BackgroudGif` | string | URL to a `.gif` file the device fetches as background; required when `NewFlag: 0`, ignored when `NewFlag: 1` ✅ |
 | `ItemList` | array | list of item objects (below) |
 
 **Item object:** `TextId` (< 40), `type` (see table), `x`, `y`, `dir`, `font` (id from
@@ -465,9 +468,10 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
   seconds; the response must be JSON `{"DispData": "value"}`. Example URL
   `http://appin.divoom-gz.com/Device/ReturnCurrentDate?test=0` → `{"DispData": "2022-01-22 13:51:56"}`.
 
-> ❌ **Type 23 not available on Times Gate** — `SendHttpItemList` does not work as a
-> text overlay on this device (see note above). The `DispData` pull model is therefore
-> not usable here.
+> ✅ **Type 23 confirmed working on Times Gate** — device polls the URL every
+> `update_time` seconds and displays the returned `{"DispData": "value"}`. See the
+> design note in §0.5 and the `DispData` pull-model architecture discussion in the
+> backlog.
 
 ```json
 {
@@ -480,14 +484,16 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 }
 ```
 
-> ❌ **Not working on Times Gate (tested).** Tested with and without `LcdIndex`, with
-> various fonts (0, 2, 4, 18), after a valid `SendHttpGif`. Result: always a brief
-> "loading" screen followed by the previous gif — text never appears. The command is
-> accepted (`error_code: 0`) but the device switches mode instead of overlaying text,
-> then reverts. Conclusion: `SendHttpItemList` is a Pixoo command that the Times Gate
-> does not support as a text overlay. On-device clock/temp/weather (type 1–21) and
-> the type-23 URL-poll (`DispData`) are therefore **not available** on Times Gate.
-> Use `Draw/SendHttpText` (§4.7) for all text overlays.
+> ✅ **Verified working on Times Gate** — but requires two extra fields not in the
+> generic Pixoo doc (page 61): **`LcdIndex`** (0–4, target screen) and **`NewFlag`**
+> (`1` = overwrite existing items) and **`BackgroudGif`** (URL to a `.gif` file the
+> device fetches as background — must be a reachable URL; `NewFlag: 1` makes
+> `BackgroudGif` optional). Without `NewFlag` + `BackgroudGif` the device shows a
+> brief loading screen and reverts. Tested and confirmed all types: type 6 (hh:mm:ss),
+> type 14 (weekday), type 22 (static text), type 23 (URL-poll `DispData`) — all
+> rendered correctly on screen 0 with `LcdIndex: 0`. The Times Gate-specific doc
+> page (132) correctly documents `LcdIndex` and `NewFlag`/`BackgroudGif`; the generic
+> Pixoo page (61) omits them.
 
 ---
 

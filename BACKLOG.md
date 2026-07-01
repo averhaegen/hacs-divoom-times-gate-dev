@@ -69,11 +69,14 @@ options-flow YAML editor, diagnostics).
   writes `docs/FACES_OVERALL.md` (Overall Display / whole dial, 27) and
   `docs/FACES_INDEPENDENT.md` (Independent Display / per-screen, 537) from their
   two disjoint cloud sources; combined `FACES.md` removed.
-- [x] **`SendHttpItemList` — confirmed NOT working on Times Gate.** Tested with/without
-  `LcdIndex`, fonts 0/2/4/18, after a valid `SendHttpGif`. Always: brief loading →
-  revert to gif, no text. Device accepts the command (`error_code: 0`) but switches
-  mode instead of overlaying. On-device clock/temp/weather (type 1–21) and type-23
-  URL-poll (`DispData`) are not available. Text overlays → use `SendHttpText` only.
+- [x] **`SendHttpItemList` — confirmed WORKING on Times Gate.** Requires `LcdIndex`
+  (target screen) + `NewFlag: 1` + `BackgroudGif` (gif URL as background). Without
+  these the device shows loading and reverts. All types confirmed: type 6 (hh:mm:ss),
+  type 14 (weekday), type 22 (static text), type 23 (URL-poll `DispData`) ✅.
+- [ ] **Exploit `SendHttpItemList` type 23 (`DispData`) for push-free sensor values.**
+  Host `{"DispData": "<value>"}` endpoints in HA per sensor; set once, device self-
+  refreshes. This is now the primary candidate to replace periodic JPEG pushes for
+  text-based screens.
 
 ## Quality scale → Platinum (parked)
 
