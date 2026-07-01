@@ -434,15 +434,20 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 | `Command` | string | `Draw/SendHttpItemList` |
 | `LocalToken` | int | required |
 | `LcdIndex` | int | 0–4, target screen ✅ |
-| `NewFlag` | int | **`1` = overwrite** existing items (required to make it work) ✅ |
-| `BackgroudGif` | string | URL to a `.gif` file the device fetches as background; required when `NewFlag: 0`, ignored when `NewFlag: 1` ✅ |
+| `NewFlag` | int | `1` = overwrite all items + set new background; `0` = add/update individual items, background unchanged ✅ |
+| `BackgroudGif` | string | URL to a `.gif` the device fetches as background — required with `NewFlag: 1`; omit with `NewFlag: 0` ✅ |
 | `ItemList` | array | list of item objects (below) |
 
-**Item object:** `TextId` (< 40), `type` (see table), `x`, `y`, `dir`, `font` (id from
-§4.9; pick a `Type=0` font to allow scrolling), `TextWidth`, `Textheight`,
-`TextString` (< 512; display string **or** request URL; optional), `speed`,
-`color` (`#RRGGBB`), `update_time` (URL poll interval seconds; optional),
-`align` (`1` left, `2` middle, `3` right; firmware ≥ 90102).
+**Item object:** `TextId` (< 40), `type` (see table), `x`, `y`, `dir` (`0` scroll left,
+`1` scroll right), `font` (id from §4.9; pick a `Type=0` font to allow scrolling),
+`TextWidth` (up to **128** for full screen width ✅ — no upper limit like `SendHttpText`),
+`Textheight`, `TextString` (< 512; display string **or** request URL; optional), `speed`
+(ms per scroll step), `color` (`#RRGGBB`), `update_time` (URL poll interval seconds;
+optional), `align` (`0` scroll ✅, `1` left, `2` middle, `3` right; firmware ≥ 90102).
+
+**Scrolling behaviour** ✅: text longer than `TextWidth` scrolls when `align: 0`. Use
+`dir: 0` for horizontal left scroll. Note: `dir: 0` + `align: 2` (middle) triggers
+**vertical** scroll on Times Gate — use `align: 0` for horizontal.
 
 **`type` values:**
 
@@ -473,13 +478,28 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 > design note in §0.5 and the `DispData` pull-model architecture discussion in the
 > backlog.
 
+**Setup call (NewFlag 1) — send once to set background + all items** ✅:
 ```json
 {
   "Command": "Draw/SendHttpItemList", "LocalToken": <LocalToken>,
+  "LcdIndex": 0, "NewFlag": 1,
+  "BackgroudGif": "https://dummyimage.com/128x128/1e1e1e/000000.gif",
   "ItemList": [
-    { "TextId": 1, "type": 6,  "x": 0, "y": 0,  "dir": 0, "font": 18, "TextWidth": 64, "Textheight": 16, "speed": 100, "align": 1, "color": "#FF0000" },
-    { "TextId": 2, "type": 22, "x": 0, "y": 32, "dir": 0, "font": 2,  "TextWidth": 64, "Textheight": 16, "speed": 100, "align": 1, "color": "#FFFFFF", "TextString": "hello, divoom" },
-    { "TextId": 3, "type": 23, "x": 0, "y": 48, "dir": 0, "font": 4,  "TextWidth": 64, "Textheight": 16, "speed": 100, "align": 1, "color": "#FFF000", "update_time": 60, "TextString": "http://appin.divoom-gz.com/Device/ReturnCurrentDate?test=0" }
+    { "TextId": 1, "type": 6,  "x": 0, "y": 8,  "dir": 0, "font": 18, "TextWidth": 128, "Textheight": 16, "speed": 100, "align": 2, "color": "#00FFFF" },
+    { "TextId": 2, "type": 14, "x": 0, "y": 30, "dir": 0, "font": 18, "TextWidth": 128, "Textheight": 16, "speed": 100, "align": 2, "color": "#FFFFFF" },
+    { "TextId": 3, "type": 22, "x": 0, "y": 56, "dir": 0, "font": 4,  "TextWidth": 128, "Textheight": 16, "speed": 50,  "align": 0, "color": "#FFFF00", "TextString": "Hello Times Gate!" },
+    { "TextId": 4, "type": 23, "x": 0, "y": 80, "dir": 0, "font": 2,  "TextWidth": 128, "Textheight": 16, "speed": 50,  "align": 2, "color": "#FF8800", "update_time": 10, "TextString": "http://appin.divoom-gz.com/Device/ReturnCurrentDate?test=0" }
+  ]
+}
+```
+
+**Update call (NewFlag 0) — update one item without reloading background** ✅:
+```json
+{
+  "Command": "Draw/SendHttpItemList", "LocalToken": <LocalToken>,
+  "LcdIndex": 0, "NewFlag": 0,
+  "ItemList": [
+    { "TextId": 3, "type": 22, "x": 0, "y": 56, "dir": 0, "font": 4, "TextWidth": 128, "Textheight": 16, "speed": 50, "align": 0, "color": "#00FF00", "TextString": "Updated value!" }
   ]
 }
 ```
