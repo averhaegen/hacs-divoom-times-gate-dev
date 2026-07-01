@@ -73,10 +73,25 @@ options-flow YAML editor, diagnostics).
   (target screen) + `NewFlag: 1` + `BackgroudGif` (gif URL as background). Without
   these the device shows loading and reverts. All types confirmed: type 6 (hh:mm:ss),
   type 14 (weekday), type 22 (static text), type 23 (URL-poll `DispData`) ✅.
-- [ ] **Exploit `SendHttpItemList` type 23 (`DispData`) for push-free sensor values.**
-  Host `{"DispData": "<value>"}` endpoints in HA per sensor; set once, device self-
-  refreshes. This is now the primary candidate to replace periodic JPEG pushes for
-  text-based screens.
+- [x] **DispData HTTP view.** `custom_components/divoom_times_gate/dispdata.py`
+  serves `{"DispData": "<state>"}` for any `entity_id`, no-auth, gated by a
+  per-config-entry secret in the URL path. Registered once globally (shared
+  aiohttp route across entries) in `__init__.py`; secret persisted in
+  `entry.data[CONF_DISPDATA_SECRET]`. See `docs/DISPDATA.md`.
+- [x] **`dispdata_text` page type — up to 4 sensors per screen.**
+  `coordinator._apply_dispdata_text` + `device.send_item_list`. `sensors:` list
+  (or a single-sensor `entity_id` shorthand) builds one type-23 item per sensor,
+  auto-stacked at y `8/40/70/100`. Each poll URL carries an optional `?label=`
+  query param that `dispdata.py`'s view uses to prefix the value
+  (`"<name>: <state><unit>"`); unit_of_measurement is appended automatically.
+  Sends one `Draw/SendHttpItemList` (`NewFlag: 1`) setup call per screen when
+  the page's config changes (signature-based, like other native page types),
+  then never pushes again — the device self-polls each item independently.
+  See `docs/DISPDATA.md` §3 for the YAML and field defaults.
+  **Not yet tested on a real device.**
+- [ ] **Batch `dispdata_text` (and other native pages) across screens into one
+  `Draw/CommandList` call**, per [[feedback-multi-screen-calls]] — currently each
+  screen still sends its own `Draw/SendHttpItemList` POST.
 
 ## Quality scale → Platinum (parked)
 

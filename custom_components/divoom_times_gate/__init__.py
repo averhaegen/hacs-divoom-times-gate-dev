@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import secrets as secrets_module
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -11,6 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_DEVICE_ID,
+    CONF_DISPDATA_SECRET,
     CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
@@ -21,11 +23,12 @@ from .const import (
 from .coordinator import TimesGateCoordinator
 from .device import TimesGate
 from .discovery import async_discover_devices, async_get_independent_presets
+from .dispdata import register_secret, unregister_secret
 from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON, Platform.SELECT]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON, Platform.SELECT, Platform.SWITCH]
 
 type DivoomTimesGateConfigEntry = ConfigEntry[TimesGateCoordinator]
 
@@ -73,6 +76,17 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
+
+    # Generate a stable per-entry secret once, for the type-23 DispData poll
+    # endpoint (see dispdata.py / docs/DISPDATA.md).
+    dispdata_secret = entry.data.get(CONF_DISPDATA_SECRET)
+    if not dispdata_secret:
+        dispdata_secret = secrets_module.token_urlsafe(16)
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_DISPDATA_SECRET: dispdata_secret}
+        )
+    register_secret(hass, dispdata_secret)
+    entry.async_on_unload(lambda: unregister_secret(hass, dispdata_secret))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))

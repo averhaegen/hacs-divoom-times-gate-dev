@@ -19,25 +19,43 @@ from .entity import TimesGateEntity
 
 PARALLEL_UPDATES = 1
 
-# RGB effect name -> (SelectEffect index, ColorCycle). "Colour N" effects honour
-# the chosen colour (SelectEffect 3/4/6/7/9); "Party N" are fixed multicolour
-# animations that ignore the colour. "Rainbow" auto-cycles via ColorCycle.
-RGB_EFFECTS: dict[str, tuple[int, bool]] = {
-    "Solid": (3, False),
-    "Rainbow": (3, True),
-    "Colour 4": (4, False),
-    "Colour 6": (6, False),
-    "Colour 7": (7, False),
-    "Colour 9": (9, False),
-    "Party 0": (0, False),
-    "Party 1": (1, False),
-    "Party 2": (2, False),
-    "Party 5": (5, False),
-    "Party 8": (8, False),
-    "Party 10": (10, False),
-    "Party 11": (11, False),
+# Edgelight effect IDs (0-11), used directly as SelectEffect when light_index=1.
+EDGELIGHT_EFFECTS: dict[str, int] = {
+    "0. Sparkle": 0,
+    "1. Pendulum": 1,
+    "2. Rainbow": 2,
+    "3. Beetle": 3,
+    "4. Bulb": 4,
+    "5. Flame": 5,
+    "6. Waves": 6,
+    "7. Rain": 7,
+    "8. Heart": 8,
+    "9. Infinity": 9,
+    "10. Rocket": 10,
+    "11. Color wheel": 11,
 }
-DEFAULT_RGB_EFFECT = "Solid"
+DEFAULT_EDGELIGHT_EFFECT = "4. Bulb"
+# Backlight "off" theme when used as Edgelight's secondary zone (Scenario 2).
+EDGELIGHT_SECONDARY_OFF = 5
+
+# Backlight effect IDs (0-11), used directly as SelectEffect when light_index=2.
+BACKLIGHT_EFFECTS: dict[str, int] = {
+    "0. Beetle": 0,
+    "1. Atom": 1,
+    "2. Pendulum": 2,
+    "3. Sparkle": 3,
+    "4. Rainbow": 4,
+    "5. Bulb": 5,
+    "6. Infinity": 6,
+    "7. Chat": 7,
+    "8. Antenna": 8,
+    "9. Waves": 9,
+    "10. Rain": 10,
+    "11. Circles": 11,
+}
+DEFAULT_BACKLIGHT_EFFECT = "5. Bulb"
+# Edgelight "off" theme when used as Backlight's secondary zone (Scenario 1).
+BACKLIGHT_SECONDARY_OFF = 6
 
 
 async def async_setup_entry(
@@ -47,13 +65,17 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Times Gate display light + RGB lights."""
     coordinator = entry.runtime_data
-    async_add_entities(
-        [
-            TimesGateLight(coordinator),
-            TimesGateRGBLight(coordinator, 1, "Surround lights"),
-            TimesGateRGBLight(coordinator, 2, "Back lights"),
-        ]
+    edgelight = TimesGateRGBLight(
+        coordinator, 1, "Edgelight", EDGELIGHT_EFFECTS,
+        DEFAULT_EDGELIGHT_EFFECT, BACKLIGHT_SECONDARY_OFF,
     )
+    backlight = TimesGateRGBLight(
+        coordinator, 2, "Backlight", BACKLIGHT_EFFECTS,
+        DEFAULT_BACKLIGHT_EFFECT, EDGELIGHT_SECONDARY_OFF,
+    )
+    coordinator.rgb_lights[1] = edgelight
+    coordinator.rgb_lights[2] = backlight
+    async_add_entities([TimesGateLight(coordinator), edgelight, backlight])
 
 
 class TimesGateLight(TimesGateEntity, LightEntity):
@@ -98,47 +120,51 @@ class TimesGateLight(TimesGateEntity, LightEntity):
 
 
 class TimesGateRGBLight(TimesGateEntity, LightEntity):
-    """One of the device's RGB lighting zones (edge strip or backlight).
+    """One of the device's two RGB lighting zones (Edgelight or Backlight).
 
     The device has no read-back for RGB state, so this is an assumed-state light.
+    Colour cycling is controlled by a separate ``switch`` entity
+    (``TimesGateColorCycleSwitch``) that reads/writes ``color_cycle`` on this light
+    and re-sends the current effect. Setting one zone re-points the device's
+    physical light button to control only that zone (see docs/RGB_LIGHTS.md).
     """
 
     _attr_color_mode = ColorMode.RGB
     _attr_supported_color_modes = {ColorMode.RGB}
     _attr_supported_features = LightEntityFeature.EFFECT
-    _attr_effect_list = list(RGB_EFFECTS)
     _attr_assumed_state = True
 
-    def __init__(self, coordinator, light_index: int, name: str) -> None:
+    def __init__(
+        self,
+        coordinator,
+        light_index: int,
+        name: str,
+        effects: dict[str, int],
+        default_effect: str,
+        secondary_off: int,
+    ) -> None:
         super().__init__(coordinator)
         self._light_index = light_index
+        self._effects = effects
+        self._secondary_off = secondary_off
         self._attr_name = name
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_rgb_{light_index}"
+        self._attr_effect_list = list(effects)
         self._attr_is_on = False
         self._attr_rgb_color = (255, 255, 255)
         self._attr_brightness = 255
-        self._attr_effect = DEFAULT_RGB_EFFECT
+        self._attr_effect = default_effect
+        self.color_cycle = False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         if (rgb := kwargs.get(ATTR_RGB_COLOR)) is not None:
             self._attr_rgb_color = rgb
         if (bri := kwargs.get(ATTR_BRIGHTNESS)) is not None:
             self._attr_brightness = bri
-        if (eff := kwargs.get(ATTR_EFFECT)) in RGB_EFFECTS:
+        if (eff := kwargs.get(ATTR_EFFECT)) in self._effects:
             self._attr_effect = eff
 
-        select_effect, color_cycle = RGB_EFFECTS.get(
-            self._attr_effect, RGB_EFFECTS[DEFAULT_RGB_EFFECT]
-        )
-        color_hex = "#{:02X}{:02X}{:02X}".format(*self._attr_rgb_color)
-        await self._device.set_rgb(
-            self._light_index,
-            True,
-            color_hex,
-            round((self._attr_brightness or 255) * 100 / 255),
-            effect=select_effect,
-            color_cycle=color_cycle,
-        )
+        await self._async_apply()
         self._attr_is_on = True
         self.async_write_ha_state()
 
@@ -146,3 +172,24 @@ class TimesGateRGBLight(TimesGateEntity, LightEntity):
         await self._device.set_rgb(self._light_index, False, "#000000", 0)
         self._attr_is_on = False
         self.async_write_ha_state()
+
+    async def async_set_color_cycle(self, enabled: bool) -> None:
+        """Set colour-cycle state and re-push if the light is currently on."""
+        self.color_cycle = enabled
+        if self._attr_is_on:
+            await self._async_apply()
+        self.async_write_ha_state()
+
+    async def _async_apply(self) -> None:
+        """Push the current effect/colour/cycle state to the device."""
+        select_effect = self._effects.get(self._attr_effect, self._effects[next(iter(self._effects))])
+        color_hex = "#{:02X}{:02X}{:02X}".format(*self._attr_rgb_color)
+        await self._device.set_rgb(
+            self._light_index,
+            True,
+            color_hex,
+            round((self._attr_brightness or 255) * 100 / 255),
+            effect=select_effect,
+            color_cycle=self.color_cycle,
+            secondary_effect=self._secondary_off,
+        )

@@ -9,6 +9,7 @@ CONF_HARDWARE = "hardware"
 CONF_MAC = "mac"
 CONF_DEVICE_ID = "device_id"
 CONF_DASHBOARD_BASE = "dashboard_base"  # preset position (0-4) used as overlay base
+CONF_DISPDATA_SECRET = "dispdata_secret"  # URL guard for the type-23 DispData view
 
 DEFAULT_HARDWARE = 400
 DEFAULT_REFRESH_INTERVAL = 60

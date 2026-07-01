@@ -164,23 +164,24 @@ How long each item of a subscribed gallery shows, per screen.
 ### 1.13 `Channel/SetRGBInfo` — ambient RGB lighting ✅
 
 Controls the two ambient light zones (reverse-engineered live).
+**Full effect catalog with icons and per-scenario ID tables: see [`docs/RGB_LIGHTS.md`](RGB_LIGHTS.md).**
 
 ```json
 { "Command": "Channel/SetRGBInfo", "LocalToken": <LocalToken>,
-  "SelectLightIndex": 1, "Brightness": 100, "OnOff": 1,
-  "LightList": [ { "SelectEffect": 3, "Color": "#00FF00", "ColorCycle": 0 } ] }
+  "SelectLightIndex": 2, "Brightness": 100, "OnOff": 1,
+  "LightList": [ { "SelectEffect": 0 }, { "SelectEffect": 0 }, { "SelectEffect": 5, "Color": "#00FF00", "ColorCycle": 0 } ] }
 ```
 
-- `SelectLightIndex` — `0` All / `1` **Surround** (edge strips) / `2` **Back** (behind
-  screens). The two zones are independent (blue front + green back works).
-- `SelectEffect` — `Color` only applies on effects **3, 4, 6, 7, 9**; effects
-  `0,1,2,5,8,10,11` are fixed multicolour animations that ignore `Color`.
-- `ColorCycle` — `1` auto rainbow cycle, `0` fixed colour.
+- `SelectLightIndex` — `0` = both / `1` = **Edgelight** (surround strips) / `2` = **Backlight** (behind screens). The two zones are independent.
+- `LightList` — array of 3 items; which index controls which zone **shifts depending on `SelectLightIndex`** — see `RGB_LIGHTS.md` §2 for the full mapping.
+- `SelectEffect` — effect ID; mapping differs between Edgelight and Backlight (separate ID tables in `RGB_LIGHTS.md`).
+- `Color` — `#RRGGBB`; only applied on effects with customizable colour (❌ effects ignore it).
+- `ColorCycle` — `1` = auto colour cycle, `0` = fixed colour.
 - `OnOff` — `1`=on, `0`=off ✅ (the docs state the opposite — **wrong**).
-- `Brightness` — 0–100 ambient brightness. `KeyOnOff` = the app's "button light".
+- `Brightness` — 0–100. `KeyOnOff` — button backlight on/off.
 
-Suggested HA mapping: Solid = effect 3 / cycle 0; Rainbow = effect 3 / cycle 1;
-Colour = effect 4/6/7/9; Party = a fixed-animation effect.
+**Backlight "Solid" colour:** `SelectLightIndex: 2`, `LightList[2].SelectEffect: 5`, `ColorCycle: 0`, `Color: "#RRGGBB"`.
+**Backlight "Rainbow":** same but `SelectEffect: 4`, `ColorCycle: 1`.
 
 ---
 
@@ -423,6 +424,21 @@ Single line, fixed height 16pt, scrolls if it doesn't fit.
 `{ id, name, width, high, charset, type }`. `type` `0` = scrolls when text overflows,
 `1` = no scroll. The `id` is what you pass as `font` in `SendHttpItemList`.
 
+**Verified working font IDs on Times Gate** ✅ (exhaustively tested, all even — odd IDs do not exist):
+
+| Size class | Font IDs |
+|------------|----------|
+| Small (fits in `Textheight: 16`) | `2, 4, 18, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 80, 96, 108, 120, 124, 128, 140, 150, 158, 160, 162, 164, 174, 178, 180, 182, 184, 186, 188, 190, 194, 196, 198, 200, 246, 248, 250, 252, 254` |
+| Large (needs `Textheight: 64`, see note) | `256` *(built-in yellow colour)*, `260` *(built-in white colour)* |
+
+> ⚠️ **Large font gotcha** ✅: fonts 256 and 260 have a built-in colour — the `color`
+> field is ignored. They also require more vertical space; use `y: 32, Textheight: 64`
+> (full-screen height). Additionally they only render correctly when sent with **`NewFlag: 0`**
+> *after* the screen has already been initialised with `NewFlag: 1`. Sending them directly
+> with `NewFlag: 1` results in a black screen.
+>
+> Fonts 262+ were tested and did not render — likely not present on this firmware.
+
 ### 4.10 `Draw/SendHttpItemList` — rich item list with on-device data 📄❓
 
 Sends a list of items that can render **device-native elements** (time, date,
@@ -435,7 +451,7 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 | `LocalToken` | int | required |
 | `LcdIndex` | int | 0–4, target screen ✅ |
 | `NewFlag` | int | `1` = overwrite all items + set new background; `0` = add/update individual items, background unchanged ✅ |
-| `BackgroudGif` | string | URL to a `.gif` the device fetches as background — required with `NewFlag: 1`; omit with `NewFlag: 0` ✅ |
+| `BackgroudGif` | string | URL to a `.gif` the device fetches as background — required with `NewFlag: 1`; omit with `NewFlag: 0` ✅. **Must be `.gif`** ✅ — a `.jpg`/`.png` URL returns `error_code 0` (accepted) but the panel gets stuck showing no background/loading; only tested with `.gif` did the background actually render. |
 | `ItemList` | array | list of item objects (below) |
 
 **Item object:** `TextId` (< 40), `type` (see table), `x`, `y`, `dir` (`0` scroll left,
@@ -541,17 +557,23 @@ not across the full screen. To centre text on the full 128px screen: `x: 0`,
 
 ## 5. Command list (batching)
 
-### 5.1 `Draw/CommandList` — run several commands in one POST 📄
+### 5.1 `Draw/CommandList` — run several commands in one POST ✅
 
-Firmware ≥ 90102.
+Firmware ≥ 90102. Batches multiple commands into a single HTTP call — confirmed
+working on Times Gate. **Always prefer this over sequential calls when updating
+multiple screens simultaneously**: it avoids visible per-screen flicker and reduces
+round-trips.
 
 ```json
 { "Command": "Draw/CommandList", "LocalToken": <LocalToken>,
   "CommandList": [
-    { "Command": "Device/PlayTFGif", "FileType": 2, "FileName": "http://f.divoom-gz.com/64_64.gif" },
-    { "Command": "Channel/SetBrightness", "Brightness": 100 }
+    { "Command": "Draw/SendHttpItemList", "LcdIndex": 0, "NewFlag": 0, "ItemList": [...] },
+    { "Command": "Draw/SendHttpItemList", "LcdIndex": 1, "NewFlag": 0, "ItemList": [...] },
+    { "Command": "Draw/SendHttpItemList", "LcdIndex": 2, "NewFlag": 0, "ItemList": [...] }
   ] }
 ```
+
+> Note: `LocalToken` belongs on the outer wrapper only — omit it from each inner command.
 
 ### 5.2 `Draw/UseHTTPCommandSource` — run commands from a URL 📄
 

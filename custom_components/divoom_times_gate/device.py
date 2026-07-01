@@ -102,16 +102,28 @@ class TimesGate:
         on: bool,
         color_hex: str,
         brightness: int,
-        effect: int = 3,
+        effect: int = 5,
         color_cycle: bool = False,
+        secondary_effect: int = 0,
     ) -> dict:
-        """Control the RGB lighting (Channel/SetRGBInfo).
+        """Control one RGB lighting zone (Channel/SetRGBInfo).
 
-        light_index: 1=Surround lights (edge strips), 2=Back lights (behind the
-        screens). ``effect`` is the SelectEffect; only some effects honour
-        ``color_hex`` (3/4/6/7/9). ``color_cycle`` auto-cycles a rainbow instead
-        of the fixed colour. OnOff is 1=on/0=off (the docs say the opposite).
+        light_index: 1=Edgelight (surround strips), 2=Backlight (behind screens).
+        LightList index placement depends on light_index — see docs/RGB_LIGHTS.md §2:
+          Scenario 1 (Edgelight): LightList[1]=effect, [2]=secondary_effect (backlight
+            secondary theme 0-6; 6=off)
+          Scenario 2 (Backlight): LightList[1]=secondary_effect (edgelight secondary
+            theme 0-5; 5=off), [2]=effect
+        OnOff is 1=on/0=off (the docs say the opposite — wrong).
+
+        Note: setting one zone re-points the physical light button to control only
+        that zone (device behaviour, not something this integration can avoid).
         """
+        if light_index == 1:
+            light_list = [{"SelectEffect": 0}, {"SelectEffect": int(effect)}, {"SelectEffect": int(secondary_effect)}]
+        else:
+            light_list = [{"SelectEffect": 0}, {"SelectEffect": int(secondary_effect)}, {"SelectEffect": int(effect)}]
+
         return await self._send(
             {
                 "Command": "Channel/SetRGBInfo",
@@ -120,8 +132,41 @@ class TimesGate:
                 "ColorCycle": 1 if color_cycle else 0,
                 "Brightness": max(0, min(100, int(brightness))),
                 "SelectLightIndex": int(light_index),
-                "LightList": [{"SelectEffect": int(effect)}] * 3,
+                "LightList": light_list,
             }
+        )
+
+    async def send_item_list(
+        self,
+        screen: int,
+        items: list[dict],
+        background_gif: str | None = None,
+    ) -> dict:
+        """Draw/SendHttpItemList — rich on-device text items for one screen.
+
+        ``background_gif`` triggers a ``NewFlag: 1`` setup call (full repaint,
+        slower — required the first time or after the panel left this mode);
+        omitting it sends ``NewFlag: 0`` (fast item-only update, no flash).
+        See docs/API.md §4.10.
+        """
+        if screen not in range(SCREEN_COUNT):
+            raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
+        payload: dict = {
+            "Command": "Draw/SendHttpItemList",
+            "LcdIndex": screen,
+            "ItemList": items,
+        }
+        if background_gif:
+            payload["NewFlag"] = 1
+            payload["BackgroudGif"] = background_gif
+        else:
+            payload["NewFlag"] = 0
+        return await self._send(payload)
+
+    async def set_key_backlight(self, on: bool) -> dict:
+        """Toggle the physical button backlight (KeyOnOff, via Channel/SetRGBInfo)."""
+        return await self._send(
+            {"Command": "Channel/SetRGBInfo", "KeyOnOff": 1 if on else 0}
         )
 
     async def play_buzzer(self, active_ms: int = 500, off_ms: int = 500, total_ms: int = 3000) -> None:

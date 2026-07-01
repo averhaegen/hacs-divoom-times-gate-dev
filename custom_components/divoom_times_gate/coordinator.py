@@ -17,14 +17,17 @@ import hashlib
 import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
+    CONF_DISPDATA_SECRET,
     CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
     DEFAULT_DURATION,
@@ -71,6 +74,9 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self._first_run = True
         self._tick = interval
         self.presets: list = []  # IndependentPreset list, filled at setup
+        # RGB light entities, keyed by light_index (1=Edgelight, 2=Backlight),
+        # filled by light.py's async_setup_entry so switch.py can reach them.
+        self.rgb_lights: dict[int, Any] = {}
 
         # Last-sent JPEG hash per screen, persisted across entry reloads so that
         # editing config only re-pushes (flashes) the screens that changed, and
@@ -253,6 +259,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                     screen, f"viz:{eq}",
                     lambda: self.device.set_visualizer(screen, eq, self._active_independence()),
                 )
+            if ptype == "dispdata_text":
+                return await self._apply_dispdata_text(screen, page)
             if ptype == "off":
                 jpeg = await self.hass.async_add_executor_job(render_black)
             else:
@@ -261,6 +269,92 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Screen %s render failed: %s", screen, err)
             return "error"
+
+    _DISPDATA_ROW_Y = (8, 40, 70, 100)  # default y per row, up to 4 sensors, evenly spaced
+    _DISPDATA_MAX_SENSORS = 4
+
+    async def _apply_dispdata_text(self, screen: int, page: dict[str, Any]) -> Any:
+        """Set up up to 4 type-23 net-text items once; the device then self-polls
+        each independently.
+
+        See docs/DISPDATA.md. ``page`` fields:
+          sensors: list of up to 4 {entity_id (required), name, color, font,
+            align, y} — or a single top-level entity_id (back-compat, same as
+            a 1-item sensors list.
+          Shared across all rows unless overridden per sensor: x, TextWidth,
+          Textheight, speed, align, font, color, update_time, background_gif.
+        """
+        sensors: list[dict[str, Any]] = list(page.get("sensors") or [])
+        if not sensors and page.get("entity_id"):
+            sensors = [{"entity_id": page["entity_id"]}]
+        if not sensors:
+            _LOGGER.error("dispdata_text page on screen %s has no sensors configured", screen)
+            return "error"
+        if len(sensors) > self._DISPDATA_MAX_SENSORS:
+            _LOGGER.warning(
+                "dispdata_text page on screen %s has %d sensors, only the first %d are shown",
+                screen, len(sensors), self._DISPDATA_MAX_SENSORS,
+            )
+            sensors = sensors[: self._DISPDATA_MAX_SENSORS]
+
+        secret = self.config_entry.data.get(CONF_DISPDATA_SECRET)
+        if not secret:
+            _LOGGER.error("dispdata_text: no DispData secret set up yet for this entry")
+            return "error"
+
+        try:
+            base_url = get_url(self.hass, allow_external=False, prefer_cloud=False)
+        except NoURLAvailableError:
+            _LOGGER.error(
+                "dispdata_text: could not resolve a local HA URL for the device to poll"
+            )
+            return "error"
+
+        items = []
+        for row, sensor in enumerate(sensors):
+            entity_id = sensor.get("entity_id")
+            if not entity_id:
+                _LOGGER.error("dispdata_text: sensor #%d on screen %s is missing entity_id", row, screen)
+                return "error"
+
+            label = sensor.get("name")
+            if label is None:
+                state = self.hass.states.get(entity_id)
+                label = state.name if state is not None else entity_id
+
+            poll_url = f"{base_url}/api/divoom_times_gate/dispdata/{secret}/{entity_id}"
+            if label:
+                poll_url += f"?label={quote(label)}"
+
+            items.append(
+                {
+                    "TextId": row + 1,
+                    "type": 23,
+                    "x": int(sensor.get("x", page.get("x", 0))),
+                    "y": int(sensor.get("y", page.get("y", self._DISPDATA_ROW_Y[row]))),
+                    "dir": 0,
+                    "font": int(sensor.get("font", page.get("font", 4))),
+                    "TextWidth": int(sensor.get("TextWidth", page.get("TextWidth", 128))),
+                    "Textheight": int(sensor.get("Textheight", page.get("Textheight", 16))),
+                    "speed": int(sensor.get("speed", page.get("speed", 50))),
+                    "align": int(sensor.get("align", page.get("align", 1))),
+                    "color": sensor.get("color", page.get("color", "#FFFFFF")),
+                    "update_time": int(sensor.get("update_time", page.get("update_time", 10))),
+                    "TextString": poll_url,
+                }
+            )
+
+        signature = f"dispdata:{screen}:{items}"
+        if self._last_hashes.get(screen) == signature:
+            return "unchanged"
+
+        background_gif = page.get(
+            "background_gif", "https://dummyimage.com/128x128/000000/000000.gif"
+        )
+        resp = await self.device.send_item_list(screen, items, background_gif=background_gif)
+        if resp.get("error_code") == 0:
+            self._last_hashes[screen] = signature
+        return resp.get("error_code", "?")
 
     async def _apply_native(self, screen: int, signature: str, apply) -> Any:
         """Apply a native page command once; skip if already applied (no flicker)."""
