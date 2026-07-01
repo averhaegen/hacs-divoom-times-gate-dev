@@ -396,7 +396,7 @@ on that screen.
 | `x`, `y` | int | start position |
 | `dir` | int | `0` scroll left, `1` scroll right |
 | `font` | int | `0–7`, app-animation font |
-| `TextWidth` | int | text area width, **> 16 and < 64** |
+| `TextWidth` | int | text area width, **> 16 and < 64** — values ≥ 64 return `"Request data illegal json"` ✅ |
 | `TextString` | string | utf8, **< 512** chars |
 | `speed` | int | scroll step time (ms) |
 | `color` | string | `#RRGGBB` |
@@ -465,13 +465,9 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
   seconds; the response must be JSON `{"DispData": "value"}`. Example URL
   `http://appin.divoom-gz.com/Device/ReturnCurrentDate?test=0` → `{"DispData": "2022-01-22 13:51:56"}`.
 
-> 💡 **Design implication — inverted, push-free updates.** Type 23 lets the device
-> **pull** its own values. If the integration exposes a tiny HTTP endpoint per value
-> that returns `{"DispData": "<current value>"}`, we set the item **once** and the
-> device self-refreshes on its `update_time` — no periodic JPEG push, no PicID churn,
-> crisp native text. HA already runs a web server (the `http` component / webhooks),
-> so hosting `{"DispData": ...}` responders for our sensor values is cheap. This is the
-> most promising path to replace the per-tick JPEG overlay for text-based screens.
+> ❌ **Type 23 not available on Times Gate** — `SendHttpItemList` does not work as a
+> text overlay on this device (see note above). The `DispData` pull model is therefore
+> not usable here.
 
 ```json
 {
@@ -484,13 +480,14 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 }
 ```
 
-> ❓ **Open question — per-screen targeting.** Unlike `SendHttpText`, the documented
-> `SendHttpItemList` params include **no** `LcdArray`/`LcdIndex`. How to target one of
-> the 5 screens is **unconfirmed**. To test: add `LcdIndex` (as in `SendHttpText`) or
-> `LcdArray` (as in `SendHttpGif`) and verify visually. Also unconfirmed whether the
-> "stuck loading" we saw was sequencing (item list must follow a valid `SendHttpGif`
-> on that screen). Resolving this unlocks fully on-device clock/temp/weather with no
-> per-refresh pushing.
+> ❌ **Not working on Times Gate (tested).** Tested with and without `LcdIndex`, with
+> various fonts (0, 2, 4, 18), after a valid `SendHttpGif`. Result: always a brief
+> "loading" screen followed by the previous gif — text never appears. The command is
+> accepted (`error_code: 0`) but the device switches mode instead of overlaying text,
+> then reverts. Conclusion: `SendHttpItemList` is a Pixoo command that the Times Gate
+> does not support as a text overlay. On-device clock/temp/weather (type 1–21) and
+> the type-23 URL-poll (`DispData`) are therefore **not available** on Times Gate.
+> Use `Draw/SendHttpText` (§4.7) for all text overlays.
 
 ---
 
