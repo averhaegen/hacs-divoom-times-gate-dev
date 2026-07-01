@@ -443,11 +443,33 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 `TextWidth` (up to **128** for full screen width ✅ — no upper limit like `SendHttpText`),
 `Textheight`, `TextString` (< 512; display string **or** request URL; optional), `speed`
 (ms per scroll step), `color` (`#RRGGBB`), `update_time` (URL poll interval seconds;
-optional), `align` (`0` scroll ✅, `1` left, `2` middle, `3` right; firmware ≥ 90102).
+optional), `align` (see table below ✅ — Times Gate values match `SendHttpText`, NOT the Pixoo doc).
 
-**Scrolling behaviour** ✅: text longer than `TextWidth` scrolls when `align: 0`. Use
-`dir: 0` for horizontal left scroll. Note: `dir: 0` + `align: 2` (middle) triggers
-**vertical** scroll on Times Gate — use `align: 0` for horizontal.
+**`align` behaviour on Times Gate** ✅ (tested — differs from Pixoo doc values):
+
+| align | Behaviour |
+|-------|-----------|
+| `0` | scroll (horizontal when text overflows `TextWidth`); appears left when text fits |
+| `3` | **centre** within the text block |
+| `5` | **right** within the text block |
+| anything else (1,2,4,6,…) | **left** (default fallback) |
+
+> ⚠️ The Pixoo doc (page 61) says `1`=left, `2`=middle, `3`=right — these values are
+> **wrong** on Times Gate. The correct values match `SendHttpText`: `0`=scroll,
+> `3`=middle, `4`=left, `5`=right. Unrecognised values default to left.
+
+`align` controls alignment **within the text block** (defined by `x` + `TextWidth`),
+not across the full screen. To centre text on the full 128px screen: `x: 0`,
+`TextWidth: 128`, `align: 3`. `dir` does **not** control scroll direction on the Times
+Gate — `align: 0` triggers horizontal scroll regardless of `dir`.
+
+> 💡 **Multi-colour scrolling trick** ✅: place two (or more) adjacent scroll blocks
+> (`align: 0`) with the same `speed` and complementary `TextWidth` values that add up
+> to 128. Give each block a different `color` and split the sentence across them so
+> the text visually runs across the full screen in multiple colours. Because both blocks
+> scroll at the same speed they stay in sync, and optically the sentence appears as one
+> continuous line with colour changes mid-text. Blocks do not clip each other — they
+> scroll through the same pixel area, so text length and timing must be matched.
 
 **`type` values:**
 
