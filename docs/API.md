@@ -400,7 +400,7 @@ on that screen.
 | `TextString` | string | utf8, **< 512** chars |
 | `speed` | int | scroll step time (ms) |
 | `color` | string | `#RRGGBB` |
-| `align` | int | `0` scroll, `2` normal, `3` middle, `4` left, `5` right (firmware ≥ 90102) |
+| `align` | int | `1` left, `3` middle, `5` right (firmware ≥ 90102); text scrolls automatically when longer than `TextWidth` ✅ |
 
 Single line, fixed height 16pt, scrolls if it doesn't fit.
 
@@ -449,19 +449,19 @@ optional), `align` (see table below ✅ — Times Gate values match `SendHttpTex
 
 | align | Behaviour |
 |-------|-----------|
-| `0` | scroll (horizontal when text overflows `TextWidth`); appears left when text fits |
+| `1` | **left** within the text block |
 | `3` | **centre** within the text block |
 | `5` | **right** within the text block |
-| anything else (1,2,4,6,…) | **left** (default fallback) |
 
 > ⚠️ The Pixoo doc (page 61) says `1`=left, `2`=middle, `3`=right — these values are
-> **wrong** on Times Gate. The correct values match `SendHttpText`: `0`=scroll,
-> `3`=middle, `4`=left, `5`=right. Unrecognised values default to left.
+> **wrong** on Times Gate. Use `1`/`3`/`5` (odd numbers: left/centre/right).
+
+**Scrolling** is triggered automatically when `TextString` is longer than `TextWidth`,
+regardless of `align`. It is not controlled by `align` or `dir`.
 
 `align` controls alignment **within the text block** (defined by `x` + `TextWidth`),
 not across the full screen. To centre text on the full 128px screen: `x: 0`,
-`TextWidth: 128`, `align: 3`. `dir` does **not** control scroll direction on the Times
-Gate — `align: 0` triggers horizontal scroll regardless of `dir`.
+`TextWidth: 128`, `align: 3`.
 
 > 💡 **Multi-colour scrolling trick** ✅: place two (or more) adjacent scroll blocks
 > (`align: 0`) with the same `speed` and complementary `TextWidth` values that add up
