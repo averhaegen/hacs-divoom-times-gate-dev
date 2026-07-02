@@ -97,9 +97,9 @@ The integration then:
    does not push again for this page on later coordinator ticks. Changing the
    page's config (position, color, sensors, …) is detected and re-triggers
    the one-time setup call.
-3. A `dispdata_text` page currently uses one `Draw/SendHttpItemList` call per
-   screen (not yet batched into a single `Draw/CommandList` across screens —
-   see BACKLOG.md).
+3. If several screens change in the same coordinator tick, their commands
+   (including any `dispdata_text` setup calls) are batched into a single
+   `Draw/CommandList` POST rather than one request per screen.
 
 | Field | Default | Notes |
 |---|---|---|
@@ -112,7 +112,123 @@ The integration then:
 | `Textheight` | `16` | use `64` for the large fonts (256, 260) |
 | `speed` | `50` | ms per scroll step, only relevant if text overflows `TextWidth` |
 | `update_time` | `10` | seconds between the device's own polls |
+| `items` | — | full manual control instead of `sensors:` — see §3b below; takes priority over `sensors`/`entity_id` if both are set |
 | `background_gif` | a solid black 128×128 gif | background shown behind all rows; **must be `.gif`** — `.jpg`/`.png` are accepted (`error_code 0`) but fail to render, see `docs/API.md` §4.10 |
+
+> ⚠️ **`name` with a space** ✅ (confirmed on device): the Times Gate's own
+> outbound poll GET does not reliably handle a percent-encoded space (`%20`)
+> in the query string — a `name` containing a space broke the device's polling.
+> Handled automatically: spaces in `name` are swapped for underscores before
+> being placed in the poll URL, and swapped back to spaces by the DispData view
+> before display, so `name: "Grid pwr"` still shows as `Grid pwr: 340W` on the
+> panel. You don't need to avoid spaces yourself — this is just documented in
+> case you're inspecting the raw poll URL and wonder why it has underscores.
+
+## 3b. Full manual layout with `items:`
+
+`sensors:` always renders one combined `"<name>: <value>"` row per sensor, in
+one colour, auto-stacked vertically. If you want the label and the value in
+**different colours**, side by side, or in a completely custom layout, use
+`items:` instead — this mirrors how you'd hand-write a raw
+`Draw/SendHttpItemList` call (`docs/API.md` §4.10): every piece is its own
+item with its own position/colour/font, and you decide the layout.
+
+```yaml
+- page_type: dispdata_text
+  items:
+    - kind: label            # static text, never polled
+      text: "Grid pwr"
+      x: 0
+      y: 40
+      font: 4
+      color: "#FFFF00"
+    - kind: value             # polls entity_id via DispData
+      entity_id: sensor.energyhome_electrical_power_from_grid
+      x: 0
+      y: 56                   # placed below the label instead of beside it
+      font: 32
+      color: "#00CCFF"
+      update_time: 10
+```
+
+Each entry:
+
+| Field | Applies to | Notes |
+|---|---|---|
+| `kind` | — | `"label"`, `"value"`, or a native kind (table below); inferred as `"value"` from `entity_id` being present, else `"label"`, if omitted |
+| `text` | `label` | required; static string, not templated |
+| `entity_id` | `value` | required |
+| `label` | `value` | optional — prefixes just this item's own value with `"<label>: "`, same space→underscore handling as `sensors:`. Usually left unset since the label is its own separate item. |
+| `update_time` | `value` | default `10` (or page-level default) |
+| `x` / `y` / `font` / `color` / `align` / `TextWidth` / `Textheight` / `speed` | all | per-item, falling back to the page-level default, then a built-in default (same as `sensors:`) |
+
+Up to **8 items** total (`_DISPDATA_MAX_ITEMS`), any mix of `label`/`value`/native.
+`items:` takes priority over `sensors:`/`entity_id` if both are present on the
+same page — pick one style per page.
+
+### Native device elements (clock, date, weather — zero polling)
+
+Besides `label`/`value`, `kind` also accepts any of the device's **built-in**
+elements — the panel renders these entirely on its own, no HA involvement at
+all after the one-time setup call (not even a poll, unlike `value`):
+
+| `kind` | Device element | | `kind` | Device element |
+|---|---|---|---|---|
+| `second` | seconds | | `weekday_2` | 2-letter weekday (`SU`) |
+| `minute` | minutes | | `weekday_3` | 3-letter weekday (`SUN`) |
+| `hour` | hours | | `weekday_full` | full weekday (`SUNDAY`) |
+| `ampm` | AM/PM marker | | `month_3` | 3-letter month (`JAN`) |
+| `time_short` | clock, `hh:mm` | | `temperature` | current temperature |
+| `time` (alias `clock`) | clock, `hh:mm:ss` | | `temp_max` | today's max temperature |
+| `year` | year | | `temp_min` | today's min temperature |
+| `day` | day of month | | `weather` | weather word (e.g. `Sunny`) |
+| `month` | month | | `noise` | ambient noise (dB) |
+| `mon_year` | month-year | | `month_day` | `eng-month.day` |
+
+A 12-hour clock is two adjacent items — `time_short` alone shows no AM/PM
+marker, so pair it with `ampm` positioned right after it:
+
+```yaml
+- page_type: dispdata_text
+  items:
+    - kind: time_short   # "hh:mm"
+      x: 0
+      TextWidth: 90
+      color: "#FFFFFF"
+    - kind: ampm          # "AM"/"PM"
+      x: 90
+      TextWidth: 38
+      color: "#AAAAAA"
+```
+
+For a 24-hour clock, `time` (`hh:mm:ss`) or `time_short` (`hh:mm`) alone is
+enough — no `ampm` item needed. Temperature/weather kinds reflect the
+location configured on the device itself (`Sys/LogAndLat`), not an HA
+weather entity — if you want an HA-side weather sensor's value instead, use
+`kind: value` with that entity's `entity_id`.
+
+## 3c. Two rendering systems — `components` vs. `dispdata_text`, which to use
+
+This integration ships **two independent ways** to put content on a screen,
+and picking the right one for each page matters:
+
+| | `page_type: components` | `page_type: dispdata_text` |
+|---|---|---|
+| Who renders? | **HA** — Pillow draws a JPEG locally | **The device itself** — native rendering |
+| Format origin | Ported from `gickowtf/pixoo-homeassistant` (Pixoo `components` schema) | This integration's own layer over Divoom's `Draw/SendHttpItemList` |
+| Update mechanism | HA pushes a new JPEG whenever the rendered content changes | Device polls itself (`kind: value`) or self-updates natively (`kind: time`/`weather`/…); HA pushes once at setup |
+| Network traffic | One push per screen per change (batched with other changed screens into one `Draw/CommandList`, see §3) | Zero after setup, except when the page's *config* changes |
+| Colour can react live to the value? | **Yes** — full Jinja templating, e.g. red/orange/green by threshold | **No** — colour is fixed at setup time; the device only re-fetches the *text*, not styling |
+| Content types | `text` (Jinja templated), `image` (icons/photos), `rectangle` (bars/borders), `templatable` (dynamic component lists) | `label` (static text), `value` (polled entity), native `kind:` (clock/date/weather) |
+| Best for | Dashboards with icons, progress bars, conditional colours, anything visual/composed | Simple always-on text/number readouts you want to be maintenance-free and low-traffic |
+
+**Rule of thumb:** if a page needs an icon, a bar, or a colour that changes
+with the value, use `components`. If it's plain text/numbers that don't need
+conditional colour, prefer `dispdata_text` — it's lighter on the network and
+self-heals less often needs re-pushing. Nothing stops you from mixing page
+types across different screens, or rotating between a `components` page and a
+`dispdata_text` page on the *same* screen — just avoid mixing `dispdata_text`
+with `gif`/`visualizer` pages in the same rotation (§6).
 
 ## 4. Network requirements — same LAN, VLANs, and firewalls
 
@@ -152,3 +268,40 @@ control to regenerate it. To rotate it: remove and re-add the integration
 `dispdata_secret` from the config entry's stored data before reload. A
 "regenerate secret" button is a reasonable future addition if this becomes a
 concern (e.g. after accidentally sharing a URL).
+
+## 6. Mixing `dispdata_text` with `gif` / `visualizer` in the same rotation
+
+Confirmed on a real device: rotating a screen between `dispdata_text` and
+native `gif` or `visualizer` pages was observed to leave the panel stuck on a
+"Loading" screen. Both `gif` (`Device/PlayGif`) and `visualizer`
+(`Channel/SetEqPosition`) switch the panel into a different native rendering
+mode than the `Draw/SendHttpItemList` overlay `dispdata_text` depends on;
+switching back doesn't reliably restore the item-list state. **Until this is
+root-caused, avoid combining `dispdata_text` with `gif`/`visualizer` pages in
+the same screen's rotation** — a screen dedicated solely to `dispdata_text`
+(optionally rotating with `components`/`clock`/`off` pages) has been confirmed
+stable. See BACKLOG.md for the open investigation.
+
+## 7. Recovering a stuck panel — HA has no read-back
+
+Once the one-time `Draw/SendHttpItemList` setup call succeeds, HA considers
+the page "done" and stops sending anything for it — by design, that's the
+whole point of DispData. The trade-off: **HA cannot detect if the panel
+itself later stops updating** (a device reboot, a background-gif fetch
+hiccup, a momentary network drop on the device's side, …), because nothing
+about the *page config* changed, only the device's live state — and HA only
+re-sends when the config's signature changes.
+
+- **Manual recovery:** press the **"Refresh screens"** button (or call the
+  `divoom_times_gate.refresh` service). This clears every screen's
+  change-tracking signature and forces a full repaint next tick, including a
+  fresh `NewFlag: 1` setup call for any `dispdata_text` page — same fix as for
+  a stuck JPEG page.
+- **Automatic recovery:** this integration intentionally does **not**
+  periodically re-send DispData setups on its own (that would undercut the
+  "zero push" design). If you want a safety net, build a small HA automation
+  instead — e.g. call the refresh button/service every N hours, or trigger it
+  off a template condition (like a `binary_sensor` you maintain that flags
+  "this screen looks stale"). Keeping this outside the integration means you
+  control the trade-off between resilience and push frequency yourself,
+  instead of the integration forcing one default on everyone.

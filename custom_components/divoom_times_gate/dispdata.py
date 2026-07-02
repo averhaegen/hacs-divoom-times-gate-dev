@@ -64,8 +64,10 @@ class DispDataView(HomeAssistantView):
 
         # Optional ?label=<text> prefixes the value as "<label>: <value>", so a
         # dispdata_text page can show a friendly name next to the reading
-        # without a separate item/API call.
+        # without a separate item/API call. Spaces arrive as underscores (see
+        # coordinator._build_dispdata_text) — the device's own poll GET doesn't
+        # reliably handle a percent-encoded space in the query string.
         if label := request.query.get("label"):
-            value = f"{label}: {value}"
+            value = f"{label.replace('_', ' ')}: {value}"
 
         return web.json_response({"DispData": value})

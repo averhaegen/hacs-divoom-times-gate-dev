@@ -296,6 +296,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 command = self.device.build_visualizer(screen, eq, self._active_independence())
                 return self._pending(screen, f"viz:{eq}", command)
             if ptype == "dispdata_text":
+                if page.get("items"):
+                    return await self._build_dispdata_items(screen, page)
                 return await self._build_dispdata_text(screen, page)
             if ptype == "off":
                 jpeg = await self.hass.async_add_executor_job(render_black)
@@ -371,7 +373,12 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
             poll_url = f"{base_url}/api/divoom_times_gate/dispdata/{secret}/{entity_id}"
             if label:
-                poll_url += f"?label={quote(label)}"
+                # The device's own HTTP client (issuing the poll GET) appears not to
+                # handle a percent-encoded space (%20) in the query string reliably
+                # — confirmed on device: a `name` with a space broke the poll.
+                # Sidestep it entirely by swapping spaces for underscores before
+                # quoting (dispdata.py's view swaps them back for display).
+                poll_url += f"?label={quote(label.replace(' ', '_'))}"
 
             items.append(
                 {
@@ -392,6 +399,150 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             )
 
         signature = f"dispdata:{screen}:{items}"
+        background_gif = page.get(
+            "background_gif", "https://dummyimage.com/128x128/000000/000000.gif"
+        )
+        command = self.device.build_item_list(screen, items, background_gif=background_gif)
+        return self._pending(screen, signature, command)
+
+    _DISPDATA_MAX_ITEMS = 8
+
+    # Native SendHttpItemList element types the device renders entirely on its
+    # own (clock/date/weather) — no TextString, no polling, zero HA involvement
+    # once sent. See docs/API.md §4.10 "type values" table.
+    _NATIVE_KIND_TYPES = {
+        "second": 1,
+        "minute": 2,
+        "hour": 3,
+        "ampm": 4,  # AM/PM marker; pair with "time_short" for a 12h clock
+        "time_short": 5,  # hh:mm
+        "time": 6,  # hh:mm:ss
+        "clock": 6,  # alias of "time"
+        "year": 7,
+        "day": 8,
+        "month": 9,
+        "mon_year": 10,
+        "month_day": 11,  # eng-month.day
+        "weekday_2": 13,  # SU
+        "weekday_3": 14,  # SUN
+        "weekday_full": 15,  # SUNDAY
+        "month_3": 16,  # JAN
+        "temperature": 17,
+        "temp_max": 18,
+        "temp_min": 19,
+        "weather": 20,  # weather word
+        "noise": 21,  # dB
+    }
+
+    async def _build_dispdata_items(
+        self, screen: int, page: dict[str, Any]
+    ) -> tuple[str, dict | None, str | None]:
+        """Build a raw list of dispdata_text items with full manual control.
+
+        Unlike ``sensors:`` (auto-stacked "<name>: <value>" rows), ``items:``
+        lets each entry be placed and coloured independently — a static
+        ``kind: label``, a polling ``kind: value``, or a native device element
+        (clock/date/weather, see ``_NATIVE_KIND_TYPES``) are fully separate, so
+        you decide the layout yourself (side by side, stacked, different
+        fonts/colours per piece) the same way you would hand-write a raw
+        Draw/SendHttpItemList call. See docs/DISPDATA.md §3.
+
+        Each entry in ``items``:
+          kind: "label" (static text), "value" (polls entity_id — inferred if
+            entity_id is present and kind is omitted), or one of
+            ``_NATIVE_KIND_TYPES`` (e.g. "time", "time_short", "ampm",
+            "weekday_3", "temperature", "weather" — rendered entirely by the
+            device, no polling, no TextString).
+          label items: text (required, static string).
+          value items: entity_id (required), update_time, label (optional
+            "<label>: " prefix on this item alone — usually left unset since
+            the label is its own item).
+          Common fields (all default to the page-level value, then a
+          built-in default): x, y, font, color, align, TextWidth, Textheight,
+          speed.
+        """
+        raw_items: list[dict[str, Any]] = list(page.get("items") or [])
+        if not raw_items:
+            _LOGGER.error("dispdata_text page on screen %s has an empty items list", screen)
+            return "error", None, None
+        if len(raw_items) > self._DISPDATA_MAX_ITEMS:
+            _LOGGER.warning(
+                "dispdata_text page on screen %s has %d items, only the first %d are shown",
+                screen, len(raw_items), self._DISPDATA_MAX_ITEMS,
+            )
+            raw_items = raw_items[: self._DISPDATA_MAX_ITEMS]
+
+        secret = self.config_entry.data.get(CONF_DISPDATA_SECRET)
+        base_url = None
+        if any(item.get("kind", "value" if item.get("entity_id") else "label") == "value" for item in raw_items):
+            if not secret:
+                _LOGGER.error("dispdata_text: no DispData secret set up yet for this entry")
+                return "error", None, None
+            try:
+                base_url = get_url(self.hass, allow_external=False, prefer_cloud=False)
+            except NoURLAvailableError:
+                _LOGGER.error(
+                    "dispdata_text: could not resolve a local HA URL for the device to poll"
+                )
+                return "error", None, None
+
+        items = []
+        for row, raw in enumerate(raw_items):
+            kind = raw.get("kind") or ("value" if raw.get("entity_id") else "label")
+            common = {
+                "TextId": row + 1,
+                "x": int(raw.get("x", page.get("x", 0))),
+                "y": int(raw.get("y", page.get("y", 8))),
+                "dir": 0,
+                "font": int(raw.get("font", page.get("font", 4))),
+                "TextWidth": int(raw.get("TextWidth", page.get("TextWidth", 128))),
+                "Textheight": int(raw.get("Textheight", page.get("Textheight", 16))),
+                "speed": int(raw.get("speed", page.get("speed", 50))),
+                "align": int(raw.get("align", page.get("align", 1))),
+                "color": raw.get("color", page.get("color", "#FFFFFF")),
+            }
+
+            if kind == "label":
+                text = raw.get("text")
+                if text is None:
+                    _LOGGER.error("dispdata_text: label item #%d on screen %s is missing text", row, screen)
+                    return "error", None, None
+                items.append({**common, "type": 22, "TextString": text})
+                continue
+
+            if kind in self._NATIVE_KIND_TYPES:
+                # Native device element (clock/date/weather) — no TextString,
+                # nothing to poll, the device renders it entirely on its own.
+                items.append({**common, "type": self._NATIVE_KIND_TYPES[kind]})
+                continue
+
+            if kind != "value":
+                _LOGGER.error(
+                    "dispdata_text: item #%d on screen %s has unknown kind %r", row, screen, kind
+                )
+                return "error", None, None
+
+            entity_id = raw.get("entity_id")
+            if not entity_id:
+                _LOGGER.error("dispdata_text: value item #%d on screen %s is missing entity_id", row, screen)
+                return "error", None, None
+
+            poll_url = f"{base_url}/api/divoom_times_gate/dispdata/{secret}/{entity_id}"
+            if label := raw.get("label"):
+                # See the space/underscore note in _build_dispdata_text — the
+                # device's own poll GET doesn't reliably handle %20.
+                poll_url += f"?label={quote(label.replace(' ', '_'))}"
+
+            items.append(
+                {
+                    **common,
+                    "type": 23,
+                    "update_time": int(raw.get("update_time", page.get("update_time", 10))),
+                    "TextString": poll_url,
+                }
+            )
+
+        signature = f"dispdata_items:{screen}:{items}"
         background_gif = page.get(
             "background_gif", "https://dummyimage.com/128x128/000000/000000.gif"
         )

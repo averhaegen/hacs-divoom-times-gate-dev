@@ -107,8 +107,43 @@ options-flow YAML editor, diagnostics).
   On-demand single-screen actions (`async_set_screen`, native face pushes)
   still send immediately, since batching only pays off when multiple screens
   change in the same update.
-
-## Quality scale → Platinum (parked)
+- [ ] **Investigate: rotating `dispdata_text` with `gif`/`visualizer` on the
+  same screen leaves the panel stuck on "Loading".** Confirmed on device —
+  disabling `gif`/`visualizer` pages on a screen that also has `dispdata_text`
+  resolved it immediately. Both native modes likely disrupt the
+  `Draw/SendHttpItemList` item-list state in a way that isn't restored when
+  rotating back. Workaround documented in `docs/DISPDATA.md` §6 (don't mix
+  them in one rotation); root cause not yet identified — possibly needs a
+  full `NewFlag: 1` re-setup specifically when returning to `dispdata_text`
+  from a `gif`/`visualizer` page (currently `invalidate()` only fires when
+  page duration elapses, which should already cover this — needs a repro to
+  confirm whether that path is actually taken).
+- [x] **Fixed: `dispdata_text` `name` containing a space broke the device's
+  own polling.** The Times Gate's outbound poll GET doesn't reliably handle a
+  percent-encoded space (`%20`) in the query string. `coordinator._build_dispdata_text`
+  now swaps spaces for underscores before building the poll URL;
+  `dispdata.py`'s view swaps them back for display. See `docs/DISPDATA.md` §3.
+- [x] **`dispdata_text` `items:` — full manual per-item layout.**
+  `coordinator._build_dispdata_items`, up to 8 items (`_DISPDATA_MAX_ITEMS`),
+  each independently a static `kind: label` (type 22) or polling `kind: value`
+  (type 23) with its own x/y/font/color/align — mirrors raw
+  `Draw/SendHttpItemList` item construction instead of the auto-stacked
+  `sensors:` "<name>: <value>" combined-row shorthand. Lets a label and its
+  value use different colours/fonts/positions (e.g. label above, value below,
+  or side by side). Takes priority over `sensors:`/`entity_id` when both are
+  present. See `docs/DISPDATA.md` §3b. **Not yet tested on a real device.**
+- [x] **`dispdata_text` `items:` — native device kinds (clock/date/weather).**
+  `coordinator._NATIVE_KIND_TYPES` maps 21 `kind` names (`time`, `time_short`,
+  `ampm`, `weekday_3`, `temperature`, `weather`, …) to the device's built-in
+  SendHttpItemList types (1-21, `docs/API.md` §4.10) — zero polling, zero HA
+  involvement after setup, the panel renders these natively. A 12h clock is
+  `time_short` + `ampm` as two adjacent items. Documented in
+  `docs/DISPDATA.md` §3b. **Not yet tested on a real device.**
+- [x] **Documented when to use `components` vs. `dispdata_text`.**
+  `docs/DISPDATA.md` §3c compares the two rendering systems (HA-side Pillow
+  JPEG push vs. device-native/self-polling) so it's clear which to pick per
+  page — key trade-off: `components` supports live conditional colour,
+  `dispdata_text` doesn't (colour is fixed at setup time).
 
 - [ ] **CI** — GitHub Actions: hassfest, HACS validation, ruff, mypy --strict.
 - [ ] **Bronze** — brands (icon/logo PR to home-assistant/brands), removal docs,
