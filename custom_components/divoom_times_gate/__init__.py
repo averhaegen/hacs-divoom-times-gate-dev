@@ -16,6 +16,7 @@ from .const import (
     CONF_HARDWARE,
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
+    CONF_MAC,
     CONF_REFRESH_INTERVAL,
     DEFAULT_HARDWARE,
     DEFAULT_REFRESH_INTERVAL,
@@ -28,9 +29,46 @@ from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON, Platform.SELECT, Platform.SWITCH]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON, Platform.IMAGE, Platform.SELECT, Platform.SWITCH]
 
 type DivoomTimesGateConfigEntry = ConfigEntry[TimesGateCoordinator]
+
+
+async def _try_heal_ip(hass, entry, session) -> TimesGate | None:
+    """If the device moved to a new IP, update the entry and return a client.
+
+    Matches the cloud LAN discovery on MAC (or DeviceId as fallback). Returns
+    a TimesGate client on the new IP, or None when nothing better was found.
+    """
+    mac = entry.data.get(CONF_MAC, "")
+    device_id = int(entry.data.get(CONF_DEVICE_ID, 0))
+    current_ip = entry.data[CONF_IP_ADDRESS]
+    match = None
+    for found in await async_discover_devices(session):
+        if (mac and found.mac == mac) or (device_id and found.device_id == device_id):
+            match = found
+            break
+    if match is None or match.ip == current_ip:
+        return None
+    _LOGGER.warning(
+        "Times Gate moved from %s to %s — updating the config entry",
+        current_ip,
+        match.ip,
+    )
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_IP_ADDRESS: match.ip,
+            CONF_DEVICE_ID: match.device_id,
+        },
+    )
+    return TimesGate(
+        match.ip,
+        int(entry.data[CONF_LOCAL_TOKEN]),
+        session,
+        entry.data.get(CONF_HARDWARE, DEFAULT_HARDWARE),
+    )
 
 
 async def async_setup_entry(
@@ -46,9 +84,13 @@ async def async_setup_entry(
     )
 
     if not await device.ping():
-        raise ConfigEntryNotReady(
-            f"Times Gate at {entry.data[CONF_IP_ADDRESS]} not reachable"
-        )
+        # The device may have moved to a new DHCP lease while HA was down.
+        # Try the cloud LAN discovery, match on MAC (or DeviceId), and retry.
+        device = await _try_heal_ip(hass, entry, session) or device
+        if not await device.ping():
+            raise ConfigEntryNotReady(
+                f"Times Gate at {entry.data[CONF_IP_ADDRESS]} not reachable"
+            )
 
     interval: int = entry.options.get(
         CONF_REFRESH_INTERVAL,

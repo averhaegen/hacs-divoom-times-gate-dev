@@ -21,13 +21,17 @@ from urllib.parse import quote
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_DISPDATA_SECRET,
+    CONF_IP_ADDRESS,
+    CONF_MAC,
     CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
     DEFAULT_DURATION,
@@ -37,6 +41,7 @@ from .const import (
 )
 from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
+from .discovery import async_discover_devices
 from .screens import (
     is_enabled,
     normalize_pages,
@@ -93,6 +98,27 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self._rot_index = [0] * SCREEN_COUNT
         self._rot_elapsed = [0] * SCREEN_COUNT
 
+        # Last frame rendered for each screen, for the preview Image entities.
+        # None means the screen currently shows native device content (a face,
+        # gif or dispdata layout) that HA didn't render and can't preview.
+        self.last_frames: dict[int, bytes | None] = {}
+        self.last_frame_times: dict[int, Any] = {}
+
+        # IP self-healing state (see _maybe_heal_ip).
+        self._heal_in_progress = False
+        self._last_heal_attempt: Any = None
+
+    def record_frame(self, screen: int, jpeg: bytes | None) -> None:
+        """Remember what HA last rendered for a screen (None = native content).
+
+        No-op when the frame is identical, so unchanged screens don't bump the
+        preview entity's image_last_updated every tick.
+        """
+        if screen in self.last_frames and self.last_frames[screen] == jpeg:
+            return
+        self.last_frames[screen] = jpeg
+        self.last_frame_times[screen] = dt_util.utcnow()
+
     # --- config helpers ----------------------------------------------------
 
     @property
@@ -131,6 +157,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         resp = await self.device.send_jpeg(jpeg, screen)
         if resp.get("error_code") == 0:
             self._last_hashes[screen] = digest
+            self.record_frame(screen, jpeg)
         return resp.get("error_code", "?")
 
     async def async_set_display(self, kind: str, value: Any) -> None:
@@ -202,9 +229,11 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 commands.append(
                     self.device.build_clock_face(screen, int(value), self._active_independence())
                 )
+                self.record_frame(screen, None)
             elif kind == "off":
                 jpeg = await self.hass.async_add_executor_job(render_black)
                 commands.append(self.device.build_jpeg(jpeg, screen))
+                self.record_frame(screen, jpeg)
         if commands:
             await self.device.send_command_list(commands)
 
@@ -212,9 +241,77 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         jpeg = await self.hass.async_add_executor_job(render_black)
         await self._send_jpeg(screen, jpeg)
 
+    # --- IP self-healing -----------------------------------------------------
+
+    _HEAL_FAILURE_THRESHOLD = 3
+    _HEAL_COOLDOWN = timedelta(minutes=5)
+
+    def _maybe_heal_ip(self) -> None:
+        """Kick off IP rediscovery when the device looks gone from its IP.
+
+        After N consecutive transport failures the device most likely got a
+        new DHCP lease. Re-run the cloud LAN discovery, match on MAC, and if
+        it reports a different IP update the config entry — the entry's
+        update listener then reloads the integration against the new address.
+        Fire-and-forget and rate-limited so ticks aren't blocked or spammy.
+        """
+        if self.device.consecutive_failures < self._HEAL_FAILURE_THRESHOLD:
+            return
+        if self._heal_in_progress:
+            return
+        now = dt_util.utcnow()
+        if self._last_heal_attempt and now - self._last_heal_attempt < self._HEAL_COOLDOWN:
+            return
+        self._last_heal_attempt = now
+        self._heal_in_progress = True
+        self.config_entry.async_create_background_task(
+            self.hass, self._heal_ip(), name="divoom_times_gate_ip_heal"
+        )
+
+    async def _heal_ip(self) -> None:
+        try:
+            entry = self.config_entry
+            mac = entry.data.get(CONF_MAC, "")
+            current_ip = entry.data.get(CONF_IP_ADDRESS, "")
+            session = async_get_clientsession(self.hass)
+            devices = await async_discover_devices(session)
+            match = None
+            if mac:
+                match = next((d for d in devices if d.mac == mac), None)
+            if match is None:
+                device_id = int(entry.data.get(CONF_DEVICE_ID, 0))
+                if device_id:
+                    match = next(
+                        (d for d in devices if d.device_id == device_id), None
+                    )
+            if match is None or match.ip == current_ip:
+                _LOGGER.debug(
+                    "IP self-heal: no new address found for %s (mac=%s)",
+                    current_ip,
+                    mac or "?",
+                )
+                return
+            _LOGGER.warning(
+                "Times Gate moved from %s to %s — updating the config entry "
+                "and reloading",
+                current_ip,
+                match.ip,
+            )
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    CONF_IP_ADDRESS: match.ip,
+                    CONF_DEVICE_ID: match.device_id,
+                },
+            )
+        finally:
+            self._heal_in_progress = False
+
     # --- periodic render/push ---------------------------------------------
 
     async def _async_update_data(self) -> dict[int, str]:
+        self._maybe_heal_ip()
         if self._first_run:
             await self.device.reset_pic_counter()
             self._first_run = False
@@ -284,18 +381,22 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             if ptype == "clock":
                 cid = int(page.get("clock_id", page.get("id", 0)))
                 command = self.device.build_clock_face(screen, cid, self._active_independence())
+                self.record_frame(screen, None)
                 return self._pending(screen, f"clock:{cid}", command)
             if ptype == "gif":
                 urls = page.get("gif_url") or page.get("gif_urls") or []
                 if isinstance(urls, str):
                     urls = [urls]
                 command = self.device.build_play_gif(screen, urls)
+                self.record_frame(screen, None)
                 return self._pending(screen, f"gif:{urls}", command)
             if ptype == "visualizer":
                 eq = int(page.get("id", page.get("eq_position", 0)))
                 command = self.device.build_visualizer(screen, eq, self._active_independence())
+                self.record_frame(screen, None)
                 return self._pending(screen, f"viz:{eq}", command)
             if ptype == "dispdata_text":
+                self.record_frame(screen, None)
                 if page.get("items"):
                     return await self._build_dispdata_items(screen, page)
                 return await self._build_dispdata_text(screen, page)
@@ -305,7 +406,12 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 jpeg = await self.hass.async_add_executor_job(render_page, self.hass, page)
             digest = hashlib.md5(jpeg).hexdigest()
             if self._last_hashes.get(screen) == digest:
+                # Still record after a reload: hashes persist across reloads but
+                # the frame cache doesn't, so the preview would stay empty.
+                if self.last_frames.get(screen) is None:
+                    self.record_frame(screen, jpeg)
                 return "unchanged", None, None
+            self.record_frame(screen, jpeg)
             return "pending", self.device.build_jpeg(jpeg, screen), digest
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Screen %s render failed: %s", screen, err)
