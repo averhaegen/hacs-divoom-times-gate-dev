@@ -19,7 +19,11 @@ DEFAULT_FACES: dict[str, list[dict]] = {
         {"name": "City Time", "clock_id": 697},
     ],
     "per_screen": [  # single-screen faces (Screen N -> Face: ...)
-        {"name": "Weather", "clock_id": 182},
+        {"name": "Weather ONE", "clock_id": 182},
+        {"name": "Big Time", "clock_id": 152},
+        {"name": "Pinkclock", "clock_id": 669},
+        {"name": "DIY Digital Clock", "clock_id": 284},
+        {"name": "Retro web cute pastel", "clock_id": 662},
     ],
 }
 
