@@ -60,9 +60,11 @@ pipeline already exists).
 
 One generic card takes 2–8 sensor slots and **auto-picks the densest
 fitting layout** by count: 2 = large halves, 3–4 = quadrant, 5–6 = two
-columns, 7–8 = compact rows. More sensors → more compact. Hard ceiling is
-8 (the device's SendHttpItemList item limit; one type-23 value overlay per
-sensor).
+columns, 7–8 = compact rows. More sensors → more compact. The ceiling of 8
+is a **design choice, not a device limit** (the protocol allows `TextId`
+< 40 per API.md §4.10): 8 keeps text readable on a 128×128 panel and caps
+the polling load — every type-23 item runs its own HTTP poll against HA
+every `update_time` seconds.
 
 - **HA icons on the card**: each slot renders its entity's MDI icon into
   the HA-rendered background — bundle the Material Design Icons TTF +
