@@ -61,3 +61,48 @@ show_message:
       example: "#FF0000"
       selector:
         text:
+
+show_image:
+  name: Show image
+  description: Show a photo or animated GIF on one screen (from a local path or URL). With duration 0 it stays until the next refresh/config change.
+  fields:
+    screen:
+      name: Screen
+      description: Screen index 0-4 (left to right).
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: box
+    image_path:
+      name: Image path
+      description: Local file path (e.g. /config/www/photo.jpg). Use this or image_url.
+      example: /config/www/photo.jpg
+      selector:
+        text:
+    image_url:
+      name: Image URL
+      description: HTTP(S) URL of the image/GIF. Use this or image_path.
+      example: https://example.com/photo.jpg
+      selector:
+        text:
+    fit:
+      name: Fit
+      description: cover = fill the square (center-crop), contain = letterbox on black.
+      default: cover
+      selector:
+        select:
+          options:
+            - cover
+            - contain
+    duration:
+      name: Duration
+      description: Seconds before reverting to the screen's normal content. 0 = keep showing.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 86400
+          mode: box

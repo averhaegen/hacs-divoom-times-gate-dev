@@ -51,6 +51,7 @@ from .screens import (
     normalize_pages,
     page_duration,
     render_black,
+    render_image_frames,
     render_page,
 )
 
@@ -403,6 +404,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 return self._pending(screen, f"viz:{eq}", command)
             if ptype == "card":
                 return await self._build_card(screen, page)
+            if ptype == "image":
+                return await self._build_image(screen, page)
             if ptype == "dispdata_text":
                 self.record_frame(screen, None)
                 if page.get("items"):
@@ -430,6 +433,42 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         if self._last_hashes.get(screen) == signature:
             return "unchanged", None, None
         return "pending", command, signature
+
+    async def _build_image(
+        self, screen: int, page: dict[str, Any]
+    ) -> tuple[str, dict | None, str | None]:
+        """Build an ``image`` page: a photo or animated GIF on one screen.
+
+        Single frames join the normal batched JPEG path. Animations need one
+        sequential POST per frame (shared PicID, incrementing PicOffset), so
+        they can't ride Draw/CommandList — they're sent directly here, guarded
+        by the same signature mechanism so an unchanged image sends nothing.
+        """
+        try:
+            frames, speed = await self.hass.async_add_executor_job(
+                render_image_frames, self.hass, page
+            )
+        except (ValueError, OSError) as err:
+            _LOGGER.error("image page on screen %s: %s", screen, err)
+            return "error", None, None
+
+        if len(frames) == 1:
+            digest = hashlib.md5(frames[0]).hexdigest()
+            if self._last_hashes.get(screen) == digest:
+                return "unchanged", None, None
+            self.record_frame(screen, frames[0])
+            return "pending", self.device.build_jpeg(frames[0], screen), digest
+
+        digest = hashlib.md5(b"".join(frames) + str(speed).encode()).hexdigest()
+        signature = f"anim:{digest}"
+        if self._last_hashes.get(screen) == signature:
+            return "unchanged", None, None
+        resp = await self.device.send_animation(frames, screen, speed)
+        status = resp.get("error_code", "?")
+        if status == 0:
+            self._last_hashes[screen] = signature
+            self.record_frame(screen, frames[0])
+        return str(status), None, None
 
     async def _build_card(
         self, screen: int, page: dict[str, Any]

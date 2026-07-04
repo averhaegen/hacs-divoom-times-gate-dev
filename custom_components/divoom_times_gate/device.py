@@ -300,3 +300,40 @@ class TimesGate:
     async def send_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
         """Send a 128×128 JPEG image to one screen (0-4)."""
         return await self._send(self.build_jpeg(jpeg_bytes, screen))
+
+    async def send_animation(
+        self, frames: list[bytes], screen: int, speed_ms: int = 200
+    ) -> dict:
+        """Send a multi-frame animation to one screen (0-4).
+
+        Per docs/API.md §5 / eriksalo's notes: all frames share one ``PicID``,
+        ``PicNum`` is the total count and ``PicOffset`` increments per frame
+        (one POST each). Keep animations under ~40 frames. A single frame
+        falls back to a plain ``send_jpeg``.
+        """
+        if len(frames) == 1:
+            return await self.send_jpeg(frames[0], screen)
+        if screen not in range(SCREEN_COUNT):
+            raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
+
+        lcd_array = [0] * SCREEN_COUNT
+        lcd_array[screen] = 1
+        self._pic_id += 1
+        pic_id = self._pic_id
+        resp: dict = {}
+        for offset, frame in enumerate(frames):
+            resp = await self._send(
+                {
+                    "Command": "Draw/SendHttpGif",
+                    "LcdArray": lcd_array,
+                    "PicNum": len(frames),
+                    "PicWidth": SCREEN_SIZE,
+                    "PicOffset": offset,
+                    "PicID": pic_id,
+                    "PicSpeed": max(50, int(speed_ms)),
+                    "PicData": base64.b64encode(frame).decode("ascii"),
+                }
+            )
+            if resp.get("error_code") != 0:
+                return resp
+        return resp

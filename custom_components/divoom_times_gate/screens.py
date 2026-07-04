@@ -26,7 +26,7 @@ import urllib.request
 from io import BytesIO
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageOps, ImageSequence
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
@@ -77,6 +77,58 @@ def render_black() -> bytes:
     buf = BytesIO()
     Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), (0, 0, 0)).save(buf, "JPEG", quality=95)
     return buf.getvalue()
+
+
+_IMAGE_MAX_FRAMES = 40  # device limit for SendHttpGif animations (docs/API.md §5)
+
+
+def render_image_frames(
+    hass: HomeAssistant, page: dict[str, Any]
+) -> tuple[list[bytes], int]:
+    """Render an ``image`` page (photo or animated GIF) to 128x128 JPEG frames.
+
+    Returns ``(frames, speed_ms)``. Sources (same keys as image components):
+    ``image_path``, ``image_url``, ``image_asset``, ``image_data``.
+    ``fit: cover`` (default) center-crops to fill the square; ``fit: contain``
+    letterboxes on black. Animated GIFs are capped at 40 frames (device
+    limit); ``speed`` overrides the GIF's own frame duration (ms).
+    """
+    img = _load_image(hass, page, {})
+    if img is None:
+        raise ValueError(
+            "image page needs one of image_path / image_url / image_asset / image_data"
+        )
+
+    fit = str(page.get("fit", "cover")).lower()
+
+    def _fit_frame(frame: Image.Image) -> Image.Image:
+        frame = frame.convert("RGB")
+        if fit == "contain":
+            frame.thumbnail((SCREEN_SIZE, SCREEN_SIZE))
+            out = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), (0, 0, 0))
+            out.paste(
+                frame,
+                ((SCREEN_SIZE - frame.width) // 2, (SCREEN_SIZE - frame.height) // 2),
+            )
+            return out
+        return ImageOps.fit(frame, (SCREEN_SIZE, SCREEN_SIZE))
+
+    frames: list[bytes] = []
+    durations: list[int] = []
+    for raw in ImageSequence.Iterator(img):
+        buf = BytesIO()
+        _fit_frame(raw).save(buf, "JPEG", quality=95)
+        frames.append(buf.getvalue())
+        durations.append(int(raw.info.get("duration", 200)))
+        if len(frames) >= _IMAGE_MAX_FRAMES:
+            _LOGGER.warning(
+                "image page: animation truncated to %d frames (device limit)",
+                _IMAGE_MAX_FRAMES,
+            )
+            break
+
+    speed = int(page.get("speed", max(50, sum(durations) // len(durations))))
+    return frames, speed
 
 
 def render_page(hass: HomeAssistant, page: dict[str, Any]) -> bytes:

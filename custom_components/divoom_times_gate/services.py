@@ -1,4 +1,4 @@
-"""Services for Divoom Times Gate: set_clock_face, show_message."""
+"""Services for Divoom Times Gate: set_clock_face, show_message, show_image."""
 from __future__ import annotations
 
 from io import BytesIO
@@ -12,9 +12,11 @@ from homeassistant.helpers.event import async_call_later
 
 from .const import DOMAIN, SCREEN_COUNT, SCREEN_SIZE
 from .canvas import _scalable_font  # reuse the scalable font loader
+from .screens import render_image_frames
 
 SERVICE_SET_CLOCK_FACE = "set_clock_face"
 SERVICE_SHOW_MESSAGE = "show_message"
+SERVICE_SHOW_IMAGE = "show_image"
 
 _SCREEN = vol.All(vol.Coerce(int), vol.Range(min=0, max=SCREEN_COUNT - 1))
 
@@ -30,6 +32,16 @@ _SHOW_MESSAGE_SCHEMA = vol.Schema(
         vol.Required("text"): cv.string,
         vol.Optional("duration", default=10): vol.All(vol.Coerce(int), vol.Range(min=1)),
         vol.Optional("color", default="#FFFFFF"): cv.string,
+    }
+)
+_SHOW_IMAGE_SCHEMA = vol.Schema(
+    {
+        vol.Required("screen"): _SCREEN,
+        vol.Exclusive("image_path", "source"): cv.string,
+        vol.Exclusive("image_url", "source"): cv.string,
+        vol.Optional("fit", default="cover"): vol.In(["cover", "contain"]),
+        # 0 = keep showing until the next config change / refresh
+        vol.Optional("duration", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
     }
 )
 
@@ -87,8 +99,30 @@ def async_register_services(hass: HomeAssistant) -> None:
 
             async_call_later(hass, call.data["duration"], _restore)
 
+    async def _show_image(call: ServiceCall) -> None:
+        screen = call.data["screen"]
+        page = {k: call.data[k] for k in ("image_path", "image_url", "fit") if k in call.data}
+        if "image_path" not in page and "image_url" not in page:
+            raise vol.Invalid("show_image needs image_path or image_url")
+        frames, speed = await hass.async_add_executor_job(
+            render_image_frames, hass, page
+        )
+        for coord in _coordinators(hass):
+            await coord.device.send_animation(frames, screen, speed)
+            coord.record_frame(screen, frames[0])
+            # Bypassed the hash cache; make sure the next tick can repaint.
+            coord.invalidate(screen)
+            if call.data["duration"]:
+                async def _restore(_now, c=coord) -> None:
+                    await c.async_request_refresh()
+
+                async_call_later(hass, call.data["duration"], _restore)
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_CLOCK_FACE, _set_clock_face, schema=_SET_CLOCK_FACE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SHOW_IMAGE, _show_image, schema=_SHOW_IMAGE_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SHOW_MESSAGE, _show_message, schema=_SHOW_MESSAGE_SCHEMA
