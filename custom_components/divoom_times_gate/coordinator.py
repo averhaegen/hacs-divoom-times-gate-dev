@@ -16,8 +16,11 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import timedelta
+from io import BytesIO
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
+
+from PIL import Image
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -42,6 +45,7 @@ from .const import (
 from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
 from .discovery import async_discover_devices
+from .dispdata import publish_card_background
 from .screens import (
     is_enabled,
     normalize_pages,
@@ -397,6 +401,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 command = self.device.build_visualizer(screen, eq, self._active_independence())
                 self.record_frame(screen, None)
                 return self._pending(screen, f"viz:{eq}", command)
+            if ptype == "card":
+                return await self._build_card(screen, page)
             if ptype == "dispdata_text":
                 self.record_frame(screen, None)
                 if page.get("items"):
@@ -423,6 +429,59 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         """Skip building a duplicate command if the signature hasn't changed."""
         if self._last_hashes.get(screen) == signature:
             return "unchanged", None, None
+        return "pending", command, signature
+
+    async def _build_card(
+        self, screen: int, page: dict[str, Any]
+    ) -> tuple[str, dict | None, str | None]:
+        """Build a gallery card (SPEC_CARD_GALLERY.md): HA-rendered background
+        GIF served over HTTP + type-23 self-polling value overlays.
+
+        The command signature covers the background digest and the overlay
+        items, so a card only re-sends its (flashing) setup call when the
+        background or item layout actually changed — value updates happen
+        device-side via polling and never repaint.
+        """
+        from .cards import CARD_RENDERERS  # local import: PIL-heavy module
+
+        card_type = str(page.get("card", "sensor_grid"))
+        renderer = CARD_RENDERERS.get(card_type)
+        if renderer is None:
+            _LOGGER.error("Unknown card type %r on screen %s", card_type, screen)
+            return "error", None, None
+
+        secret = self.config_entry.data.get(CONF_DISPDATA_SECRET)
+        if not secret:
+            _LOGGER.error("card: no DispData secret set up yet for this entry")
+            return "error", None, None
+        try:
+            base_url = get_url(self.hass, allow_external=False, prefer_cloud=False)
+        except NoURLAvailableError:
+            _LOGGER.error("card: could not resolve a local HA URL for the device")
+            return "error", None, None
+
+        poll_base = f"{base_url}/api/divoom_times_gate/dispdata/{secret}"
+        try:
+            gif, items = await self.hass.async_add_executor_job(
+                renderer, self.hass, page, poll_base
+            )
+        except ValueError as err:
+            _LOGGER.error("card on screen %s: %s", screen, err)
+            return "error", None, None
+
+        digest = hashlib.md5(gif + repr(items).encode()).hexdigest()
+        signature = f"card:{card_type}:{digest}"
+        if self._last_hashes.get(screen) == signature:
+            return "unchanged", None, None
+
+        publish_card_background(self.hass, digest, gif)
+        background_url = f"{base_url}/api/divoom_times_gate/cardbg/{secret}/{digest}.gif"
+        command = self.device.build_item_list(screen, items, background_gif=background_url)
+
+        # Preview: show the HA-rendered background (values live on-device).
+        with BytesIO() as buf:
+            Image.open(BytesIO(gif)).convert("RGB").save(buf, "JPEG", quality=95)
+            self.record_frame(screen, buf.getvalue())
         return "pending", command, signature
 
     _DISPDATA_ROW_Y = (8, 40, 70, 100)  # default y per row, up to 4 sensors, evenly spaced

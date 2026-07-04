@@ -24,15 +24,29 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 URL_PATTERN = "/api/divoom_times_gate/dispdata/{secret}/{entity_id}"
+CARDBG_URL_PATTERN = "/api/divoom_times_gate/cardbg/{secret}/{digest}"
 _DATA_KEY = "dispdata_secrets"
+CARDBG_CACHE_KEY = "cardbg_cache"
+_CARDBG_CACHE_MAX = 32  # entries; ~5 screens x a few digests in flight
 
 
 def register_secret(hass: HomeAssistant, secret: str) -> None:
-    """Mark ``secret`` as valid; registers the shared view on first call."""
+    """Mark ``secret`` as valid; registers the shared views on first call."""
     secrets: set[str] = hass.data.setdefault(DOMAIN, {}).setdefault(_DATA_KEY, set())
     if not secrets:
         hass.http.register_view(DispDataView(hass))
+        hass.http.register_view(CardBackgroundView(hass))
     secrets.add(secret)
+
+
+def publish_card_background(hass: HomeAssistant, digest: str, gif: bytes) -> None:
+    """Make a rendered card background fetchable at its digest URL."""
+    cache: dict[str, bytes] = hass.data.setdefault(DOMAIN, {}).setdefault(
+        CARDBG_CACHE_KEY, {}
+    )
+    cache[digest] = gif
+    while len(cache) > _CARDBG_CACHE_MAX:
+        cache.pop(next(iter(cache)))
 
 
 def unregister_secret(hass: HomeAssistant, secret: str) -> None:
@@ -71,3 +85,31 @@ class DispDataView(HomeAssistantView):
             value = f"{label.replace('_', ' ')}: {value}"
 
         return web.json_response({"DispData": value})
+
+
+class CardBackgroundView(HomeAssistantView):
+    """Serves rendered card backgrounds (GIF) by content digest.
+
+    The digest in the URL doubles as the cache-buster: a changed background
+    gets a new digest and therefore a new URL, sidestepping the device's
+    cache-by-URL behaviour for ``BackgroudGif``.
+    """
+
+    url = CARDBG_URL_PATTERN
+    name = "api:divoom_times_gate:cardbg"
+    requires_auth = False
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request: web.Request, secret: str, digest: str) -> web.Response:
+        secrets: set[str] = self._hass.data.get(DOMAIN, {}).get(_DATA_KEY, set())
+        if secret not in secrets:
+            return web.json_response({"error": "forbidden"}, status=403)
+        cache: dict[str, bytes] = self._hass.data.get(DOMAIN, {}).get(
+            CARDBG_CACHE_KEY, {}
+        )
+        gif = cache.get(digest.removesuffix(".gif"))
+        if gif is None:
+            return web.Response(status=404)
+        return web.Response(body=gif, content_type="image/gif")
