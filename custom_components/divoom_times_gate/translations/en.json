@@ -9,13 +9,24 @@
           "local_token": "LocalToken",
           "refresh_interval": "Refresh interval (seconds)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Times Gate",
+        "description": "Update the device's IP address, LocalToken, or refresh interval. The integration reloads with the new settings.",
+        "data": {
+          "ip_address": "Device / IP address",
+          "local_token": "LocalToken",
+          "refresh_interval": "Refresh interval (seconds)"
+        }
       }
     },
     "error": {
       "cannot_connect": "Could not reach the device, or the LocalToken was rejected. Check the IP and token."
     },
     "abort": {
-      "already_configured": "This Times Gate is already configured."
+      "already_configured": "This Times Gate is already configured. Its IP address and token were updated in place.",
+      "reconfigure_successful": "Reconfiguration successful.",
+      "wrong_device": "The device at this IP is a different Times Gate (MAC mismatch). Add it as a new device instead."
     }
   },
   "options": {

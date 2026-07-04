@@ -46,6 +46,10 @@ class TimesGate:
         else:
             self._url = f"http://{ip}/post"
         self._pic_id = 0
+        # Consecutive transport failures (timeouts/refused, not device errors).
+        # The coordinator watches this to trigger IP self-healing when the
+        # device likely moved to a new DHCP lease.
+        self.consecutive_failures = 0
 
     async def _send(self, command: dict) -> dict:
         """POST a command with the LocalToken injected. Returns parsed JSON."""
@@ -55,6 +59,7 @@ class TimesGate:
                 self._url, json=payload, timeout=aiohttp.ClientTimeout(total=9)
             ) as resp:
                 data = await resp.json(content_type=None)
+                self.consecutive_failures = 0
                 if data.get("error_code") not in (0, None):
                     _LOGGER.warning(
                         "Times Gate %s rejected %s: %s",
@@ -64,6 +69,7 @@ class TimesGate:
                     )
                 return data
         except Exception as err:  # noqa: BLE001 - surface any transport error
+            self.consecutive_failures += 1
             _LOGGER.error("Error communicating with Times Gate at %s: %s", self._ip, err)
             return {"error_code": "exception", "exception": str(err)}
 

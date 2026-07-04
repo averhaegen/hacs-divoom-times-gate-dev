@@ -65,7 +65,16 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             if await device.ping():
                 # Prefer the stable MAC as the unique id; fall back to the IP.
                 await self.async_set_unique_id((match.mac if match else "") or ip)
-                self._abort_if_unique_id_configured()
+                # Same device re-added (e.g. it got a new DHCP lease): update the
+                # existing entry's IP/token in place and reload, instead of
+                # forcing the user to delete and re-create the device.
+                self._abort_if_unique_id_configured(
+                    updates={
+                        CONF_IP_ADDRESS: ip,
+                        CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
+                        CONF_DEVICE_ID: match.device_id if match else 0,
+                    }
+                )
                 title = f"{match.name} ({ip})" if match else f"Times Gate ({ip})"
                 return self.async_create_entry(
                     title=title,
@@ -109,6 +118,61 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
+        """Change IP/token/interval on the existing entry (HA 'Reconfigure')."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        session = async_get_clientsession(self.hass)
+
+        if user_input is not None:
+            ip = str(user_input[CONF_IP_ADDRESS]).strip()
+            token = int(user_input[CONF_LOCAL_TOKEN])
+            device = TimesGate(
+                ip, token, session, entry.data.get(CONF_HARDWARE, DEFAULT_HARDWARE)
+            )
+            if await device.ping():
+                # Guard against pointing the entry at a *different* device: if
+                # discovery knows the MAC at this IP and the entry has one
+                # stored, they must match.
+                discovered = await async_discover_devices(session)
+                match = next((d for d in discovered if d.ip == ip), None)
+                stored_mac = entry.data.get(CONF_MAC, "")
+                if match and stored_mac and match.mac and match.mac != stored_mac:
+                    return self.async_abort(reason="wrong_device")
+                data_updates = {
+                    CONF_IP_ADDRESS: ip,
+                    CONF_LOCAL_TOKEN: token,
+                    CONF_REFRESH_INTERVAL: int(
+                        user_input.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL)
+                    ),
+                }
+                if match:
+                    data_updates[CONF_DEVICE_ID] = match.device_id
+                return self.async_update_reload_and_abort(
+                    entry, data_updates=data_updates
+                )
+            errors["base"] = "cannot_connect"
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_IP_ADDRESS, default=entry.data.get(CONF_IP_ADDRESS, "")
+                ): str,
+                vol.Required(
+                    CONF_LOCAL_TOKEN, default=entry.data.get(CONF_LOCAL_TOKEN)
+                ): int,
+                vol.Optional(
+                    CONF_REFRESH_INTERVAL,
+                    default=entry.data.get(
+                        CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
+                    ),
+                ): int,
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure", data_schema=schema, errors=errors
+        )
 
     @staticmethod
     @callback

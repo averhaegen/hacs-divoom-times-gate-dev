@@ -153,7 +153,44 @@ options-flow YAML editor, diagnostics).
 - [~] **Gold** — discovery **done** (cloud LAN lookup picker in the config
   flow, MAC as unique id); still: reconfiguration flow, repair issues, entity
   translations/categories/device-classes, extensive docs.
+- [x] **Reconfigure flow** (`async_step_reconfigure`) — "Reconfigure" on the
+  entry changes IP/token/interval in place (`async_update_reload_and_abort`),
+  with a MAC-mismatch guard against pointing the entry at a different device.
+  Re-adding the device also updates IP/token in place via
+  `_abort_if_unique_id_configured(updates=...)`. Done 2026-07-04.
+- [x] **IP self-healing** — after 3 consecutive transport failures (rate-
+  limited to one attempt per 5 min) the coordinator re-runs cloud discovery,
+  matches on MAC (DeviceId fallback), updates the entry's IP and reloads.
+  Also runs once at setup when the stored IP doesn't ping (HA restarted
+  after the lease changed). Done 2026-07-04. Still open: `dhcp` manifest
+  discovery (match on MAC OUI) as the zero-touch variant.
 - [ ] **Platinum** — strict typing across the codebase, enforced by mypy in CI.
+
+## Card gallery (v2) — see docs/SPEC_CARD_GALLERY.md
+
+Agreed direction 2026-07-03 (three tiers: pixoo-compat frozen, native card
+gallery, experimental native-face authoring). In priority order:
+
+- [ ] **Hybrid card MVP (chosen first step)** — proves the flash-free pattern
+  end-to-end with one **Solar card**: animated sun GIF as
+  `background_gif` (sent once, device loops it), power/yield as type-23
+  self-polling overlays.
+  - HTTP view serving card background GIFs from HA (next to the dispdata
+    view; content-hash cache-buster in the URL since the device caches
+    GIFs by URL).
+  - Bar-string/formatter option in `dispdata.py` (e.g. `█████░░░░ 47%`);
+    test block-glyph coverage in device fonts first, fallback `|||` / `===`.
+- [ ] **Card framework** — card manifest (slots: entity count +
+  device_classes, options), registry, `page_type: card` in the coordinator.
+- [ ] **Gallery cards** — battery, range_bar, grid_power, energy_cost,
+  climate, weather, gauge, text_value (variants = same card, more slots).
+- [ ] **Multi-frame animation renderer** — `Draw/SendHttpGif` with shared
+  `PicID` / incrementing `PicOffset` (≤ ~40 frames) as fallback for layouts
+  overlays can't express (charts, sparklines).
+- [ ] **Tier 3 gate: probe script** — test `Device/GetLocalClockInfo`,
+  `Device/GetScreenSnapshot`, `Device/GetTimeDialFontV2` on the Times Gate
+  (port 80 `/post`, bare JSON) before building anything on native-face
+  authoring.
 
 ## Notes / dead ends
 
