@@ -187,10 +187,13 @@ gallery, experimental native-face authoring). In priority order:
 - [ ] **Multi-frame animation renderer** — `Draw/SendHttpGif` with shared
   `PicID` / incrementing `PicOffset` (≤ ~40 frames) as fallback for layouts
   overlays can't express (charts, sparklines).
-- [ ] **Tier 3 gate: probe script** — test `Device/GetLocalClockInfo`,
-  `Device/GetScreenSnapshot`, `Device/GetTimeDialFontV2` on the Times Gate
-  (port 80 `/post`, bare JSON) before building anything on native-face
-  authoring.
+- [x] **Tier 3 gate: probed 2026-07-04 — NEGATIVE.** `Device/GetLocalClockInfo`,
+  `Device/GetScreenSnapshot`, `Device/GetTimeDialFontV2`, `GetLocalFontList`
+  all return "Request data illegal json" on the Times Gate (HW 400, port 80
+  `/post`), and port 9000 `/divoom_api` (Frame envelope) is closed. The Frame
+  watchface-authoring API does not exist on this device — Tier 3 is dead;
+  don't invest further. (Also rules out `GetScreenSnapshot` as a preview
+  source for native faces.)
 
 ## Notes / dead ends
 

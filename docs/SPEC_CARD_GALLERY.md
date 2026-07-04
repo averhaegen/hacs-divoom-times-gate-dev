@@ -109,11 +109,12 @@ to activate. The Times Gate shares the firmware command-registry architecture
 and already answers `Channel/SetClockSelectId`, but the clock-authoring
 commands are **unverified on Times Gate**.
 
-Gate for this tier: a probe script against a real device testing
+**Gate result (probed live 2026-07-04, HW 400): NEGATIVE — Tier 3 is dead.**
 `Device/GetLocalClockInfo`, `Device/GetScreenSnapshot`,
-`Device/GetTimeDialFontV2` (port 80 `/post`, bare JSON — not the Frame's
-port-9000 `/divoom_api` envelope). Only if reads work do we attempt writes.
-Until then, nothing in Tier 1/2 may depend on Tier 3.
+`Device/GetTimeDialFontV2` and `GetLocalFontList` all return
+"Request data illegal json" on port 80 `/post`, and port 9000 `/divoom_api`
+(Frame envelope) is closed. The Frame watchface-authoring API does not exist
+on the Times Gate; this tier is dropped unless future firmware adds it.
 
 ## Migration & compatibility
 
