@@ -109,12 +109,16 @@ to activate. The Times Gate shares the firmware command-registry architecture
 and already answers `Channel/SetClockSelectId`, but the clock-authoring
 commands are **unverified on Times Gate**.
 
-**Gate result (probed live 2026-07-04, HW 400): NEGATIVE — Tier 3 is dead.**
-`Device/GetLocalClockInfo`, `Device/GetScreenSnapshot`,
-`Device/GetTimeDialFontV2` and `GetLocalFontList` all return
-"Request data illegal json" on port 80 `/post`, and port 9000 `/divoom_api`
-(Frame envelope) is closed. The Frame watchface-authoring API does not exist
-on the Times Gate; this tier is dropped unless future firmware adds it.
+**Gate result (probed live 2026-07-04): NEGATIVE on HW 400, open question
+on HW 402.** On HW 400 (port 80 `/post`), `Device/GetLocalClockInfo`,
+`GetScreenSnapshot`, `GetTimeDialFontV2` and `GetLocalFontList` all return
+"Request data illegal json" — including with the full Frame envelope and
+response-unpack stub fields — and port 9000 is closed. The port-80 handler
+answers in the old Pixoo style (`error_code`, not `ReturnCode`), so the
+Frame API genuinely isn't there. However, the Times Gate has two hardware
+revisions and **HW 402 uses port 9000 `/divoom_api`** (already routed that
+way in `device.py`) — the Frame-family API where these commands are proven.
+Tier 3 is dead for HW 400; re-probe if a HW 402 device becomes available.
 
 ## Migration & compatibility
 
