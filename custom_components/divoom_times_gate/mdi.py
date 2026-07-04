@@ -82,13 +82,45 @@ def icon_char(name: str) -> str | None:
     return chr(codepoint) if codepoint else None
 
 
+def _battery_icon(state: State) -> str:
+    """State-dependent battery icon, mirroring HA's frontend battery logic:
+    round the level to the nearest 10 → ``mdi:battery-10`` … ``mdi:battery-90``,
+    full → ``mdi:battery``, near-empty → ``mdi:battery-outline``, non-numeric →
+    ``mdi:battery-unknown``. (Charging variants need a second entity; a card
+    could add that later via an explicit ``icon`` template.)
+    """
+    try:
+        level = float(state.state)
+    except (TypeError, ValueError):
+        return "mdi:battery-unknown"
+    decile = round(level / 10) * 10
+    if decile >= 100:
+        return "mdi:battery"
+    if decile <= 0:
+        return "mdi:battery-outline"
+    return f"mdi:battery-{decile}"
+
+
+# device_class → state-dependent icon resolver (frontend-style dynamic icons).
+_DYNAMIC_ICONS = {
+    "battery": _battery_icon,
+}
+
+
 def icon_for_state(state: State | None) -> str:
-    """Best icon name for an entity state (see module docstring for order)."""
+    """Best icon name for an entity state (see module docstring for order).
+
+    An explicit ``icon`` attribute always wins; otherwise device classes with
+    a dynamic resolver (battery fill level) get a state-dependent icon, then
+    the static device_class table, then the generic default.
+    """
     if state is None:
         return DEFAULT_ICON
     if icon := state.attributes.get("icon"):
         return icon
     if device_class := state.attributes.get("device_class"):
+        if dynamic := _DYNAMIC_ICONS.get(device_class):
+            return dynamic(state)
         if icon := DEVICE_CLASS_ICONS.get(device_class):
             return icon
     return DEFAULT_ICON
