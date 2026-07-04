@@ -206,3 +206,14 @@ class TimesGateRGBLight(TimesGateEntity, LightEntity):
             color_cycle=self.color_cycle,
             secondary_effect=self._secondary_off,
         )
+        # Brightness is global on the device — every call applies it to BOTH
+        # zones (see RGB_LIGHTS.md §2e.5). Mirror it onto the sibling entity
+        # so HA doesn't show a stale per-zone value.
+        sibling = self.coordinator.rgb_lights.get(2 if self._light_index == 1 else 1)
+        if (
+            sibling is not None
+            and sibling.is_on
+            and sibling._attr_brightness != self._attr_brightness  # noqa: SLF001
+        ):
+            sibling._attr_brightness = self._attr_brightness  # noqa: SLF001
+            sibling.async_write_ha_state()
