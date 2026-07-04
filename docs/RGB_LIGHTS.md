@@ -246,3 +246,12 @@ Only `LightList[0]` has effect — `[1]` and `[2]` are ignored. Both zones show 
    secondary `0`) · both on (primary + approximated secondary) · back on +
    edge **truly** off — **impossible**; HA approximates with secondary `1`
    (dim red).
+4. **Sequential calls do not compose.** "Call 1 sets Edgelight, call 2 sets
+   Backlight" does not yield both custom effects: call 2 replaces call 1's
+   zone with its coarse secondary theme. The last call always wins for both
+   zones — two simultaneous custom effects/colors are not expressible.
+5. **`Brightness` is global, not per zone.** It applies to both zones,
+   including the secondary one (verified: backlight at `Brightness: 10`
+   dimmed the edgelight's secondary dim-red to invisible; resending at 100
+   brought it back). Two different zone brightnesses are not possible; the
+   last call's value applies to everything.
