@@ -35,8 +35,10 @@ EDGELIGHT_EFFECTS: dict[str, int] = {
     "11. Color wheel": 11,
 }
 DEFAULT_EDGELIGHT_EFFECT = "4. Bulb"
-# Backlight "off" theme when used as Edgelight's secondary zone (Scenario 2).
-EDGELIGHT_SECONDARY_OFF = 5
+# Edgelight secondary theme when the Backlight is set (Scenario 2). Verified
+# on-device 2026-07-04: there is NO "edgelight off" secondary value (0-8 all
+# render an effect) — 1 (dim red) is the least intrusive. See RGB_LIGHTS.md §2e.
+EDGELIGHT_SECONDARY_OFF = 1
 
 # Backlight effect IDs (0-11), used directly as SelectEffect when light_index=2.
 BACKLIGHT_EFFECTS: dict[str, int] = {
@@ -54,8 +56,10 @@ BACKLIGHT_EFFECTS: dict[str, int] = {
     "11. Circles": 11,
 }
 DEFAULT_BACKLIGHT_EFFECT = "5. Bulb"
-# Edgelight "off" theme when used as Backlight's secondary zone (Scenario 1).
-BACKLIGHT_SECONDARY_OFF = 6
+# Backlight "off" theme when the Edgelight is set (Scenario 1). Verified
+# on-device 2026-07-04: 0 = off (the doc's original 6 renders the orange
+# Fireplace theme instead). See RGB_LIGHTS.md §2e.
+BACKLIGHT_SECONDARY_OFF = 0
 
 
 async def async_setup_entry(
@@ -169,7 +173,16 @@ class TimesGateRGBLight(TimesGateEntity, LightEntity):
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._device.set_rgb(self._light_index, False, "#000000", 0)
+        # OnOff:0 turns off BOTH zones regardless of SelectLightIndex (verified
+        # on-device). If the sibling zone is on, re-assert the sibling instead:
+        # its apply call forces this zone to the sibling's secondary_off theme
+        # (true off for the Backlight; dim red for the Edgelight, which has no
+        # off theme — see RGB_LIGHTS.md §2e).
+        sibling = self.coordinator.rgb_lights.get(2 if self._light_index == 1 else 1)
+        if sibling is not None and sibling.is_on:
+            await sibling._async_apply()  # noqa: SLF001 - sibling of same class
+        else:
+            await self._device.set_rgb(self._light_index, False, "#000000", 0)
         self._attr_is_on = False
         self.async_write_ha_state()
 

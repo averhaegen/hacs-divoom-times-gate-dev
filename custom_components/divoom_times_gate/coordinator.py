@@ -304,6 +304,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                     CONF_IP_ADDRESS: match.ip,
                     CONF_DEVICE_ID: match.device_id,
                 },
+                # The title usually embeds the IP ("Times Gate (192.168.x.x)").
+                title=entry.title.replace(current_ip, match.ip),
             )
         finally:
             self._heal_in_progress = False

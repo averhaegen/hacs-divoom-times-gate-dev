@@ -158,17 +158,19 @@ Only `LightList[0]` has effect — `[1]` and `[2]` are ignored. Both zones show 
 
 **`LightList[1]` — Edgelight effect IDs (0–11):** same table as Scenario 0.
 
-**`LightList[2]` — Backlight secondary theme (0–6):**
+**`LightList[2]` — Backlight secondary theme:**
 
-| ID | Effect |
+> ⚠️ **Corrected 2026-07-04 after live device testing (HW 400)** — the earlier
+> table had off/fireplace swapped. Verified values:
+
+| ID | Effect (verified) |
 |---|---|
-| 0 | Pastel rainbow |
-| 1 | Fireplace (red/orange) |
-| 2 | RGB flashing colors |
-| 3 | Rainbow |
-| 4 | RGB breathing colors |
-| 5 | Solid RGB colors |
-| 6 | Backlight off |
+| 0 | **Backlight off** ✅ |
+| 5 | Fireplace-like (red/orange) |
+| 6 | Fireplace (red/orange) — *earlier doc wrongly listed this as "off"* |
+
+Other values (1–4) not yet re-verified; treat the original table with
+suspicion until tested.
 
 ### 2d. Scenario 2 — `SelectLightIndex: 2` (Backlight primary)
 
@@ -212,7 +214,36 @@ Only `LightList[0]` has effect — `[1]` and `[2]` are ignored. Both zones show 
 | 10 | Rain | ✅ |
 | 11 | Circles | ✅ |
 
-**`LightList[1]` — Edgelight secondary theme (0–5):**
+**`LightList[1]` — Edgelight secondary theme:**
+
+> ⚠️ **Corrected 2026-07-04 after live device testing (HW 400).** Key finding:
+> **there is NO "edgelight off" value** — every tested id (0–8) renders an
+> effect. "Backlight on + edgelight fully off" is not expressible in one call.
+
+| ID | Effect (verified) |
+|---|---|
+| 0 | Pastel rainbow ✅ (matches original doc) |
+| 1 | Dark red, dim (least intrusive — used as HA's pseudo-off) ✅ |
+| 2 | Rainbow, fading |
+| 3 | Rainbow, standard transitions |
+| 4 | Pastel rainbow, breathing |
+| 5 | Static rainbow — *earlier doc wrongly listed this as "off"* |
+| 6 | (renders an effect; not off) |
+| 7 | Flashing rainbow, top-to-bottom sweep |
+| 8 | Static color |
+
+### 2e. Verified cross-zone semantics (live-tested 2026-07-04, HW 400)
+
+1. Every `SetRGBInfo` call **always re-asserts both zones**: the primary zone
+   gets the full 0–11 effect, the other zone gets a coarse secondary theme.
+   "Leave the other zone alone" does not exist.
+2. `OnOff: 0` turns **both zones off**, regardless of `SelectLightIndex`.
+3. Achievable states: both off (`OnOff:0`) · edge on + back off (Scenario 1,
+   secondary `0`) · both on (primary + approximated secondary) · back on +
+   edge **truly** off — **impossible**; HA approximates with secondary `1`
+   (dim red).
+
+Original (pre-correction) table for reference:
 
 | ID | Effect |
 |---|---|

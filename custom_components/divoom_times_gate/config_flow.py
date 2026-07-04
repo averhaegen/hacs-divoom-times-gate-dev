@@ -149,8 +149,11 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
                 if match:
                     data_updates[CONF_DEVICE_ID] = match.device_id
+                old_ip = entry.data.get(CONF_IP_ADDRESS, "")
                 return self.async_update_reload_and_abort(
-                    entry, data_updates=data_updates
+                    entry,
+                    data_updates=data_updates,
+                    title=entry.title.replace(old_ip, ip) if old_ip else entry.title,
                 )
             errors["base"] = "cannot_connect"
 
