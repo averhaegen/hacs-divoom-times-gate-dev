@@ -56,6 +56,44 @@ Asset reuse: the icon set extracted from the PoC customizations
 (`poc-customizations/icons/`) seeds the shared icon library (`docs/icons/`
 pipeline already exists).
 
+#### `sensor_grid` — the generic multi-sensor card (refined 2026-07-04)
+
+One generic card takes 2–8 sensor slots and **auto-picks the densest
+fitting layout** by count: 2 = large halves, 3–4 = quadrant, 5–6 = two
+columns, 7–8 = compact rows. More sensors → more compact. Hard ceiling is
+8 (the device's SendHttpItemList item limit; one type-23 value overlay per
+sensor).
+
+- **HA icons on the card**: each slot renders its entity's MDI icon into
+  the HA-rendered background — bundle the Material Design Icons TTF +
+  name→codepoint map, draw with Pillow at any size/color. Fallback for
+  entities without an explicit `icon`: a small device_class→mdi table
+  (default icons are frontend-side in HA, not readable from the backend).
+- **Division of labor**: background (icons, labels, frames, optional
+  animation) is HA-rendered and sent once with a content-hash cache-buster;
+  live values are type-23 overlays the device polls itself — flash-free
+  value updates.
+- **State-dependent icon colors** (e.g. battery icon red < 20%): the
+  background re-renders and re-pushes only when a color threshold is
+  crossed — rare, brief repaint accepted.
+- **Value refresh**: type-23 device polling is the default for all cards;
+  a per-card `render_mode: push` escape hatch stays available for cards
+  whose value zone needs graphics (bars, sparklines) rather than text.
+
+#### Configuration UX
+
+Options-flow, two equivalent editors over the same config (approximating
+the Lovelace "visual editor ⇄ YAML" toggle, which isn't available to
+integration options):
+
+1. **Form**: card-type dropdown + entity selectors per slot + option
+   fields.
+2. **"Edit as YAML"** menu step: the same card object in the raw
+   ObjectSelector editor.
+
+A custom Lovelace card with live preview is a possible later shell on top
+of the same config schema (out of scope for v2.0).
+
 #### Animation (new capability, from eriksalo/DivoomTimesGate docs)
 
 Multi-frame push via `Draw/SendHttpGif`: same `PicID` for all frames,
