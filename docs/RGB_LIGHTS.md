@@ -158,19 +158,23 @@ Only `LightList[0]` has effect — `[1]` and `[2]` are ignored. Both zones show 
 
 **`LightList[1]` — Edgelight effect IDs (0–11):** same table as Scenario 0.
 
-**`LightList[2]` — Backlight secondary theme:**
+**`LightList[2]` — Backlight secondary theme (0–6):**
 
-> ⚠️ **Corrected 2026-07-04 after live device testing (HW 400)** — the earlier
-> table had off/fireplace swapped. Verified values:
+> ⚠️ **These secondary IDs do not appear to be stable — their behavior is
+> unpredictable.** Live testing 2026-07-04 (HW 400) contradicted this table:
+> `0` turned the backlight **off** and `6` rendered the orange Fireplace
+> theme. The integration uses `0` as backlight-off; treat the table below as
+> indicative at best and verify on your own device/firmware.
 
-| ID | Effect (verified) |
+| ID | Effect |
 |---|---|
-| 0 | **Backlight off** ✅ |
-| 5 | Fireplace-like (red/orange) |
-| 6 | Fireplace (red/orange) — *earlier doc wrongly listed this as "off"* |
-
-Other values (1–4) not yet re-verified; treat the original table with
-suspicion until tested.
+| 0 | Pastel rainbow |
+| 1 | Fireplace (red/orange) |
+| 2 | RGB flashing colors |
+| 3 | Rainbow |
+| 4 | RGB breathing colors |
+| 5 | Solid RGB colors |
+| 6 | Backlight off |
 
 ### 2d. Scenario 2 — `SelectLightIndex: 2` (Backlight primary)
 
@@ -214,36 +218,14 @@ suspicion until tested.
 | 10 | Rain | ✅ |
 | 11 | Circles | ✅ |
 
-**`LightList[1]` — Edgelight secondary theme:**
+**`LightList[1]` — Edgelight secondary theme (0–5):**
 
-> ⚠️ **Corrected 2026-07-04 after live device testing (HW 400).** Key finding:
-> **there is NO "edgelight off" value** — every tested id (0–8) renders an
-> effect. "Backlight on + edgelight fully off" is not expressible in one call.
-
-| ID | Effect (verified) |
-|---|---|
-| 0 | Pastel rainbow ✅ (matches original doc) |
-| 1 | Dark red, dim (least intrusive — used as HA's pseudo-off) ✅ |
-| 2 | Rainbow, fading |
-| 3 | Rainbow, standard transitions |
-| 4 | Pastel rainbow, breathing |
-| 5 | Static rainbow — *earlier doc wrongly listed this as "off"* |
-| 6 | (renders an effect; not off) |
-| 7 | Flashing rainbow, top-to-bottom sweep |
-| 8 | Static color |
-
-### 2e. Verified cross-zone semantics (live-tested 2026-07-04, HW 400)
-
-1. Every `SetRGBInfo` call **always re-asserts both zones**: the primary zone
-   gets the full 0–11 effect, the other zone gets a coarse secondary theme.
-   "Leave the other zone alone" does not exist.
-2. `OnOff: 0` turns **both zones off**, regardless of `SelectLightIndex`.
-3. Achievable states: both off (`OnOff:0`) · edge on + back off (Scenario 1,
-   secondary `0`) · both on (primary + approximated secondary) · back on +
-   edge **truly** off — **impossible**; HA approximates with secondary `1`
-   (dim red).
-
-Original (pre-correction) table for reference:
+> ⚠️ **These secondary IDs do not appear to be stable — their behavior is
+> unpredictable.** Live testing 2026-07-04 (HW 400) matched this table for
+> `0` and `1` but not for the rest, and found **no "edgelight off" value at
+> all** (every id 0–8 rendered an effect). The integration uses `1` (dim
+> dark red) as the least intrusive pseudo-off. Verify on your own
+> device/firmware.
 
 | ID | Effect |
 |---|---|
@@ -253,3 +235,14 @@ Original (pre-correction) table for reference:
 | 3 | Static rainbow |
 | 4 | Very slow color cycle |
 | 5 | Edgelight off |
+
+### 2e. Cross-zone semantics (live-tested 2026-07-04, HW 400)
+
+1. Every `SetRGBInfo` call **always re-asserts both zones**: the primary zone
+   gets the full 0–11 effect, the other zone gets a coarse secondary theme.
+   "Leave the other zone alone" does not exist.
+2. `OnOff: 0` turns **both zones off**, regardless of `SelectLightIndex`.
+3. Achievable states: both off (`OnOff:0`) · edge on + back off (Scenario 1,
+   secondary `0`) · both on (primary + approximated secondary) · back on +
+   edge **truly** off — **impossible**; HA approximates with secondary `1`
+   (dim red).
