@@ -171,13 +171,13 @@ options-flow YAML editor, diagnostics).
 Agreed direction 2026-07-03 (three tiers: pixoo-compat frozen, native card
 gallery, experimental native-face authoring). In priority order:
 
-- [ ] **Hybrid card MVP (chosen first step)** — proves the flash-free pattern
-  end-to-end with one **Solar card**: animated sun GIF as
-  `background_gif` (sent once, device loops it), power/yield as type-23
-  self-polling overlays.
-  - HTTP view serving card background GIFs from HA (next to the dispdata
-    view; content-hash cache-buster in the URL since the device caches
-    GIFs by URL).
+- [x] **Hybrid card MVP — `sensor_grid` shipped 2026-07-05** (docs/CARDS.md):
+  `page_type: card`, 2-8 slots with auto-densest layout, bundled MDI icons
+  in the HA-rendered background, cardbg HTTP view (digest URL as
+  cache-buster), type-23 value overlays, per-slot color/color_template.
+  **Not yet tested on a real device.** Still open from the original MVP:
+  - Animated background (Solar card with moving sun rays) — needs an
+    animated GIF variant of the background renderer.
   - Bar-string/formatter option in `dispdata.py` (e.g. `█████░░░░ 47%`);
     test block-glyph coverage in device fonts first, fallback `|||` / `===`.
 - [ ] **Card framework** — card manifest (slots: entity count +
