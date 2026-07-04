@@ -192,10 +192,18 @@ gallery, experimental native-face authoring). In priority order:
   `GetLocalFontList`) are unknown on port 80 `/post` — even with the Frame
   envelope + unpack-stub fields — and port 9000 is closed. Also rules out
   `GetScreenSnapshot` as a preview source for native faces on HW 400.
-- [ ] **Tier 3 re-probe on HW 402** — the second Times Gate hardware revision
-  uses port 9000 `/divoom_api` (the Frame-family API where watchface
-  authoring is proven; `device.py` already routes 402 there). Needs access
-  to a HW 402 device.
+- [ ] **Tier 3 (reframed): Divoom-ecosystem faces via DataRule polling** —
+  design a dial in Divoom's official `DivoomClockConfig.exe` designer that
+  polls an HA endpoint (DataRule "Normal" JSON shape:
+  `{"AppName", "DispData":[{"AppTitle","AppData"}]}`), like Divoom's own
+  Spotify/YouTube cards. "Send device" works without review for personal
+  use. First steps: HA view serving the Normal shape; hands-on designer
+  test on the Times Gate (tool is Pixoo64-oriented, 0-63 coords). See
+  SPEC_CARD_GALLERY.md Tier 3 and reference/DivoomClockConfig.
+- [ ] **Device-local authoring re-probe on HW 402** — the second Times Gate
+  hardware revision uses port 9000 `/divoom_api` (the Frame-family API where
+  `Device/CreateLocalClock` is proven; `device.py` already routes 402
+  there). Needs access to a HW 402 device.
 
 ## Notes / dead ends
 

@@ -97,28 +97,45 @@ Implications:
   layouts that text overlays can't express (charts, sparklines, icons
   per state).
 
-### Tier 3 — Native Divoom faces (experimental track)
+### Tier 3 — Divoom-ecosystem faces (designer + DataRule polling)
 
-Goal: author a card once and install it as a *device-native* clock face
-(survives without HA pushing), possibly shareable via Divoom's ecosystem.
+Goal: design a face with Divoom's own tooling that **polls HA itself** for
+its data (the same mechanism behind Divoom's built-in Spotify/YouTube/
+weather cards), so it runs device-native with zero HA pushing and is usable
+straight from the Divoom app. Optionally publish it to Divoom's community
+gallery. The most involved route, but potentially the most user-friendly
+for Divoom-app users.
 
-The DivoomDevelop toolchain (visual editor v2 + mcp-divoom-lan) documents
-this for the "Frame" family: `Device/CreateLocalClock` multipart upload,
-`ItemList[]` with `disp` widget ids, integer font ids, `Channel/SetClockSelectId`
-to activate. The Times Gate shares the firmware command-registry architecture
-and already answers `Channel/SetClockSelectId`, but the clock-authoring
-commands are **unverified on Times Gate**.
+Documented in `reference/DivoomClockConfig` (official Divoom repo):
 
-**Gate result (probed live 2026-07-04): NEGATIVE on HW 400, open question
-on HW 402.** On HW 400 (port 80 `/post`), `Device/GetLocalClockInfo`,
-`GetScreenSnapshot`, `GetTimeDialFontV2` and `GetLocalFontList` all return
-"Request data illegal json" — including with the full Frame envelope and
-response-unpack stub fields — and port 9000 is closed. The port-80 handler
-answers in the old Pixoo style (`error_code`, not `ReturnCode`), so the
-Frame API genuinely isn't there. However, the Times Gate has two hardware
-revisions and **HW 402 uses port 9000 `/divoom_api`** (already routed that
-way in `device.py`) — the Frame-family API where these commands are proven.
-Tier 3 is dead for HW 400; re-probe if a HW 402 device becomes available.
+- **Designer**: `DivoomClockConfig.exe` (Windows), login with the Divoom
+  app account. Compose background + display elements + fonts. **"Send
+  device"** pushes the dial directly to your own online device — private
+  use needs no review. "Submit for review" → Divoom admin review (~1 week)
+  → public in the dial community.
+- **Data polling (DivoomDataRule.pdf)**: a dial element can fetch a URL and
+  extract values from the JSON response. *Normal* mode expects
+  `{"AppName":..., "DispData":[{"AppTitle":..., "AppData":...}, ...]}`;
+  *Custom* mode uses rules like `"DispData,UserInfo,n:Level"` (with array
+  aggregation `[List:x-y]`).
+- **HA side**: a small HTTP view serving the Normal-mode shape from HA
+  entities (trivial next to the existing dispdata view) makes any
+  designer-built dial display HA data natively.
+
+Caveats / to verify:
+- The designer targets 0–63 coordinates (Pixoo64-oriented); whether Times
+  Gate dials use the same pipeline/resolution needs a hands-on test.
+- Windows-only tool; needs the device online in the Divoom cloud.
+- A published dial has its poll URL baked in — fine for personal use;
+  gallery distribution to *other* HA users likely can't parameterize their
+  HA URL.
+
+Side note (probed live 2026-07-04): the *device-local* Frame authoring API
+(`Device/CreateLocalClock` etc., from the visual-editor-v2/mcp-divoom-lan
+toolchain) does **not** exist on Times Gate HW 400 (port 80 answers in old
+Pixoo style; port 9000 closed). HW 402 routes to port 9000 `/divoom_api`
+and might support it — re-probe if such a device becomes available. That
+negative result does not affect the cloud-designer route above.
 
 ## Migration & compatibility
 
