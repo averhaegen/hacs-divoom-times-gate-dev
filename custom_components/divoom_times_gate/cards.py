@@ -30,8 +30,20 @@ from .mdi import draw_icon, icon_for_state
 _LOGGER = logging.getLogger(__name__)
 
 MAX_SLOTS = 8
-_LABEL_COLOR = (128, 128, 128)
-_DEFAULT_VALUE_COLOR = "#FFFFFF"
+_DEFAULT_FOREGROUND = "#FFFFFF"
+_DEFAULT_BACKGROUND = "#000000"
+
+# Named colour themes (page option ``theme:``). ``background``/``foreground``
+# in the page override the chosen theme's values individually.
+THEMES: dict[str, dict[str, str]] = {
+    "dark": {"background": "#000000", "foreground": "#FFFFFF"},      # default
+    "light": {"background": "#FFFFFF", "foreground": "#1A1A1A"},
+    "navy": {"background": "#0B1E3B", "foreground": "#FFB300"},      # amber on blue
+    "forest": {"background": "#0C1F17", "foreground": "#4ADE80"},    # green
+    "sunset": {"background": "#2A1020", "foreground": "#FF8C69"},    # warm coral
+    "terminal": {"background": "#001200", "foreground": "#33FF66"},  # CRT green
+}
+DEFAULT_THEME = "dark"
 
 
 def _label_font(size: int) -> ImageFont.ImageFont:
@@ -60,14 +72,40 @@ def _layout_cells(count: int) -> list[tuple[int, int, int, int]]:
     return [(c % 2 * w, c // 2 * h, w, h) for c in range(8)]
 
 
-def _resolve_color(hass: HomeAssistant, slot: dict[str, Any]) -> str:
-    """Slot icon/value colour: ``color_template`` (rendered) > ``color`` > white."""
+def _rgb(color: str) -> tuple[int, int, int]:
+    from PIL import ImageColor
+
+    try:
+        return ImageColor.getrgb(color)[:3]
+    except ValueError:
+        return (128, 128, 128)
+
+
+def _dim(color: str, factor: float = 0.55) -> tuple[int, int, int]:
+    """A dimmed version of a hex colour, for labels against the foreground."""
+    r, g, b = _rgb(color)
+    return (int(r * factor), int(g * factor), int(b * factor))
+
+
+def _blend(a: str, b: str, t: float) -> tuple[int, int, int]:
+    """Blend colour ``a`` toward ``b`` by fraction ``t`` (0..1)."""
+    ra, ga, ba = _rgb(a)
+    rb, gb, bb = _rgb(b)
+    return (
+        int(ra + (rb - ra) * t),
+        int(ga + (gb - ga) * t),
+        int(ba + (bb - ba) * t),
+    )
+
+
+def _resolve_color(hass: HomeAssistant, slot: dict[str, Any], default: str) -> str:
+    """Slot icon/value colour: ``color_template`` (rendered) > ``color`` > foreground."""
     if tpl := slot.get("color_template"):
         try:
-            return str(Template(str(tpl), hass).async_render()).strip() or _DEFAULT_VALUE_COLOR
+            return str(Template(str(tpl), hass).async_render()).strip() or default
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("sensor_grid color_template failed: %s", err)
-    return str(slot.get("color", _DEFAULT_VALUE_COLOR))
+    return str(slot.get("color", default))
 
 
 def render_sensor_grid(
@@ -121,7 +159,14 @@ def render_sensor_grid(
         raise ValueError(f"sensor_grid: unknown layout {layout!r}")
 
     tpl_base = poll_base.replace("/dispdata/", "/dispdata_tpl/")
-    img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), (0, 0, 0))
+    # Theme colours: a named `theme` sets the base pair; `background`/
+    # `foreground` override individually. `background` fills the canvas,
+    # `foreground` is the default for icons + values (per-slot `color`/
+    # `color_template` still override those).
+    theme = THEMES.get(str(page.get("theme", DEFAULT_THEME)).lower(), THEMES[DEFAULT_THEME])
+    background = str(page.get("background") or theme["background"])
+    foreground = str(page.get("foreground") or theme["foreground"])
+    img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), background)
     draw = ImageDraw.Draw(img)
     items: list[dict[str, Any]] = []
     font_default = int(page.get("font", 4))
@@ -131,7 +176,11 @@ def render_sensor_grid(
     # of being truncated in the baked background.
     scroll_labels = bool(page.get("scroll_labels", True))
     label_font_id = int(page.get("label_font", 2))
-    label_color = str(page.get("label_color", "#808080"))
+    # Labels default to a dimmed foreground (readable on any background).
+    label_color = str(page.get("label_color") or "") or _dim(foreground)
+    # Dividers: a subtle line blended between bg and fg — matches any theme
+    # (a dimmed foreground alone looked muddy/grey on coloured backgrounds).
+    sep_color = _blend(background, foreground, 0.22)
 
     def label_item(i: int, text: str, x: int, y: int, w: int) -> None:
         items.append(
@@ -196,7 +245,7 @@ def render_sensor_grid(
                 "Textheight": 16,
                 "speed": 50,
                 "align": 5,  # right (Times Gate: 1 left / 3 centre / 5 right)
-                "color": str(page.get("header_color", "#FFFFFF")),
+                "color": str(page.get("header_color") or foreground),
             }
         )
         top = 15
@@ -208,7 +257,7 @@ def render_sensor_grid(
             if not entity_id:
                 raise ValueError(f"sensor_grid slot #{i} is missing entity_id")
             state = hass.states.get(entity_id)
-            color = _resolve_color(hass, slot)
+            color = _resolve_color(hass, slot, foreground)
             icon = slot.get("icon") or icon_for_state(state)
             label = slot.get("name")
             if label is None:
@@ -221,10 +270,10 @@ def render_sensor_grid(
             if scroll_labels:
                 label_item(i, label, text_x, y + 1, SCREEN_SIZE - text_x - 2)
             else:
-                draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=_LABEL_COLOR)
+                draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=label_color)
             value_item(slot, i, text_x, y + 12, SCREEN_SIZE - text_x - 2, color)
             if i:
-                draw.line([(0, y), (SCREEN_SIZE, y)], fill=(35, 35, 35))
+                draw.line([(0, y), (SCREEN_SIZE, y)], fill=sep_color)
     else:
         cells = _layout_cells(len(slots))
         for i, slot in enumerate(slots):
@@ -233,7 +282,7 @@ def render_sensor_grid(
             if not entity_id:
                 raise ValueError(f"sensor_grid slot #{i} is missing entity_id")
             state = hass.states.get(entity_id)
-            color = _resolve_color(hass, slot)
+            color = _resolve_color(hass, slot, foreground)
             icon = slot.get("icon") or icon_for_state(state)
             label = slot.get("name")
             if label is None:
@@ -246,14 +295,14 @@ def render_sensor_grid(
                 if scroll_labels:
                     label_item(i, label, text_x, y + 10, SCREEN_SIZE - text_x - 2)
                 else:
-                    draw.text((text_x, y + 10), str(label)[:16], font=_label_font(11), fill=_LABEL_COLOR)
+                    draw.text((text_x, y + 10), str(label)[:16], font=_label_font(11), fill=label_color)
                 value_item(slot, i, text_x, y + 26, SCREEN_SIZE - text_x - 2, color)
             elif mode == "quad":
                 # Label on top (centered), large icon in the middle, value below.
                 label_txt = str(label)[:11]
                 lf = _label_font(10)
                 lw = draw.textlength(label_txt, font=lf)
-                draw.text((x + (w - lw) // 2, y + 2), label_txt, font=lf, fill=_LABEL_COLOR)
+                draw.text((x + (w - lw) // 2, y + 2), label_txt, font=lf, fill=label_color)
                 icon_size = 26
                 draw_icon(draw, icon, (x + (w - icon_size) // 2, y + 14), icon_size, color)
                 value_item(slot, i, x + 2, y + h - 20, w - 4, color, align=3)
@@ -265,10 +314,10 @@ def render_sensor_grid(
 
         # Separator lines between cells (subtle, dark gray).
         if len(slots) > 2:
-            draw.line([(SCREEN_SIZE // 2, 0), (SCREEN_SIZE // 2, SCREEN_SIZE)], fill=(40, 40, 40))
+            draw.line([(SCREEN_SIZE // 2, 0), (SCREEN_SIZE // 2, SCREEN_SIZE)], fill=sep_color)
         for _, cy, _, ch in cells[1::2]:
             if cy > 0:
-                draw.line([(0, cy), (SCREEN_SIZE, cy)], fill=(40, 40, 40))
+                draw.line([(0, cy), (SCREEN_SIZE, cy)], fill=sep_color)
 
     return _encode_gif(img), items
 
@@ -277,30 +326,25 @@ def _encode_gif(img: Image.Image) -> bytes:
     """Encode a card background as a GIF the device renders faithfully.
 
     The device treats GIF **palette index 0 as transparent** (verified on
-    device 2026-07-05: whichever colour ADAPTIVE quantization happened to put
-    at index 0 vanished — first white, then green — while the same shape in
-    another colour rendered fine). Force **black** onto index 0: our card
-    backgrounds are black, so index-0 transparency is invisible (black on a
-    black panel) and every drawn colour renders. Also clamp 255→254 as belt-
-    and-suspenders against any pure-white edge case.
+    device 2026-07-05: whichever colour landed at index 0 vanished — first
+    white, then green — leaving solid fills as bare outlines). To make ANY
+    colour render (including white or a custom background), we quantize the
+    image to at most 255 colours in indices 1–255 and reserve index 0 as an
+    unused sentinel — so no visible pixel is ever transparent.
     """
-    img = Image.eval(img, lambda v: 254 if v == 255 else v)
-    p = img.convert("P", palette=Image.Palette.ADAPTIVE)
-    pal = p.getpalette() or []
-    black_idx = next(
-        (i for i in range(len(pal) // 3) if pal[i * 3 : i * 3 + 3] == [0, 0, 0]),
-        None,
-    )
-    if black_idx not in (None, 0):
-        pal[0:3], pal[black_idx * 3 : black_idx * 3 + 3] = (
-            pal[black_idx * 3 : black_idx * 3 + 3],
-            pal[0:3],
-        )
-        swap = {0: black_idx, black_idx: 0}
-        p.putdata([swap.get(v, v) for v in p.getdata()])
-        p.putpalette(pal)
+    q = img.convert("RGB").quantize(colors=255, method=Image.Quantize.FASTOCTREE)
+    # Shift every pixel's palette index up by 1 so index 0 is free.
+    shifted = bytes((b + 1) & 0xFF for b in q.tobytes())
+    out = Image.frombytes("P", q.size, shifted)
+    pal = (q.getpalette() or [])[: 255 * 3]
+    pal += [0] * (255 * 3 - len(pal))  # pad to exactly 255 colours
+    out.putpalette([0, 0, 0] + pal)  # index 0 = unused black sentinel
     buf = BytesIO()
-    p.save(buf, "GIF")
+    # optimize=False is REQUIRED: the GIF optimizer would collapse the unused
+    # index 0 and shift a real colour (e.g. a white background) onto it, which
+    # the device then renders transparent. Keeping the sentinel means no pixel
+    # ever maps to index 0.
+    out.save(buf, "GIF", optimize=False)
     return buf.getvalue()
 
 
