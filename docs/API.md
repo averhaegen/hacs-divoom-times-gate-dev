@@ -451,7 +451,7 @@ temperature, weather, noise) or poll a URL — no per-refresh pushing for those.
 | `LocalToken` | int | required |
 | `LcdIndex` | int | 0–4, target screen ✅ |
 | `NewFlag` | int | `1` = overwrite all items + set new background; `0` = add/update individual items, background unchanged ✅ |
-| `BackgroudGif` | string | URL to a `.gif` the device fetches as background — required with `NewFlag: 1`; omit with `NewFlag: 0` ✅. **Must be `.gif`** ✅ — a `.jpg`/`.png` URL returns `error_code 0` (accepted) but the panel gets stuck showing no background/loading; only tested with `.gif` did the background actually render. |
+| `BackgroudGif` | string | URL to a `.gif` the device fetches as background — required with `NewFlag: 1`; omit with `NewFlag: 0` ✅. **Must be `.gif`** ✅ — a `.jpg`/`.png` URL returns `error_code 0` (accepted) but the panel gets stuck showing no background/loading; only tested with `.gif` did the background actually render. **Pure white (255,255,255) is treated as transparent** ✅ — white pixels vanish entirely (a solid white icon renders as just its antialiased outline); clamp to (254,254,254), which renders normally. |
 | `ItemList` | array | list of item objects (below) |
 
 **Item object:** `TextId` (< 40), `type` (see table), `x`, `y`, `dir` (`0` scroll left,

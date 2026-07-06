@@ -271,6 +271,11 @@ def render_sensor_grid(
                 draw.line([(0, cy), (SCREEN_SIZE, cy)], fill=(40, 40, 40))
 
     buf = BytesIO()
+    # The device treats PURE white (255,255,255) in BackgroudGif as
+    # transparent (verified on-device 2026-07-05: white pixels simply vanish,
+    # leaving antialiased edges as an "outline"). Clamp 255 -> 254 per
+    # channel — visually identical, but the device keeps the pixels.
+    img = Image.eval(img, lambda v: 254 if v == 255 else v)
     # The device fetches BackgroudGif as an actual GIF; static single frame.
     img.convert("P", palette=Image.Palette.ADAPTIVE).save(buf, "GIF")
     return buf.getvalue(), items
