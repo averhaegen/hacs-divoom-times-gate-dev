@@ -21,7 +21,7 @@ row spacing. Pick by what you need to show:
 | **Plain numbers** | `4` · 14×14 · · `24` · 8×14 · · `96` · 7×13 | `4` is the default |
 | **Numbers + decimal** | `184` · 12×14 · · `44` · 6×14 · · `370` · 12×12 | for `3.2` |
 | **Numbers + `%`** | `248` · 11×11 · · `300` · 13×13 · · `46` · 5×13 | for `67%` |
-| **Numbers + `:` (clock)** | `22` · 7×11 · · `90` · 8×11 · · `46` · 5×13 | for `12:30` |
+| **Numbers + `:` (clock)** | `18` · 5×5 · · `22` · 7×11 · · `90` · 8×11 | `18` looks great for clocks |
 | **Temperature (`21c`)** | `254` · 11×14 · · `248` · 11×11 | `c`/`f` glyphs |
 
 ### Text / units / labels
@@ -34,6 +34,9 @@ row spacing. Pick by what you need to show:
 > Tip: the safest single choice for a mixed value is the default **`4`** — it
 > renders general text and numbers. Reach for a specialised id only when you
 > want a specific look (e.g. `254` for `21c`, `248` for `%`).
+>
+> Observed on device: **`18`** is a clean small clock/numeric font; **`2`**
+> and **`4`** are similar general fonts, with **`4`** rendering a bit larger.
 
 ## Bigger / display fonts (outside the card band)
 
