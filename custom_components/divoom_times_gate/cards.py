@@ -150,9 +150,11 @@ def render_sensor_grid(
 
     layout = str(page.get("layout", "auto")).lower()
     if layout == "auto":
-        mode = "rows" if len(slots) <= 2 else "list" if len(slots) <= 5 else "compact"
+        mode = "rows" if len(slots) <= 2 else "list" if len(slots) <= 6 else "compact"
     elif layout == "list":
-        mode = "list" if len(slots) <= 5 else "compact"
+        # Adaptive single column: stacks label+value when rows are tall enough,
+        # otherwise one line per sensor. Handles any count without clipping.
+        mode = "rows" if len(slots) <= 2 else "list"
     elif layout == "grid":
         mode = "rows" if len(slots) <= 2 else "quad" if len(slots) <= 4 else "compact"
     else:
@@ -227,9 +229,11 @@ def render_sensor_grid(
         )
 
     # Optional native header (device-rendered clock/date/weather) top-right.
+    # It floats in the top-right corner and overlaps row 0 (whose content is
+    # kept on the left), so it costs no vertical padding.
     header = str(page.get("header", "time_short")).lower()
-    top = 0
-    if mode == "list" and header not in ("none", "false", ""):
+    header_present = mode == "list" and header not in ("none", "false", "")
+    if header_present:
         native_type = NATIVE_KIND_TYPES.get(header)
         if native_type is None:
             raise ValueError(f"sensor_grid: unknown header kind {header!r}")
@@ -248,10 +252,13 @@ def render_sensor_grid(
                 "color": str(page.get("header_color") or foreground),
             }
         )
-        top = 15
 
     if mode == "list":
-        row_h = (SCREEN_SIZE - top) // len(slots)
+        n = len(slots)
+        row_h = SCREEN_SIZE // n
+        # Stacked (label above value) only when a row is tall enough; otherwise
+        # one line per sensor (icon + right-aligned value). ~5+ sensors → lines.
+        stacked = row_h >= 30
         for i, slot in enumerate(slots):
             entity_id = slot.get("entity_id")
             if not entity_id:
@@ -263,15 +270,26 @@ def render_sensor_grid(
             if label is None:
                 label = state.name if state is not None else entity_id.split(".")[-1]
 
-            y = top + i * row_h
-            icon_size = min(24, row_h - 4)
+            y = i * row_h
+            # Row 0 yields its right edge to the floating header.
+            right = 60 if (header_present and i == 0) else SCREEN_SIZE - 2
+            icon_size = min(row_h - 4, 24 if stacked else 20)
             draw_icon(draw, icon, (2, y + (row_h - icon_size) // 2), icon_size, color)
             text_x = 2 + icon_size + 5
-            if scroll_labels:
-                label_item(i, label, text_x, y + 1, SCREEN_SIZE - text_x - 2)
+
+            if stacked:
+                if scroll_labels:
+                    label_item(i, label, text_x, y + 1, right - text_x)
+                else:
+                    draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=label_color)
+                value_item(slot, i, text_x, y + 13, right - text_x, color)
             else:
-                draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=label_color)
-            value_item(slot, i, text_x, y + 12, SCREEN_SIZE - text_x - 2, color)
+                # One line: small label after the icon, value right-aligned.
+                lf = _label_font(9)
+                draw.text((text_x, y + (row_h - 9) // 2), str(label)[:9], font=lf, fill=label_color)
+                lw = int(draw.textlength(str(label)[:9], font=lf))
+                value_x = min(text_x + lw + 4, text_x + 46)
+                value_item(slot, i, value_x, y + (row_h - 16) // 2, right - value_x, color, align=5)
             if i:
                 draw.line([(0, y), (SCREEN_SIZE, y)], fill=sep_color)
     else:

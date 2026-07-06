@@ -507,6 +507,11 @@ not across the full screen. To centre text on the full 128px screen: `x: 0`,
 - **Types 1–21** render **on-device** with zero further pushes. The chosen `font` must
   include the needed glyphs (digits for numeric types; letters for weekday/month/weather).
 - **Type 22** = a static string you push.
+  > ⚠️ **Scrolling: type 22 does NOT scroll on the Times Gate** (verified
+  > 2026-07-05 — a static string wider than `TextWidth` is truncated, not
+  > scrolled, regardless of `dir`/`speed`/`font`). **Type 23 (net text) DOES
+  > scroll** on overflow. So to scroll a label, push it as a type-23 item
+  > (a URL returning the static text) rather than type 22.
 - **Type 23** = **net text**: `TextString` is a URL the device polls every `update_time`
   seconds; the response must be JSON `{"DispData": "value"}`. Example URL
   `http://appin.divoom-gz.com/Device/ReturnCurrentDate?test=0` → `{"DispData": "2022-01-22 13:51:56"}`.
