@@ -81,6 +81,11 @@ def _rgb(color: str) -> tuple[int, int, int]:
         return (128, 128, 128)
 
 
+def _hex(rgb: tuple[int, int, int]) -> str:
+    """An (r,g,b) tuple as a #RRGGBB string (device item colours must be hex)."""
+    return "#{:02X}{:02X}{:02X}".format(*rgb)
+
+
 def _dim(color: str, factor: float = 0.55) -> tuple[int, int, int]:
     """A dimmed version of a hex colour, for labels against the foreground."""
     r, g, b = _rgb(color)
@@ -179,7 +184,9 @@ def render_sensor_grid(
     scroll_labels = bool(page.get("scroll_labels", True))
     label_font_id = int(page.get("label_font", 2))
     # Labels default to a dimmed foreground (readable on any background).
-    label_color = str(page.get("label_color") or "") or _dim(foreground)
+    # MUST be a hex string: type-22 label items send this straight to the
+    # device, which rejects a list/tuple colour ("Request data illegal json").
+    label_color = str(page.get("label_color") or "") or _hex(_dim(foreground))
     # Dividers: a subtle line blended between bg and fg — matches any theme
     # (a dimmed foreground alone looked muddy/grey on coloured backgrounds).
     sep_color = _blend(background, foreground, 0.22)
