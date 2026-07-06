@@ -18,6 +18,8 @@ from aiohttp import web
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import TemplateError
+from homeassistant.helpers.template import Template
 
 from .const import DOMAIN
 
@@ -36,7 +38,24 @@ def register_secret(hass: HomeAssistant, secret: str) -> None:
     if not secrets:
         hass.http.register_view(DispDataView(hass))
         hass.http.register_view(CardBackgroundView(hass))
+        hass.http.register_view(DispDataTemplateView(hass))
     secrets.add(secret)
+
+
+TPL_URL_PATTERN = "/api/divoom_times_gate/dispdata_tpl/{secret}/{key}"
+_TPL_KEY = "dispdata_templates"
+
+
+def register_value_template(hass: HomeAssistant, key: str, template: str) -> None:
+    """Register a Jinja template served at the dispdata_tpl endpoint.
+
+    Cards use this for per-slot ``value_template``: the device polls
+    ``/dispdata_tpl/<secret>/<key>`` and the template renders fresh in HA on
+    every poll (e.g. turning ``0.001`` kW into ``1 W``). Keyed by a content
+    hash, so identical templates share an entry and re-registration is a
+    no-op.
+    """
+    hass.data.setdefault(DOMAIN, {}).setdefault(_TPL_KEY, {})[key] = template
 
 
 def publish_card_background(hass: HomeAssistant, digest: str, gif: bytes) -> None:
@@ -84,6 +103,31 @@ class DispDataView(HomeAssistantView):
         if label := request.query.get("label"):
             value = f"{label.replace('_', ' ')}: {value}"
 
+        return web.json_response({"DispData": value})
+
+
+class DispDataTemplateView(HomeAssistantView):
+    """Serves ``{"DispData": <rendered template>}`` for a registered template."""
+
+    url = TPL_URL_PATTERN
+    name = "api:divoom_times_gate:dispdata_tpl"
+    requires_auth = False
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request: web.Request, secret: str, key: str) -> web.Response:
+        secrets: set[str] = self._hass.data.get(DOMAIN, {}).get(_DATA_KEY, set())
+        if secret not in secrets:
+            return web.json_response({"error": "forbidden"}, status=403)
+        template = self._hass.data.get(DOMAIN, {}).get(_TPL_KEY, {}).get(key)
+        if template is None:
+            return web.json_response({"error": "unknown template"}, status=404)
+        try:
+            value = str(Template(template, self._hass).async_render())
+        except TemplateError as err:
+            _LOGGER.warning("dispdata_tpl %s render failed: %s", key, err)
+            value = "err"
         return web.json_response({"DispData": value})
 
 

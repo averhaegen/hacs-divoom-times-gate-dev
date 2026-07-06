@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_DURATION,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    NATIVE_KIND_TYPES,
     SCREEN_COUNT,
 )
 from .defaults import DEFAULT_SCREENS
@@ -613,32 +614,9 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     _DISPDATA_MAX_ITEMS = 8
 
-    # Native SendHttpItemList element types the device renders entirely on its
-    # own (clock/date/weather) — no TextString, no polling, zero HA involvement
-    # once sent. See docs/API.md §4.10 "type values" table.
-    _NATIVE_KIND_TYPES = {
-        "second": 1,
-        "minute": 2,
-        "hour": 3,
-        "ampm": 4,  # AM/PM marker; pair with "time_short" for a 12h clock
-        "time_short": 5,  # hh:mm
-        "time": 6,  # hh:mm:ss
-        "clock": 6,  # alias of "time"
-        "year": 7,
-        "day": 8,
-        "month": 9,
-        "mon_year": 10,
-        "month_day": 11,  # eng-month.day
-        "weekday_2": 13,  # SU
-        "weekday_3": 14,  # SUN
-        "weekday_full": 15,  # SUNDAY
-        "month_3": 16,  # JAN
-        "temperature": 17,
-        "temp_max": 18,
-        "temp_min": 19,
-        "weather": 20,  # weather word
-        "noise": 21,  # dB
-    }
+    # Native device-rendered element types — moved to const.NATIVE_KIND_TYPES
+    # (shared with card headers); kept as a class alias for existing callers.
+    _NATIVE_KIND_TYPES = NATIVE_KIND_TYPES
 
     async def _build_dispdata_items(
         self, screen: int, page: dict[str, Any]

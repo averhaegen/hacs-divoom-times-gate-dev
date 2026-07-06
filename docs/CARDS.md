@@ -10,14 +10,15 @@ background only re-sends when its content changes (config edit, a
 
 ## `sensor_grid`
 
-2–8 sensors, densest-fitting layout chosen automatically:
+1–8 sensors. `layout: auto` (default) picks by count; `layout: list` or
+`layout: grid` forces a style:
 
-| Slots | Layout |
+| Layout | Shape |
 |---|---|
-| 2 | Two large rows — 28px icon, label, big value |
-| 3–4 | Quadrants — small icon + label on top, value across the cell |
-| 5–6 | 2 columns × 3 rows — icon + value, no label |
-| 7–8 | 2 columns × 4 rows — icon + value, no label |
+| `list` (auto for 3–5) | Full-width rows: icon left, label on the top line, value below it. Optional native header (clock by default) top-right. |
+| `grid` (2–4) | Cells: label on top, large centered icon, value centered underneath. |
+| auto 1–2 | Two big rows (32px icon, label + value beside it). |
+| auto/any 6–8 | Compact 2-column grid: icon + value only. |
 
 The 8-slot ceiling is a readability choice, not a device limit.
 
@@ -26,6 +27,11 @@ The 8-slot ceiling is a readability choice, not a device limit.
 ```yaml
 page_type: card
 card: sensor_grid        # currently the only card type
+layout: auto             # auto | list | grid
+header: time_short       # list layout: native element top-right (hh:mm).
+                         # Any dispdata native kind (time, weekday_3,
+                         # temperature, ...) or "none" to disable.
+header_color: "#FFFFFF"
 update_time: 10          # poll interval (s), page default
 font: 4                  # device font id for values, page default
 slots:
@@ -38,9 +44,16 @@ slots:
       {% set s = states('sensor.home_battery_soc') | int %}
       {% if s < 20 %}#FF3B30{% elif s < 50 %}#FF9500{% else %}#34C759{% endif %}
   - entity_id: sensor.grid_power
+    value_template: >-   # transform the shown value (renders per poll)
+      {{ (states('sensor.grid_power') | float * 1000) | round }} W
     update_time: 5       # per-slot poll override
     font: 2              # per-slot font override
 ```
+
+`value_template` values are rendered fresh in HA on every device poll (via
+the `dispdata_tpl` endpoint), so unit conversions, rounding and formatting
+always reflect the current state. Battery-class entities without an explicit
+icon get a dynamic fill-level icon (`mdi:battery-70` etc.), like HA's own UI.
 
 ### Notes
 
