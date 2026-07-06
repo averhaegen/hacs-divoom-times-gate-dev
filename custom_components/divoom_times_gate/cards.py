@@ -270,15 +270,38 @@ def render_sensor_grid(
             if cy > 0:
                 draw.line([(0, cy), (SCREEN_SIZE, cy)], fill=(40, 40, 40))
 
-    buf = BytesIO()
-    # The device treats PURE white (255,255,255) in BackgroudGif as
-    # transparent (verified on-device 2026-07-05: white pixels simply vanish,
-    # leaving antialiased edges as an "outline"). Clamp 255 -> 254 per
-    # channel — visually identical, but the device keeps the pixels.
+    return _encode_gif(img), items
+
+
+def _encode_gif(img: Image.Image) -> bytes:
+    """Encode a card background as a GIF the device renders faithfully.
+
+    The device treats GIF **palette index 0 as transparent** (verified on
+    device 2026-07-05: whichever colour ADAPTIVE quantization happened to put
+    at index 0 vanished — first white, then green — while the same shape in
+    another colour rendered fine). Force **black** onto index 0: our card
+    backgrounds are black, so index-0 transparency is invisible (black on a
+    black panel) and every drawn colour renders. Also clamp 255→254 as belt-
+    and-suspenders against any pure-white edge case.
+    """
     img = Image.eval(img, lambda v: 254 if v == 255 else v)
-    # The device fetches BackgroudGif as an actual GIF; static single frame.
-    img.convert("P", palette=Image.Palette.ADAPTIVE).save(buf, "GIF")
-    return buf.getvalue(), items
+    p = img.convert("P", palette=Image.Palette.ADAPTIVE)
+    pal = p.getpalette() or []
+    black_idx = next(
+        (i for i in range(len(pal) // 3) if pal[i * 3 : i * 3 + 3] == [0, 0, 0]),
+        None,
+    )
+    if black_idx not in (None, 0):
+        pal[0:3], pal[black_idx * 3 : black_idx * 3 + 3] = (
+            pal[black_idx * 3 : black_idx * 3 + 3],
+            pal[0:3],
+        )
+        swap = {0: black_idx, black_idx: 0}
+        p.putdata([swap.get(v, v) for v in p.getdata()])
+        p.putpalette(pal)
+    buf = BytesIO()
+    p.save(buf, "GIF")
+    return buf.getvalue()
 
 
 CARD_RENDERERS = {
