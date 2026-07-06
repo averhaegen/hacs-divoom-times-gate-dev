@@ -175,11 +175,18 @@ gallery, experimental native-face authoring). In priority order:
   `page_type: card`, 2-8 slots with auto-densest layout, bundled MDI icons
   in the HA-rendered background, cardbg HTTP view (digest URL as
   cache-buster), type-23 value overlays, per-slot color/color_template.
-  **Not yet tested on a real device.** Still open from the original MVP:
+  Device-verified 2026-07-05 (background GIF fetch, icons, type-23 polling).
+  Since extended with: named themes + `background`/`foreground` (palette
+  index-0 transparency worked around via a reserved sentinel), MDI icons with
+  dynamic battery levels, per-slot `value_template`, `page_type: image` +
+  `show_image` service. Still open from the original MVP:
   - Animated background (Solar card with moving sun rays) — needs an
     animated GIF variant of the background renderer.
   - Bar-string/formatter option in `dispdata.py` (e.g. `█████░░░░ 47%`);
     test block-glyph coverage in device fonts first, fallback `|||` / `===`.
+  - Label scrolling does not work on the test unit (type-22 items don't
+    scroll regardless of dir/speed/font) — investigate `SendHttpText` or
+    accept truncation.
 - [ ] **Card framework** — card manifest (slots: entity count +
   device_classes, options), registry, `page_type: card` in the coordinator.
 - [ ] **Gallery cards** — battery, range_bar, grid_power, energy_cost,

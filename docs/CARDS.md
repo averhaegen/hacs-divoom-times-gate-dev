@@ -35,7 +35,7 @@ header: time_short       # list layout: native element top-right (hh:mm).
                          # Any dispdata native kind (time, weekday_3,
                          # temperature, ...) or "none" to disable.
 update_time: 10          # poll interval (s), page default
-font: 4                  # device font id for values, page default
+font: 4                  # device font id for values (see docs/FONTS.md)
 slots:
   - entity_id: sensor.solar_power
     name: Solar          # label; default: the entity's friendly name

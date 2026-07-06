@@ -6,6 +6,13 @@ It renders your Home Assistant sensor data across the 5 screens, lets you switch
 between HA content and the device's native faces, and exposes device controls:
 display brightness/on-off, two RGB lights (edge strip + backlight), a **Display
 source** select, a **Screen 1–5** select each, a refresh button, and a buzzer.
+Each screen also exposes a **preview image** entity showing what HA last
+rendered on it.
+
+The quickest way to get your data on screen is a **card** (`page_type: card`) —
+drop in 2–8 sensors and it renders a themed, icon-labelled layout for you (see
+[docs/CARDS.md](docs/CARDS.md)). For full manual control, `components` pages
+give you pixel-level drawing.
 
 > ⚠️ **Development repo.** Under active development. The default screens use the
 > author's entity IDs as worked examples — edit them via **Configure** to match
@@ -76,7 +83,32 @@ each **Screen N** select.
 Each screen is configured independently. A screen is **either** a single page
 **or a list of pages that rotate** (by each page's `duration`, in seconds) — the
 same model as a Pixoo's page list, so a Pixoo config drops straight in. Edit via
-**Configure** (options) as YAML. The page schema matches
+**Configure** (options) as YAML.
+
+### Easiest: a card
+
+A `card` page turns a handful of sensors into a polished layout — icons
+(auto-picked from each entity), labels, live-polled values, and a colour theme —
+without drawing anything by hand:
+
+```yaml
+- page_type: card
+  card: sensor_grid
+  theme: navy            # dark | light | navy | forest | sunset | terminal
+  slots:
+    - entity_id: sensor.solar_power
+      color: "#FFB300"
+    - entity_id: sensor.home_battery_soc   # battery icon fills with the level
+    - entity_id: sensor.grid_power
+      value_template: "{{ (states('sensor.grid_power')|float * 1000)|round }} W"
+```
+
+2–8 sensors, layout chosen automatically. Full options — themes, per-slot
+colours/icons/fonts, value templates, headers — in **[docs/CARDS.md](docs/CARDS.md)**.
+
+### Full control: a components page
+
+The page schema matches
 [pixoo-homeassistant](https://github.com/gickowtf/pixoo-homeassistant), so pages
 are portable between a Pixoo 64 and a Times Gate.
 
@@ -114,8 +146,21 @@ are portable between a Pixoo 64 and a Times Gate.
   copied from a Pixoo config renders identically (it's scaled up to 128 with
   nearest-neighbour).
 
+`dispdata_text` and `card` pages use **device font ids** instead (rendered by
+the device, not HA). See **[docs/FONTS.md](docs/FONTS.md)** for a
+use-case-sorted shortlist (which fonts do letters, digits, `%`, `.`, `:`) and
+[docs/FONTS_CATALOG.md](docs/FONTS_CATALOG.md) for all 308 with exact charsets.
+
 ### Other page types
 
+- `page_type: card` — a prebuilt sensor layout (see above and
+  [docs/CARDS.md](docs/CARDS.md)).
+- `page_type: image` — a photo or animated GIF on the screen, from
+  `image_path: /config/www/photo.jpg` or `image_url:` (`fit: cover` | `contain`).
+  Animated GIFs play as an animation (up to ~40 frames).
+- `page_type: dispdata_text` — device-native text that **self-polls HA** (no
+  per-tick push). Good for lightweight always-fresh values and native clock/
+  date/weather elements. See [docs/DISPDATA.md](docs/DISPDATA.md).
 - `page_type: clock` — a native device face. `clock_id: 61`.
 - `page_type: gif` — play animated GIF(s) on the screen (device-native, sizes
   16/32/64/128). `gif_url: "https://…/x.gif"` (or `gif_urls: [url, url]`).
@@ -195,6 +240,9 @@ Adjust the `variables` to your own sensors:
   native face on a screen.
 - **`divoom_times_gate.show_message`** — `screen`, `text`, optional `duration`
   and `color`. Flash a message, then revert to normal content.
+- **`divoom_times_gate.show_image`** — `screen`, `image_path` or `image_url`,
+  optional `fit` (cover/contain) and `duration` (0 = keep showing). Quickly
+  throw a photo or animated GIF onto a screen.
 
 ## RGB lighting
 
