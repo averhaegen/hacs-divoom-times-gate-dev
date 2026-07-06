@@ -346,22 +346,26 @@ def _encode_gif(img: Image.Image) -> bytes:
     The device treats GIF **palette index 0 as transparent** (verified on
     device 2026-07-05: whichever colour landed at index 0 vanished — first
     white, then green — leaving solid fills as bare outlines). To make ANY
-    colour render (including white or a custom background), we quantize the
-    image to at most 255 colours in indices 1–255 and reserve index 0 as an
-    unused sentinel — so no visible pixel is ever transparent.
+    colour render (including white or a custom background), we reserve index 0
+    as an unused sentinel and put the real colours in indices 1+.
+
+    The palette is kept **minimal** (only the colours actually used, padded to
+    the next power of two): a forced 256-entry palette **crashes the device's
+    GIF parser** (verified on device — a 256-colour background froze the unit,
+    a ~32-colour one rendered fine).
     """
     q = img.convert("RGB").quantize(colors=255, method=Image.Quantize.FASTOCTREE)
+    data = q.tobytes()
+    used = max(data) + 1  # highest palette index actually used, +1
     # Shift every pixel's palette index up by 1 so index 0 is free.
-    shifted = bytes((b + 1) & 0xFF for b in q.tobytes())
+    shifted = bytes((b + 1) & 0xFF for b in data)
     out = Image.frombytes("P", q.size, shifted)
-    pal = (q.getpalette() or [])[: 255 * 3]
-    pal += [0] * (255 * 3 - len(pal))  # pad to exactly 255 colours
+    pal = (q.getpalette() or [])[: used * 3]
     out.putpalette([0, 0, 0] + pal)  # index 0 = unused black sentinel
     buf = BytesIO()
-    # optimize=False is REQUIRED: the GIF optimizer would collapse the unused
-    # index 0 and shift a real colour (e.g. a white background) onto it, which
-    # the device then renders transparent. Keeping the sentinel means no pixel
-    # ever maps to index 0.
+    # optimize=False keeps the unused sentinel at index 0 (the optimizer would
+    # collapse it and shift a real colour — e.g. a white background — onto
+    # index 0, which the device then renders transparent).
     out.save(buf, "GIF", optimize=False)
     return buf.getvalue()
 
