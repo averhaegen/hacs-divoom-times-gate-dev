@@ -34,6 +34,54 @@ CDN = "https://f.divoom-gz.com/"
 
 TYPE_LABELS = {0: "bitmap", 1: "vector", 3: "image glyph"}
 
+# Style hints derived from the font *name* (the files are encrypted, so this
+# is the best available signal). Keyword → hint.
+_STYLE_HINTS = [
+    (("segment",), "7-segment/digital"),
+    (("pixel", "8-bit", "8bit"), "pixel/8-bit"),
+    (("serif", "宋体"), "serif"),
+    (("圆", "round", "rounded"), "rounded"),
+    (("hand", "手写", "script"), "handwriting"),
+    (("bold", "粗"), "bold"),
+]
+
+
+def style_hint(name: str) -> str:
+    low = name.lower()
+    return ", ".join(h for keys, h in _STYLE_HINTS if any(k in low for k in keys))
+
+
+def categories(charset: str, ftype: int) -> list[str]:
+    """Functional buckets a font belongs to, from its (API) charset."""
+    if not charset:
+        # The classic bitmap "standard fonts" render general text.
+        return ["full-text"] if ftype == 0 else ["unknown-charset"]
+    cs = set(charset)
+    has_digits = any(c.isdigit() for c in cs)
+    lower = sum(c.islower() for c in cs)
+    upper = sum(c.isupper() for c in cs)
+    cats = []
+    if lower >= 20 and upper >= 20 and len(cs & set("%.:-/")) >= 3:
+        cats.append("full-text")
+    elif lower >= 20 and upper >= 20:
+        cats.append("letters-digits")
+    elif upper >= 20:
+        cats.append("caps-digits")
+    if has_digits:
+        if "%" in cs:
+            cats.append("percent")
+        if "." in cs:
+            cats.append("decimals")
+        if ":" in cs:
+            cats.append("clock")
+        if "$" in cs:
+            cats.append("currency")
+        if "c" in cs and "f" in cs and lower <= 4:
+            cats.append("temperature")
+        if cs <= set("0123456789"):
+            cats.append("digits-only")
+    return cats or ["other"]
+
 _PREFERRED_SAMPLE = "Ab12.5%:-$"
 
 
@@ -68,8 +116,43 @@ def main() -> int:
         "Use `scripts/show_font_samples.py` to display fonts on the device",
         "and photograph them instead.",
         "",
-        "| id | size | type | name | charset | file |",
-        "|---|---|---|---|---|---|",
+    ]
+
+    # --- "pick a working font fast" section: functional lists ---------------
+    CAT_LABELS = {
+        "full-text": "Full text (upper+lower case, digits, symbols) — labels, any value",
+        "letters-digits": "Letters + digits (few/no symbols) — unit text like `kWh`",
+        "caps-digits": "UPPERCASE + digits — compact unit text like `W`, `KM`",
+        "percent": "Digits with `%` — percentages",
+        "decimals": "Digits with `.` — decimal values",
+        "clock": "Digits with `:` — times/clocks",
+        "currency": "Digits with `$` — currency",
+        "temperature": "Digits with `c`/`f` — temperatures (`21c`)",
+        "digits-only": "Bare digits only — integers",
+        "unknown-charset": "Charset not published (try on device)",
+        "other": "Other",
+    }
+    by_cat: dict[str, list[str]] = {}
+    for f in fonts:
+        fid = int(f["id"])
+        size = f"{f.get('width', '?')}×{f.get('high', '?')}"
+        for cat in categories(str(f.get("charset", "")), int(f.get("type", -1))):
+            by_cat.setdefault(cat, []).append(f"**{fid}** ({size})")
+    lines += ["## Quick picks by use case", ""]
+    for cat, label in CAT_LABELS.items():
+        ids = by_cat.get(cat)
+        if ids:
+            lines.append(f"- **{label}**: {', '.join(ids)}")
+    lines += [
+        "",
+        "Sizes are baked into the font (glyph grid) — a bigger value means a",
+        "bigger font id choice, not a setting. Fonts can appear in multiple",
+        "lists.",
+        "",
+        "## Full catalog",
+        "",
+        "| id | size | type | name | style hint | charset | file |",
+        "|---|---|---|---|---|---|---|",
     ]
     for f in sorted(fonts, key=lambda f: int(f["id"])):
         fid = int(f["id"])
@@ -77,10 +160,11 @@ def main() -> int:
         cell_charset = charset[:60] + ("…" if len(charset) > 60 else "")
         file_url = f.get("fontUrl") or f.get("url") or ""
         file_cell = f"[file]({CDN}{file_url})" if file_url else "—"
+        name = str(f.get("name", "?"))
         lines.append(
             f"| {fid} | {f.get('width', '?')}×{f.get('high', '?')} "
             f"| {TYPE_LABELS.get(int(f.get('type', -1)), f.get('type'))} "
-            f"| {str(f.get('name', '?')).replace('|', '\\|')} "
+            f"| {name.replace('|', '\\|')} | {style_hint(name) or '—'} "
             f"| `{cell_charset}` | {file_cell} |"
         )
 
