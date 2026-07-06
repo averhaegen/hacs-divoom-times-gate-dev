@@ -14,121 +14,369 @@ and photograph them instead.
 
 ## Quick picks by use case
 
-A few representative ids per need (small · card-safe ~14px · large).
-For every size available, find the charset in the grouped table below.
+Grouped by **font family** — fonts on one line are the same font at
+different sizes, so pick the `id` whose height fits (the card default
+is 14px). Glyphs outside a font's charset are dropped silently.
 
-- **Full text (upper+lower case, digits, symbols) — labels, any value**: `80` (7px), `58` (12px)
-- **Letters + digits (few/no symbols) — unit text like `kWh`**: `48` (9px), `280` (19px)
-- **UPPERCASE + digits — compact unit text like `W`, `KM`**: `18` (5px), `568` (14px), `642` (24px)
-- **Digits with `%` — percentages**: `18` (5px), `94` (12px), `492` (26px)
-- **Digits with `.` — decimal values**: `18` (5px), `94` (12px), `356` (29px)
-- **Digits with `:` — times/clocks**: `18` (5px), `46` (13px), `500` (128px)
-- **Digits with `$` — currency**: `170` (10px), `160` (16px)
-- **Digits with `c`/`f` — temperatures (`21c`)**: `148` (5px), `302` (12px), `440` (35px)
-- **Bare digits only — integers**: `82` (5px), `96` (13px), `538` (77px)
-- **Other**: `40` (5px), `646` (13px), `382` (33px)
+- **Full text (upper+lower case, digits, symbols) — labels, any value**:
+    - _standard font_: `52` (13px), `190` (16px) (+5 more sizes)
+    - _uppercase and lowercase English letters/numerals/characters_: `80` (7px)
+    - _numerals/uppercase and lowercase English letters/full characters_: `170` (10px)
+    - _font, Source Sans Pro_: `32` (16px)
+- **Letters + digits (few/no symbols) — unit text like `kWh`**:
+    - _English letters_: `276` (19px), `280` (19px)
+    - _English letters, Arabic figures_: `48` (9px)
+- **UPPERCASE + digits — compact unit text like `W`, `KM`**:
+    - _uppercase English letters_: `168` (5px), `406` (6px), `112` (7px), `386` (10px), `244` (15px)
+    - _numerals/uppercase letters/characters_: `198` (5px), `196` (6px)
+    - _letters_: `396` (10px), `398` (10px)
+    - _; minimum pixel characters_: `18` (5px)
+- **Digits with `%` — percentages**:
+    - _numerals/uppercase letters/characters_: `198` (5px), `196` (6px)
+    - _digit_: `274` (12px), `300` (13px)
+    - _uppercase and lowercase English letters/numerals/characters_: `80` (7px)
+    - _numerals/uppercase and lowercase English letters/full characters_: `170` (10px)
+- **Digits with `.` — decimal values**:
+    - _digit_: `288` (21px), `358` (26px), `298` (27px), `356` (29px)
+    - _numerals_: `150` (13px), `88` (15px), `362` (16px), `246` (22px)
+    - _unnamed_: `428` (21px), `430` (21px), `432` (21px)
+    - _numerals/uppercase letters/characters_: `198` (5px), `196` (6px)
+- **Digits with `:` — times/clocks**:
+    - _unnamed_: `422` (43px), `500` (128px) (+17 more sizes)
+    - _numerals_: `86` (7px), `482` (50px) (+15 more sizes)
+    - _digit_: `256` (23px), `344` (31px), `400` (31px), `360` (47px)
+    - _numerals/uppercase letters/characters_: `198` (5px), `196` (6px)
+- **Digits with `$` — currency**:
+    - _numerals/uppercase and lowercase English letters/full characters_: `170` (10px)
+    - _数字/字符_: `160` (16px)
+- **Digits with `c`/`f` — temperatures (`21c`)**:
+    - _numerals/temperature symbols_: `182` (6px), `410` (9px), `336` (13px), `254` (14px), `530` (19px), `522` (32px)
+    - _digit_: `278` (16px), `282` (16px), `296` (17px)
+    - _digit_: `352` (13px), `354` (13px), `294` (27px)
+    - _numbers/temperature symbols_: `506` (8px), `512` (9px), `466` (15px)
+- **Bare digits only — integers**:
+    - _numerals_: `122` (6px), `96` (13px), `538` (77px) (+42 more sizes)
+    - _number_: `668` (11px), `672` (14px), `582` (16px), `654` (26px), `650` (35px), `658` (38px)
+    - _Digital Segment Display_: `82` (5px), `30` (9px), `60` (11px)
+    - _Number_: `464` (11px), `474` (15px), `472` (23px)
+- **Other**:
+    - _numerals_: `194` (7px), `388` (7px), `414` (9px), `250` (11px), `364` (11px), `382` (33px)
+    - _three-letter abbreviation of uppercase and lowercase English letters for days of the week_: `330` (20px), `332` (20px), `334` (20px)
+    - _week letters_: `346` (20px), `348` (20px), `350` (20px)
+    - _unnamed_: `434` (21px), `436` (21px), `438` (21px)
 
-## Fonts grouped by charset
+## Full catalog (raw)
 
-Fonts that support the same glyphs are listed together — they differ
-only in size, so pick the id whose height fits your layout (the card
-default is 14px). Glyphs outside the charset are dropped silently.
+Every font id as returned by the endpoint. The `charset` is
+authoritative; `style hint` is guessed from the name.
 
-| Supported glyphs (charset) | Available as `id` (height) |
-|---|---|
-| `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz…` | `80` (7px) |
-| `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop…` | `170` (10px) |
-| `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop…` | `48` (9px) |
-| `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz` | `276` (19px), `280` (19px) |
-| `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZud.+~#` | `18` (5px), `34` (5px) |
-| `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZud.` | `42` (9px) |
-| `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZkm.-+/:%cf` | `198` (5px), `196` (6px) |
-| `0123456789JANFEBMRPYULGSOCTVDWonvedhuriat:-/.` | `372` (7px) |
-| `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZ` | `26` (7px) |
-| `JFMASONDanebrpyulgtcov` | `456` (11px) |
-| `0123456789+-%ADEFHIMNORSTUWcf.` | `248` (11px) |
-| `0123456789-/.MonTueWdhFriSat` | `554` (11px) |
-| `ADEFHIMNORSTUW0123456789cf` | `666` (6px) |
-| `MonTueWdhFriSaty` | `330` (20px), `332` (20px), `334` (20px), `346` (20px), `348` (20px), `350` (20px) |
-| `MonTueWdhFriSat` | `326` (14px), `342` (14px) |
-| `MTWFSonuedhrita` | `468` (15px) |
-| `SunyClodRaiwFg` | `304` (14px), `374` (27px) |
-| `MTWFSouehra` | `454` (10px) |
-| `0123456789:apmET` | `188` (7px) |
-| `0123456789dB` | `544` (7px), `320` (11px) |
-| `0123456789km-/:%cf` | `22` (11px), `20` (14px), `28` (14px) |
-| `0123456789km./:%cf` | `46` (13px) |
-| `0123456789/.:kmsh` | `578` (6px) |
-| `0123456789%+-km.` | `152` (5px) |
-| `0123456789.-%mk` | `204` (6px) |
-| `0123456789cf.-/` | `480` (9px) |
-| `0123456789cf%-.` | `546` (5px) |
-| `0123456789:cf-.` | `604` (9px) |
-| `0123456789km.%` | `94` (12px) |
-| `0123456789+-cf` | `154` (5px), `156` (5px) |
-| `0123456789km.$` | `160` (16px) |
-| `0123456789cf-~` | `272` (14px) |
-| `0123456789cf%-` | `526` (7px), `302` (12px) |
-| `0123456789cf~-` | `308` (8px), `306` (14px) |
-| `0123456789-cf%` | `322` (14px) |
-| `0123456789.-cf` | `370` (12px) |
-| `0123456789-cf.` | `420` (13px) |
-| `0123456789-.km` | `586` (10px), `584` (22px) |
-| `0123456789m/s.` | `674` (16px) |
-| `0123456789km.` | `44` (14px) |
-| `0123456789cf-` | `148` (5px), `110` (7px), `278` (16px), `282` (16px), `296` (17px), `440` (35px) |
-| `0123456789-cf` | `182` (6px), `506` (8px), `410` (9px), `512` (9px), `564` (11px), `566` (12px), `336` (13px), `338` (13px), `352` (13px), `354` (13px), `254` (14px), `466` (15px), `530` (19px), `678` (24px), `294` (27px), `490` (29px), `562` (30px), `522` (32px), `662` (32px) |
-| `0123456789.k-` | `376` (12px) |
-| `0123456789-fc` | `458` (8px), `448` (23px) |
-| `0123456789km` | `178` (16px) |
-| `0123456789cf` | `478` (9px) |
-| `0123456789hm` | `532` (9px), `560` (20px) |
-| `ap` | `40` (5px), `202` (5px), `92` (7px) |
-| `0123456789k` | `124` (6px) |
-| `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-.%` | `318` (8px) |
-| `ABCDEFGHIJKLMNOPQRSTUVWXYZ-',` | `114` (5px) |
-| `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ` | `118` (5px), `54` (10px) |
-| `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` | `652` (7px), `664` (11px) |
-| `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | `168` (5px), `192` (5px), `406` (6px), `112` (7px), `140` (7px), `386` (10px), `396` (10px), `398` (10px), `686` (10px), `568` (14px), `244` (15px) |
-| `0123456789JANFEBMRPYULGSTOCVDWHI./-` | `290` (18px) |
-| `0123456789JANFEBMRPYULGSOCTVDWHI` | `380` (15px) |
-| `ABCDEFGHIJLMNOPRSTUVWY0123456789` | `656` (11px) |
-| `ABCDEFGHIJLMNOPRSTUVY` | `642` (24px) |
-| `JANFEBMRPYULGSTOCVD` | `446` (26px) |
-| `JANFEBMRPYULGSOCTVD` | `486` (27px) |
-| `ABCDEFGJLMNOPRSTUVY` | `614` (8px) |
-| `0123456789MONTUEWDHFRISA-/.` | `418` (9px) |
-| `MONTUEWDHRSFIAY` | `434` (21px), `436` (21px), `438` (21px) |
-| `MTWFSONUEDHRIAP` | `508` (8px), `510` (9px) |
-| `MONTUEWDHFRISA` | `266` (11px), `314` (11px), `536` (17px) |
-| `SUNMOTEWDHRFIA` | `646` (13px) |
-| `ADEFHIMNORSTU0123456789` | `616` (7px) |
-| `MONTUWDHFRISA` | `572` (9px) |
-| `MOTUWEHFRSA` | `310` (8px) |
-| `0123456789KMLIVEOFN.` | `184` (14px) |
-| `SQUADFPOL/` | `494` (6px) |
-| `RUNIGDSWM` | `580` (5px) |
-| `0123456789.KM/S` | `368` (8px), `366` (12px) |
-| `0123456789DHMS` | `518` (18px) |
-| `0123456789KM.` | `288` (21px), `358` (26px), `298` (27px), `356` (29px) |
-| `0123456789.AV` | `610` (7px) |
-| `0123456789.W` | `608` (14px), `606` (23px) |
-| `0123456789.+-%` | `200` (6px) |
-| `0123456789./-` | `316` (11px) |
-| `0123456789.-/` | `324` (13px), `340` (13px), `428` (21px), `430` (21px), `432` (21px) |
-| `0123456789-/.` | `404` (10px) |
-| `0123456789-./` | `574` (7px) |
-| `0123456789+-` | `144` (9px) |
-| `0123456789.+` | `270` (10px) |
-| `0123456789/-` | `284` (11px) |
-| `0123456789:` | `86` (7px), `252` (7px), `126` (8px), `134` (8px), `172` (9px), `534` (9px), `556` (9px), `90` (11px), `558` (11px), `232` (20px), `502` (22px), `256` (23px), `516` (25px), `416` (26px), `242` (28px), `408` (28px), `602` (30px), `328` (31px), `344` (31px), `400` (31px), `442` (31px), `422` (43px), `424` (43px), `426` (43px), `360` (47px), `482` (50px), `208` (128px), `210` (128px), `212` (128px), `214` (128px), `216` (128px), `218` (128px), `220` (128px), `222` (128px), `224` (128px), `226` (128px), `228` (128px), `230` (128px), `238` (128px), `496` (128px), `498` (128px), `500` (128px) |
-| `0123456789.` | `150` (13px), `88` (15px), `362` (16px), `260` (20px), `476` (21px), `246` (22px) |
-| `0123456789-` | `194` (7px), `388` (7px), `414` (9px), `588` (9px), `392` (10px), `250` (11px), `364` (11px), `146` (14px), `382` (33px) |
-| `0123456789%` | `460` (8px), `274` (12px), `300` (13px), `492` (26px) |
-| `0123456789?` | `390` (21px) |
-| `0123456789` | `82` (5px), `378` (5px), `122` (6px), `50` (7px), `102` (7px), `108` (7px), `142` (7px), `174` (7px), `648` (7px), `688` (7px), `78` (8px), `136` (8px), `164` (8px), `504` (8px), `30` (9px), `36` (9px), `132` (9px), `162` (9px), `514` (9px), `552` (9px), `56` (10px), `84` (10px), `394` (10px), `550` (10px), `592` (10px), `684` (10px), `60` (11px), `120` (11px), `138` (11px), `464` (11px), `668` (11px), `96` (13px), `104` (13px), `180` (13px), `24` (14px), `76` (14px), `384` (14px), `542` (14px), `548` (14px), `570` (14px), `672` (14px), `98` (15px), `474` (15px), `166` (16px), `524` (16px), `540` (16px), `582` (16px), `130` (17px), `450` (17px), `612` (18px), `528` (19px), `444` (20px), `128` (22px), `576` (22px), `106` (23px), `472` (23px), `484` (23px), `488` (24px), `412` (25px), `654` (26px), `644` (29px), `620` (30px), `452` (32px), `462` (32px), `520` (32px), `676` (33px), `650` (35px), `682` (35px), `312` (37px), `470` (38px), `658` (38px), `234` (45px), `402` (55px), `286` (57px), `236` (64px), `240` (64px), `594` (64px), `596` (64px), `598` (64px), `600` (64px), `538` (77px) |
-| `*(unpublished — general bitmap text)*` | `58` (12px), `52` (13px), `4` (14px), `2` (16px), `32` (16px), `62` (16px), `158` (16px), `186` (16px), `190` (16px), `590` (16px) |
-
-Need an exact size, style, or download URL for a specific id? Those
-columns are in the raw endpoint response; re-run the generator or query
-`https://app.divoom-gz.com/Device/GetTimeDialFontList` with `{DeviceId, DeviceType:"LCD"}` directly.
+| id | size | type | name | style hint | charset | file |
+|---|---|---|---|---|---|---|
+| 2 | 16×16 | bitmap | 8pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/D6/80/eEwpPWC4tX6EaCuWAAAAAE69aF8710.bin) |
+| 4 | 14×14 | bitmap | 10pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/D6/7F/eEwpPWC4syuES-SBAAAAAMs-yl8870.bin) |
+| 18 | 5×5 | vector | 3*5; minimum pixel characters | pixel/8-bit | `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZud.+~#` | [file](https://f.divoom-gz.com/group1/M00/C9/09/L1ghbmCDwVqEVyVsAAAAADQoJaE7433850) |
+| 20 | 6×14 | vector | 6*14 social dial numerals | — | `0123456789km-/:%cf` | [file](https://f.divoom-gz.com/group1/M00/D2/45/eEwpPWCmM1-ENlPQAAAAAPCCFfY3041706) |
+| 22 | 7×11 | vector | 7*11  social dial time numerals | — | `0123456789km-/:%cf` | [file](https://f.divoom-gz.com/group1/M00/CF/A2/eEwpPWCbTIaEekM6AAAAAAW4cDc5714543) |
+| 24 | 8×14 | vector | 8*14 Arabic numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/B7/6C/eEwpPWA3auKEGBW6AAAAADj09rs8339782) |
+| 26 | 7×7 | vector | 7*7 uppercase letters/numbers | — | `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/B7/6F/eEwpPWA3ehGEB_hRAAAAAMEwpwg0799256) |
+| 28 | 6×14 | vector | 6*14 Digital Segment Display | 7-segment/digital | `0123456789km-/:%cf` | [file](https://f.divoom-gz.com/group1/M00/B7/B4/eEwpPWA4m_yEKdBRAAAAAEpfNio7011429) |
+| 30 | 4×9 | vector | 4*9 Digital Segment Display | 7-segment/digital | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D1/5F/L1ghbmCmHiSELc62AAAAAB3W_Uc5090931) |
+| 32 | 16×16 | bitmap | 16pt font, Source Sans Pro | — | `` | [file](https://f.divoom-gz.com/group1/M00/C1/4F/L1ghbmBkDt-EEXlFAAAAACBBi7c939.bin) |
+| 34 | 5×5 | vector | 3*5 financial pixel characters | pixel/8-bit | `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZud.+~#` | [file](https://f.divoom-gz.com/group1/M00/15/D3/L1ghbmOi9eyEb3lUAAAAADU0qUw6350786) |
+| 36 | 4×9 | vector | 4*9 Digital Segment Display2 | 7-segment/digital | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/C1/53/L1ghbmBkIB6EDeMJAAAAAB3W_Uc4125534) |
+| 40 | 3×5 | vector | 3*5 AM/PM | — | `ap` | [file](https://f.divoom-gz.com/group1/M00/BD/C3/eEwpPWBR8MeELuiAAAAAAGEb5G85509409) |
+| 42 | 7×9 | vector | 7*9 uppercase letters/numbers | — | `0123456789km-/:%cfABCDEFGHIJKLMNOPQRSTUVWXYZud.` | [file](https://f.divoom-gz.com/group1/M00/BD/26/L1ghbmBS_OKELiuzAAAAAIKIec47238302) |
+| 44 | 6×14 | vector | 6*14 numerals | — | `0123456789km.` | [file](https://f.divoom-gz.com/group1/M00/D1/6C/L1ghbmCmU3qEUUOfAAAAAMwzmQM8158012) |
+| 46 | 5×13 | vector | 5*13 numerals | — | `0123456789km./:%cf` | [file](https://f.divoom-gz.com/group1/M00/C0/0D/L1ghbmBe6RKESFRZAAAAAM-YhH46333854) |
+| 48 | 7×9 | vector | 7*9 English letters, Arabic figures | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx…` | [file](https://f.divoom-gz.com/group1/M00/C0/49/L1ghbmBf2-yEGTdRAAAAAHxCCco3279427) |
+| 50 | 4×7 | vector | 4*7 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/C5/7B/eEwpPWBxasaEBcWEAAAAAD14Fqw3489646) |
+| 52 | 13×13 | bitmap | 12pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/C4/9D/L1ghbmBxbP6EAGXlAAAAAE69aF83925984) |
+| 54 | 4×10 | vector | 4*10 numerals/uppercase letters | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/C9/06/eEwpPWCAER2EGhhRAAAAAKshaWk4191363) |
+| 56 | 5×10 | vector | 5*10 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/C8/2C/L1ghbmCAJeSEGhJlAAAAAKQsKv45731624) |
+| 58 | 12×12 | bitmap | 12pt standard font2 | — | `` | [file](https://f.divoom-gz.com/group1/M00/CA/CB/eEwpPWCHZCuEPQmjAAAAAKKDiJM7252601) |
+| 60 | 5×11 | vector | 5*11Digital Segment Display | 7-segment/digital | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/CE/32/L1ghbmCY9AmESw7gAAAAAHjrPWM6269048) |
+| 62 | 16×16 | bitmap | 16pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/CE/40/L1ghbmCZLpKEbBdIAAAAAA7k1RM720.bin) |
+| 76 | 6×14 | vector | 6*14 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/CF/B0/eEwpPWCbixSEdkSnAAAAAG2sSnw6204092) |
+| 78 | 4×8 | vector | 4*8 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/CE/DC/L1ghbmCbt_6EfeCeAAAAAH2ad8U4367069) |
+| 80 | 5×7 | vector | 5*7  uppercase and lowercase English letters/numerals/characters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567…` | [file](https://f.divoom-gz.com/group1/M00/D1/99/eEwpPWCjayKEDkz4AAAAAHiIV7c6112256) |
+| 82 | 3×5 | vector | 5*5 Digital Segment Display | 7-segment/digital | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/CF/66/L1ghbmCd85OEQJVPAAAAAN3iR4A0111036) |
+| 84 | 6×10 | vector | 6*10 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D1/59/L1ghbmCmBTWEZS9NAAAAABbqtF02866468) |
+| 86 | 4×7 | vector | 4*7numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/D1/C5/L1ghbmCnwA6EUui5AAAAAHZsX9A8074118) |
+| 88 | 9×15 | vector | 9*15 numerals | — | `0123456789.` | [file](https://f.divoom-gz.com/group1/M00/D2/C9/L1ghbmCsk--EWeVyAAAAALDMcoI5574435) |
+| 90 | 8×11 | vector | 8*11 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/D3/76/L1ghbmCvcGKEMQ9_AAAAAHkSSP80642863) |
+| 92 | 3×7 | vector | 3*7 AM/PM | — | `ap` | [file](https://f.divoom-gz.com/group1/M00/D5/6E/eEwpPWC0PQqEOjBeAAAAAK6JAkw1116108) |
+| 94 | 7×12 | vector | 7*12 numerals | — | `0123456789km.%` | [file](https://f.divoom-gz.com/group1/M00/D6/70/L1ghbmDCHliEEuNCAAAAAOXc1vI4954293) |
+| 96 | 7×13 | vector | 7*13 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D7/88/eEwpPWDIIQ-EAYiRAAAAAFouHqs3721534) |
+| 98 | 9×15 | vector | 9*15 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D6/B3/L1ghbmDITLOENJThAAAAADioBVE4274016) |
+| 102 | 5×7 | vector | 5*7  numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D6/BB/L1ghbmDIbW6ECytGAAAAAKOEWgI2333809) |
+| 104 | 7×13 | vector | 7*13 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D6/F9/L1ghbmDJbiCEPPAtAAAAAK9ynwY1535562) |
+| 106 | 11×23 | vector | 11*23 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D8/9E/L1ghbmDQMgqEDVZkAAAAAOiAF3Y4197705) |
+| 108 | 6×7 | vector | 6*7 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/D8/9F/L1ghbmDQOLyELM9HAAAAAAkeQ3Y3818278) |
+| 110 | 3×7 | vector | 3*7 numerals/characters | — | `0123456789cf-` | [file](https://f.divoom-gz.com/group1/M00/18/EA/eEwpPWO425iEB2GmAAAAAEBliPU3167424) |
+| 112 | 7×7 | vector | 7*7 uppercase English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/D9/81/eEwpPWDQQ_KEUR06AAAAAOskZVM5082446) |
+| 114 | 5×5 | vector | 5*5 uppercase English letters/characters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ-',` | [file](https://f.divoom-gz.com/group1/M00/DF/39/eEwpPWDoDH6EAMUgAAAAAOTbO0s7123562) |
+| 118 | 5×5 | vector | 5*5 numerals/uppercase English letters | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/E2/21/L1ghbmD3yWeEOnoQAAAAAMxDyG47095328) |
+| 120 | 7×11 | vector | 7*11 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/E2/6F/L1ghbmD6Fs-ETRjUAAAAAJC1GfM7365988) |
+| 122 | 4×6 | vector | 4*6 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/E3/4F/eEwpPWD6FuaEETIOAAAAAGnYtTU9258423) |
+| 124 | 3×6 | vector | 3*6 numerals | — | `0123456789k` | [file](https://f.divoom-gz.com/group1/M00/E3/55/eEwpPWD6Ln6EHEIZAAAAAB--duI9480942) |
+| 126 | 6×8 | vector | 6*8 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/E3/64/eEwpPWD6byeERdRyAAAAAAsp44w3769347) |
+| 128 | 11×22 | vector | 11*22 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/16/E6/eEwpPWORt4mEWToCAAAAAHfXBpA8592586) |
+| 130 | 9×17 | vector | 9*17  numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/14/55/L1ghbmNuKjSEVnxAAAAAAEN9CHo8062249) |
+| 132 | 5×9 | vector | 5*9 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/E2/89/L1ghbmD6hySEGDoPAAAAAFiWeeo8581755) |
+| 134 | 6×8 | vector | 6*8 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/E3/6D/eEwpPWD6k4GEAKUOAAAAAKXMvn88814438) |
+| 136 | 5×8 | vector | 5*8 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/E4/9B/eEwpPWD_wcuEdAqgAAAAALd_Ryk7152690) |
+| 138 | 5×11 | vector | 5*11 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/E4/F4/eEwpPWEBLLmEfqWNAAAAABpoPd08576123) |
+| 140 | 4×7 | vector | 4*7 English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/E4/F4/eEwpPWEBLQmEcTvhAAAAAEF4Pak6905383) |
+| 142 | 5×7 | vector | 5*7 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/E4/14/L1ghbmEBLXOEUAtrAAAAAJYR_zM0505355) |
+| 144 | 5×9 | vector | numerals/characters | — | `0123456789+-` | [file](https://f.divoom-gz.com/group1/M00/E4/F5/eEwpPWEBL9aEa-Z4AAAAAEuESIs3790844) |
+| 146 | 8×14 | vector | 8*14 numerals/characters | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/16/A0/eEwpPWOIbfmEE2j1AAAAAKIg3Ek0864094) |
+| 148 | 3×5 | vector | 3*5 temperature numerals/characters | — | `0123456789cf-` | [file](https://f.divoom-gz.com/group1/M00/14/B4/L1ghbmN8Jj6EIiotAAAAAFWIY8Q9496210) |
+| 150 | 7×13 | vector | 7*13 numerals | — | `0123456789.` | [file](https://f.divoom-gz.com/group1/M00/F5/A9/L1ghbmFL8meETeigAAAAAPstqXY4906520) |
+| 152 | 5×5 | vector | 5*5 numerals/characters | — | `0123456789%+-km.` | [file](https://f.divoom-gz.com/group1/M00/F7/1D/eEwpPWFMHCiEFKHcAAAAAFEfQbQ2412396) |
+| 154 | 5×5 | vector | 5*5 Arabic figures | — | `0123456789+-cf` | [file](https://f.divoom-gz.com/group1/M00/05/00/L1ghbmGXTPeEZBlzAAAAABQt43U8519791) |
+| 156 | 5×5 | vector | 5*5 numerals/characters | — | `0123456789+-cf` | [file](https://f.divoom-gz.com/group1/M00/06/9F/eEwpPWGXX2-EBsVzAAAAAG6bgxs7146157) |
+| 158 | 16×16 | bitmap | 13pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/05/B4/L1ghbmGzBN6EEpJXAAAAAE69aF8314.bin) |
+| 160 | 8×16 | vector | 8*16 数字/字符 | — | `0123456789km.$` | [file](https://f.divoom-gz.com/group1/M00/05/BB/L1ghbmG0DhiEDbZqAAAAAFQzl842774190) |
+| 162 | 6×9 | vector | 6*9 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/07/71/eEwpPWG2-ciEQRp_AAAAAF32Pw00264501) |
+| 164 | 5×8 | vector | 5*8 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/05/D9/L1ghbmG4OI2EDeEtAAAAABYsbMM9979105) |
+| 166 | 7×16 | vector | 7*16 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/07/78/eEwpPWG4OLyEZ7jRAAAAAIR-tAw8583046) |
+| 168 | 5×5 | vector | 5*5 uppercase English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/05/D9/L1ghbmG4OPKESNGsAAAAANCIkxk1238149) |
+| 170 | 9×10 | vector | 9*10 numerals/uppercase and lowercase English letters/full characters | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx…` | [file](https://f.divoom-gz.com/group1/M00/05/DA/L1ghbmG4ZNSEGz2LAAAAAIYz3kQ2386996) |
+| 172 | 5×9 | vector | 5*9 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/07/8B/eEwpPWG688-EEPrqAAAAAEEsObI6444956) |
+| 174 | 5×7 | vector | 5*7 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/07/80/eEwpPWG5ZrmEK23vAAAAAEF_2zQ1745514) |
+| 178 | 10×16 | vector | 10*16 numerals/indentation characters | — | `0123456789km` | [file](https://f.divoom-gz.com/group1/M00/07/DE/eEwpPWHFMF6ET6RdAAAAAA0g_pU2063771) |
+| 180 | 9×13 | vector | 9*13 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/07/C2/L1ghbmHb_RWEGfurAAAAANLK21c6429215) |
+| 182 | 3×6 | vector | 3*6 numerals/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/09/79/eEwpPWHf-uWEYMMgAAAAAMETmVs6478188) |
+| 184 | 12×14 | vector | 12*14 numerals/indentation characters | — | `0123456789KMLIVEOFN.` | [file](https://f.divoom-gz.com/group1/M00/0B/12/eEwpPWIN-4eEEu76AAAAANs4FoI8877829) |
+| 186 | 16×16 | bitmap | 14pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/0A/59/L1ghbmIpwIqEXde0AAAAAE69aF8230.bin) |
+| 188 | 5×7 | vector |  5*7 numerals/characters | — | `0123456789:apmET` | [file](https://f.divoom-gz.com/group1/M00/0B/7D/L1ghbmJNb9eEVDGYAAAAAMJv8Dc3283158) |
+| 190 | 16×16 | bitmap | 11pt standard font | — | `` | [file](https://f.divoom-gz.com/group1/M00/0B/B5/L1ghbmJT4dSEUwY3AAAAABz_aMw358.bin) |
+| 192 | 5×5 | vector | 5*5 uppercase letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/0D/4C/eEwpPWJT6FGEJeQoAAAAAHLs7EM4103989) |
+| 194 | 4×7 | vector | 4*7 numerals | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/0B/B7/L1ghbmJUAomEKCo7AAAAAOLvELc8708381) |
+| 196 | 4×6 | vector | 4*6 numerals/uppercase letters/characters | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZkm.-+/:%cf` | [file](https://f.divoom-gz.com/group1/M00/0D/04/L1ghbmJ1zryECJvAAAAAAHLXl1Y7038816) |
+| 198 | 4×5 | vector | 4*5 numerals/uppercase letters/characters | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZkm.-+/:%cf` | [file](https://f.divoom-gz.com/group1/M00/0E/9A/eEwpPWJ13MWENiy_AAAAANpyllM9395046) |
+| 200 | 3×6 | vector | 3*6 numerals/characters | — | `0123456789.+-%` | [file](https://f.divoom-gz.com/group1/M00/0F/F0/L1ghbmLLl5aETRUrAAAAAB0u81A2357483) |
+| 202 | 3×5 | vector | 3*5 lowercase a/p | — | `ap` | [file](https://f.divoom-gz.com/group1/M00/11/4F/L1ghbmLyBJ-ETlbEAAAAAOjKlHE2300778) |
+| 204 | 4×6 | vector | 4*6 numerals/characters | — | `0123456789.-%mk` | [file](https://f.divoom-gz.com/group1/M00/12/48/L1ghbmMVzBuEBEuXAAAAAEtjuyU3103719) |
+| 208 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVnaEVMikAAAAALyhgio895.bin) |
+| 210 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/57/L1ghbmQlVoOECTCsAAAAAN_EPHc416.bin) |
+| 212 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVpGEH0aJAAAAAH0Qse8348.bin) |
+| 214 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVqqEH7zWAAAAAJWCSm4155.bin) |
+| 216 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/57/L1ghbmQlVqGEIWULAAAAADu8fog217.bin) |
+| 218 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/57/L1ghbmQlVriEFTMbAAAAACA11tI106.bin) |
+| 220 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVsGEPE_-AAAAAIXxU30577.bin) |
+| 222 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/57/L1ghbmQlVsyEXT5IAAAAAPsvqdU079.bin) |
+| 224 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVtaETiHuAAAAAIPoXHM884.bin) |
+| 226 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/25/25/eEwpPWUjuLWEeUe-AAAAAMop60A964.bin) |
+| 228 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVuyEOd7tAAAAAJYOAYk425.bin) |
+| 230 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/57/L1ghbmQlVvmEbiUMAAAAALXZjb8538.bin) |
+| 232 | 11×20 | vector | 11*20 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/14/65/eEwpPWMtHhCEF7K4AAAAAMiu2_07719579) |
+| 234 | 24×45 | vector | 24*25 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/12/D2/L1ghbmMtZ5eEa0oPAAAAAAXwkUc8356432) |
+| 236 | 64×64 | vector | 64*64 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/14/84/eEwpPWMyqBuEDKX5AAAAACfUAHk5622490) |
+| 238 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1C/E9/eEwpPWQlVwSEPxxzAAAAAAE6PUY935.bin) |
+| 240 | 36×64 | vector | 36*64 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/15/59/eEwpPWNWNDCEDrpgAAAAAKHX05A0532360) |
+| 242 | 23×28 | vector | 23*28 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/16/1F/eEwpPWN2Rb6EXI3eAAAAACwkUN07309403) |
+| 244 | 16×15 | vector | 16*15 uppercase English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/16/25/eEwpPWN3HnGEd4m9AAAAAJp0oxc2539121) |
+| 246 | 18×22 | vector | 18*22 numerals | — | `0123456789.` | [file](https://f.divoom-gz.com/group1/M00/14/90/L1ghbmN3HrSEVy3yAAAAAKEtunM0863299) |
+| 248 | 11×11 | vector | 11*11 numerals/characters | — | `0123456789+-%ADEFHIMNORSTUWcf.` | [file](https://f.divoom-gz.com/group1/M00/14/CC/L1ghbmOAOIeEGaknAAAAAE2CSto9951354) |
+| 250 | 6×11 | vector | 6*11 numerals | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/16/2D/eEwpPWN4Ti2EKZEsAAAAAPv4n9Y0498277) |
+| 252 | 4×7 | vector | 4*17 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/16/2F/eEwpPWN4loqEEtqGAAAAAInYWH06721956) |
+| 254 | 11×14 | vector | 11*14 numerals/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/16/25/eEwpPWN3H46EJ_wJAAAAAJN5HNA6360164) |
+| 256 | 29×23 | image glyph | 29*23 digit | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/16/6C/L1ghbmOqUlqEJykuAAAAAHBKGBQ5285667) |
+| 260 | 23×20 | image glyph | 23*20 digit | — | `0123456789.` | [file](https://f.divoom-gz.com/group1/M00/18/00/eEwpPWOqUtGENKUsAAAAAIEBlmk8450908) |
+| 266 | 15×11 | image glyph | 15*11 week letters | — | `MONTUEWDHFRISA` | [file](https://f.divoom-gz.com/group1/M00/18/00/eEwpPWOqU-2ETX9GAAAAAG5bFFg3680786) |
+| 270 | 12×10 | vector | 12*10 numerals/characters | — | `0123456789.+` | [file](https://f.divoom-gz.com/group1/M00/18/04/eEwpPWOqk8GET0ctAAAAAFtgRX09380105) |
+| 272 | 11×14 | image glyph | 11*14 digit | — | `0123456789cf-~` | [file](https://f.divoom-gz.com/group1/M00/16/70/L1ghbmOqlvaEdklSAAAAANMGMoc6519942) |
+| 274 | 13×12 | image glyph | 13*12 digit | — | `0123456789%` | [file](https://f.divoom-gz.com/group1/M00/16/71/L1ghbmOqnPyEbpDqAAAAAObwuP49296734) |
+| 276 | 18×19 | image glyph | 18*19 English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz` | [file](https://f.divoom-gz.com/group1/M00/16/6D/L1ghbmOqUxKEN0xVAAAAAAIoCQk6092071) |
+| 278 | 18×16 | image glyph | 18*16 digit | — | `0123456789cf-` | [file](https://f.divoom-gz.com/group1/M00/18/04/eEwpPWOqlteELOdsAAAAALjWW4M5887951) |
+| 280 | 18×19 | image glyph | 18*19 English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz` | [file](https://f.divoom-gz.com/group1/M00/16/6D/L1ghbmOqUxKEN0xVAAAAAAIoCQk6092071) |
+| 282 | 18×16 | image glyph | 18*16 digit | — | `0123456789cf-` | [file](https://f.divoom-gz.com/group1/M00/18/04/eEwpPWOqlteELOdsAAAAALjWW4M5887951) |
+| 284 | 9×11 | image glyph | 9*11 digit | — | `0123456789/-` | [file](https://f.divoom-gz.com/group1/M00/16/A6/L1ghbmOtPMKEBzsBAAAAAHs9l7c8954459) |
+| 286 | 45×57 | image glyph | 45*57 digit | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/18/3D/eEwpPWOtacSEU7tHAAAAAGwZ28g1088869) |
+| 288 | 20×21 | image glyph | 20*21 digit | — | `0123456789KM.` | [file](https://f.divoom-gz.com/group1/M00/16/BB/L1ghbmOuRUaEN20mAAAAADmAWvw4130295) |
+| 290 | 23×18 | image glyph | 23*18 digit and week letters | — | `0123456789JANFEBMRPYULGSTOCVDWHI./-` | [file](https://f.divoom-gz.com/group1/M00/19/2A/eEwpPWO-dnqEHI8jAAAAANniMiM8070526) |
+| 294 | 16×27 | image glyph | 16*27 digit | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/17/38/L1ghbmO2mlaERc3cAAAAAFJVEh41537958) |
+| 296 | 13×17 | image glyph | 13*17 digit | — | `0123456789cf-` | [file](https://f.divoom-gz.com/group1/M00/18/CC/eEwpPWO2n1KET0LVAAAAANYPIo02011012) |
+| 298 | 27×27 | image glyph | 27*27 digit | — | `0123456789KM.` | [file](https://f.divoom-gz.com/group1/M00/16/A9/L1ghbmOtaUqEI8o4AAAAAHo4Y7Y1422708) |
+| 300 | 13×13 | image glyph | 13*13 digit | — | `0123456789%` | [file](https://f.divoom-gz.com/group1/M00/17/38/L1ghbmO2m_aEV5EfAAAAAPKm2L08377686) |
+| 302 | 10×12 | vector | 10*12 numerals/temperature symbols | — | `0123456789cf%-` | [file](https://f.divoom-gz.com/group1/M00/19/32/L1ghbmPp15eEYEg6AAAAANjCAPk4896208) |
+| 304 | 11×14 | vector | 11*14 weather uppercase and lowercase letters | — | `SunyClodRaiwFg` | [file](https://f.divoom-gz.com/group1/M00/1A/C6/eEwpPWPqAzqEGlsKAAAAAAsAEHw8073963) |
+| 306 | 16×14 | vector | 16*14 numerals/temperature symbols | — | `0123456789cf~-` | [file](https://f.divoom-gz.com/group1/M00/1A/CF/eEwpPWPq8pKEW-umAAAAAB73we03447264) |
+| 308 | 9×8 | vector | 9*8 numerals/temperature symbols | — | `0123456789cf~-` | [file](https://f.divoom-gz.com/group1/M00/19/3E/L1ghbmPrImaEeJ0fAAAAAKd3Ql01072097) |
+| 310 | 9×8 | vector | 9*8 uppercase English abbreviations for days of the week | — | `MOTUWEHFRSA` | [file](https://f.divoom-gz.com/group1/M00/1A/D2/eEwpPWPrOvmEPkokAAAAAOpH5v44992887) |
+| 312 | 30×37 | vector | 30*37 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/1A/DD/eEwpPWPsRCuEBel6AAAAAMGr0cw8885646) |
+| 314 | 12×11 | vector | 12*11 uppercase English abbreviations for days of the week | — | `MONTUEWDHFRISA` | [file](https://f.divoom-gz.com/group1/M00/1A/E0/eEwpPWPskHiEcGH3AAAAAEkubyw5518247) |
+| 316 | 9×11 | vector | 9*11 numerals/characters | — | `0123456789./-` | [file](https://f.divoom-gz.com/group1/M00/1A/E1/eEwpPWPsqsGEPR-eAAAAAPRlWLU5297046) |
+| 318 | 7×8 | vector | 7*8 numerals/uppercase English letters/characters | — | `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-.%` | [file](https://f.divoom-gz.com/group1/M00/1A/F2/eEwpPWPt7teEYS7YAAAAAJhHJEs0372419) |
+| 320 | 9×11 | vector | 9*11 numerals/noise dB symbols | — | `0123456789dB` | [file](https://f.divoom-gz.com/group1/M00/1A/F4/eEwpPWPuGESEdrO6AAAAAI7rb6k4901539) |
+| 322 | 16×14 | vector | 16*14 numerals/temperature symbols | — | `0123456789-cf%` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3CWeEYO_5AAAAAGzT4CM7250016) |
+| 324 | 11×13 | vector | 11*13 numerals/characters | — | `0123456789.-/` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3CZuELAA8AAAAAAP8lb88628752) |
+| 326 | 16×14 | vector | 16*14 three-letter abbreviation of uppercase and lowercase English letters for days of the week | — | `MonTueWdhFriSat` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3CcuEf89AAAAAAJv3Rqc7074121) |
+| 328 | 24×31 | vector | 24*31 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3C2GEEo1NAAAAAOycIbE8220088) |
+| 330 | 18×20 | vector | 18*20three-letter abbreviation of uppercase and lowercase English letters for days of the week | — | `MonTueWdhFriSaty` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3DNSEe-7BAAAAAIX5Qw07171919) |
+| 332 | 18×20 | vector | 18*20 three-letter abbreviation of uppercase and lowercase English letters for days of the week | — | `MonTueWdhFriSaty` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3DOSEIcOjAAAAADZL40Y8379445) |
+| 334 | 18×20 | vector | 18*20 three-letter abbreviation of uppercase and lowercase English letters for days of the week | — | `MonTueWdhFriSaty` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3DPKEcvqHAAAAALX3GwQ9711495) |
+| 336 | 13×13 | vector | 13*13 numerals/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3DSyEb308AAAAAICGX3E0512620) |
+| 338 | 13×13 | vector | 13*13 numerals/temperature symbols2 | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3DTuECK5eAAAAADoDTXU8027371) |
+| 340 | 11×13 | image glyph | 11*13 digit | — | `0123456789.-/` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3CZuELAA8AAAAAAP8lb88628752) |
+| 342 | 16×14 | image glyph | 16*14 week letters | — | `MonTueWdhFriSat` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3CcuEf89AAAAAAJv3Rqc7074121) |
+| 344 | 24×31 | image glyph | 24*31 digit | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3C2GEEo1NAAAAAOycIbE8220088) |
+| 346 | 18×20 | image glyph | 18*20 week letters | — | `MonTueWdhFriSaty` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3DNSEe-7BAAAAAIX5Qw07171919) |
+| 348 | 18×20 | image glyph | 18*20 week letters | — | `MonTueWdhFriSaty` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3DOSEIcOjAAAAADZL40Y8379445) |
+| 350 | 18×20 | image glyph | 18*20 week letters | — | `MonTueWdhFriSaty` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3DPKEcvqHAAAAALX3GwQ9711495) |
+| 352 | 13×13 | image glyph | 13*13 digit | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/1B/4F/eEwpPWP3DSyEb308AAAAAICGX3E0512620) |
+| 354 | 13×13 | image glyph | 13*13 digit | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/19/BC/L1ghbmP3DTuECK5eAAAAADoDTXU8027371) |
+| 356 | 28×29 | image glyph | 28*29 digit | — | `0123456789KM.` | [file](https://f.divoom-gz.com/group1/M00/1B/9C/eEwpPWP-9fuEdBVmAAAAAFb96Cg1505514) |
+| 358 | 25×26 | image glyph | 25*26 digit | — | `0123456789KM.` | [file](https://f.divoom-gz.com/group1/M00/1A/0A/L1ghbmP-9hCEMQx0AAAAAC8yMuw2394639) |
+| 360 | 26×47 | image glyph | 26*47 digit | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/1A/1F/L1ghbmQBWWCEV8rDAAAAAJUwf2E9719136) |
+| 362 | 8×16 | vector | 8*16 numerals | — | `0123456789.` | [file](https://f.divoom-gz.com/group1/M00/1C/3E/L1ghbmQ_vn6EQ5xcAAAAALgDAL05414749) |
+| 364 | 5×11 | vector | 5*11 numerals | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/1E/F9/eEwpPWRkqziEIZKlAAAAANoqkNc2260433) |
+| 366 | 9×12 | vector | 9*12 numerals | — | `0123456789.KM/S` | [file](https://f.divoom-gz.com/group1/M00/1D/1D/L1ghbmRbY6OEBulrAAAAAM_TooE8060533) |
+| 368 | 5×8 | vector | 5*8 numerals/wind speed units | — | `0123456789.KM/S` | [file](https://f.divoom-gz.com/group1/M00/1E/AE/eEwpPWRbY8WENWWHAAAAAH9pHGk7590025) |
+| 370 | 12×12 | vector | 12*12 numerals/temperature symbols | — | `0123456789.-cf` | [file](https://f.divoom-gz.com/group1/M00/1F/32/eEwpPWRrCS6ER2MBAAAAAI-n4l05957301) |
+| 372 | 7×7 | vector | 7*7 numerals/letters/characters | — | `0123456789JANFEBMRPYULGSOCTVDWonvedhuriat:-/.` | [file](https://f.divoom-gz.com/group1/M00/1D/A3/L1ghbmRq1paECUSHAAAAAI7SIEM1959351) |
+| 374 | 16×27 | vector | 16*27 weather uppercase and lowercase letters | — | `SunyClodRaiwFg` | [file](https://f.divoom-gz.com/group1/M00/1D/A5/L1ghbmRrDUOEKddFAAAAAPg_pxI7166180) |
+| 376 | 8×12 | vector | 8*12 numerals | — | `0123456789.k-` | [file](https://f.divoom-gz.com/group1/M00/1D/A3/L1ghbmRq0HCEdZcLAAAAAJtzqAk8047092) |
+| 378 | 3×5 | vector | 3*5numerals2 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/09/eEwpPWTHK8eEBBTaAAAAAGG0E-c0829884) |
+| 380 | 8×15 | vector | 8*15numerals/month abbreviations/weekday abbreviations | — | `0123456789JANFEBMRPYULGSOCTVDWHI` | [file](https://f.divoom-gz.com/group1/M00/20/D1/L1ghbmTQUY2ESth_AAAAABXxvJw9774228) |
+| 382 | 18×33 | vector | 18*33numerals | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/22/5C/eEwpPWTQUcaEAehqAAAAAGs_5ak9640104) |
+| 384 | 8×14 | vector | 8*14numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/20/DC/L1ghbmTRoCmEFhycAAAAALnymwM7250507) |
+| 386 | 7×10 | vector | 7*10 uppercase English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/22/69/eEwpPWTR7ySEY_vHAAAAAJBQ3y00364951) |
+| 388 | 4×7 | vector | 4*7 numerals | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/22/6A/eEwpPWTSCQ-EL7q0AAAAACLc0qE3176176) |
+| 390 | 14×21 | image glyph | 14*21 digit | — | `0123456789?` | [file](https://f.divoom-gz.com/group1/M00/22/80/eEwpPWTUj26EJi0bAAAAAJn_vGc5636697) |
+| 392 | 5×10 | image glyph | 5*10 digit | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/20/F6/L1ghbmTUr3WEVcDoAAAAAJ9X4xM3965670) |
+| 394 | 6×10 | image glyph | 6*10 digit | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/81/eEwpPWTUr4iEDYbMAAAAADcvEZg7391081) |
+| 396 | 8×10 | image glyph | 8*10 letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/21/27/L1ghbmTZxvyEKhE_AAAAAGx1T4c5050259) |
+| 398 | 8×10 | image glyph | 8*10 letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/21/27/L1ghbmTZztuEXa2XAAAAAMhO42k1257456) |
+| 400 | 18×31 | image glyph | 18*31 digit | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/21/29/L1ghbmTZ-Y2EIQDiAAAAANU_tm43608670) |
+| 402 | 24×55 | vector | 24*55 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/21/3E/L1ghbmTcYxmECfJGAAAAAAlP5Kk5506650) |
+| 404 | 6×10 | vector | 6*10 numerals/characters | — | `0123456789-/.` | [file](https://f.divoom-gz.com/group1/M00/22/C9/eEwpPWTcbjyEbfYfAAAAAKJihRo3054758) |
+| 406 | 5×6 | vector | 5*6 uppercase English letters | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/21/4A/L1ghbmTdgaqEVl-lAAAAAH0cct82143721) |
+| 408 | 15×28 | vector | 15*28 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/22/D6/eEwpPWTdxfOEGEAtAAAAAN0Tc8U3588475) |
+| 410 | 9×9 | vector | 9*9 numerals/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/21/4D/L1ghbmTd5seEQ7GVAAAAAPLA4tQ0480646) |
+| 412 | 12×25 | vector | 12*25 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/21/B3/L1ghbmTpk1CEIUn0AAAAAJPONpU9876059) |
+| 414 | 5×9 | vector | 5*9 numerals | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/21/F4/L1ghbmTxPKSEGpVWAAAAAClAfHg2005062) |
+| 416 | 14×26 | vector | 14*26 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/67/eEwpPWTuq22ENwdaAAAAALtMZ107832939) |
+| 418 | 8×9 | vector | 8*9 numerals/uppercase English letters/characters | — | `0123456789MONTUEWDHFRISA-/.` | [file](https://f.divoom-gz.com/group1/M00/23/69/eEwpPWTu1OOELTj7AAAAAGwhafU6960838) |
+| 420 | 14×13 | vector | 14*13 numerals/temperature symbols | — | `0123456789-cf.` | [file](https://f.divoom-gz.com/group1/M00/23/6A/eEwpPWTvD1GEQyM2AAAAAM-YGlg8839142) |
+| 422 | 26×43 | image glyph |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/B1/eEwpPWT255SEdQDUAAAAAPnH2ew2378651) |
+| 424 | 26×43 | image glyph |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/22/26/L1ghbmT257eEKMJJAAAAAItnFKM6096304) |
+| 426 | 26×43 | image glyph |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/B1/eEwpPWT258-EACKDAAAAAFazTfA1305201) |
+| 428 | 14×21 | image glyph |  | — | `0123456789.-/` | [file](https://f.divoom-gz.com/group1/M00/22/26/L1ghbmT26F6EUExqAAAAAHrMf8E4033673) |
+| 430 | 14×21 | image glyph |  | — | `0123456789.-/` | [file](https://f.divoom-gz.com/group1/M00/23/B1/eEwpPWT26H2Ec8XMAAAAAHPiDDk3453984) |
+| 432 | 14×21 | image glyph |  | — | `0123456789.-/` | [file](https://f.divoom-gz.com/group1/M00/22/26/L1ghbmT26JyEMm8EAAAAALfEubI6809657) |
+| 434 | 15×21 | image glyph |  | — | `MONTUEWDHRSFIAY` | [file](https://f.divoom-gz.com/group1/M00/23/B1/eEwpPWT26ROEJg6vAAAAAN1Da0g1886762) |
+| 436 | 15×21 | image glyph |  | — | `MONTUEWDHRSFIAY` | [file](https://f.divoom-gz.com/group1/M00/22/26/L1ghbmT26S2EfjQ6AAAAAKPKT1M0914271) |
+| 438 | 15×21 | image glyph |  | — | `MONTUEWDHRSFIAY` | [file](https://f.divoom-gz.com/group1/M00/23/B1/eEwpPWT26USEYtd5AAAAAJ3gIl05248649) |
+| 440 | 20×35 | vector | 20*35 numerals/temperature symbols | — | `0123456789cf-` | [file](https://f.divoom-gz.com/group1/M00/23/CE/eEwpPWT6xveEOpa_AAAAAFGTjkM4547055) |
+| 442 | 16×31 | vector | 16*31 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/24/08/eEwpPWUBaM2EfwKcAAAAAAJEk7I9097995) |
+| 444 | 19×20 | vector | 19*20 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/23/CE/eEwpPWT6xICEEqbqAAAAAD5lBO46607406) |
+| 446 | 17×26 | vector | 17*26 Three letter abbreviated month | — | `JANFEBMRPYULGSTOCVD` | [file](https://f.divoom-gz.com/group1/M00/22/43/L1ghbmT6xLmEWXXSAAAAAIyzlTc3799521) |
+| 448 | 19×23 | vector | 19*23 Number/Temperature Symbol | — | `0123456789-fc` | [file](https://f.divoom-gz.com/group1/M00/23/EE/eEwpPWT-fbmERJnOAAAAABkR--I9033003) |
+| 450 | 9×17 | vector | 9*17 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/64/L1ghbmT-fmaEYdvpAAAAAFZFltk7153541) |
+| 452 | 19×32 | image glyph |  | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/23/EE/eEwpPWT-fw6EZSo9AAAAADpNJKo2868108) |
+| 454 | 10×10 | vector | 10*10 English letters of the week | — | `MTWFSouehra` | [file](https://f.divoom-gz.com/group1/M00/02/5F/rBAAM2ZuRxSERFxTAAAAALWQKKc1015055) |
+| 456 | 9×11 | vector | 9*11 Four letter abbreviated month | — | `JFMASONDanebrpyulgtcov` | [file](https://f.divoom-gz.com/group1/M00/24/05/eEwpPWUBKZKENNAeAAAAAFY1XiA8217496) |
+| 458 | 9×8 | vector | 9*8 numerals/temperature symbols | — | `0123456789-fc` | [file](https://f.divoom-gz.com/group1/M00/22/7E/L1ghbmUBc9SEbt86AAAAACxL9H89599888) |
+| 460 | 7×8 | vector | 7*8 numbers/humidity symbols | — | `0123456789%` | [file](https://f.divoom-gz.com/group1/M00/22/7B/L1ghbmUBLC2EOz_rAAAAAAWbazk4747116) |
+| 462 | 12×32 | vector | 12*32 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/24/06/eEwpPWUBLXSEUhihAAAAAKauJ444994066) |
+| 464 | 7×11 | vector | 7*11 Number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/7B/L1ghbmUBLeCEUCP9AAAAAIaCnpQ0322127) |
+| 466 | 7×15 | vector | 7*15 numbers/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/24/12/eEwpPWUCq4CENNIKAAAAAMlgNEc0152619) |
+| 468 | 10×15 | vector | 10*15 Three uppercase and lowercase English letters | — | `MTWFSonuedhrita` | [file](https://f.divoom-gz.com/group1/M00/0D/90/Ci0s8Wl4G2aEeKxuAAAAANHGzn49254824) |
+| 470 | 16×38 | vector | 16*38 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/87/L1ghbmUCrViEPzA8AAAAAHERq7w0780051) |
+| 472 | 13×23 | vector | 13*23 Number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/87/L1ghbmUCrlKEaPryAAAAAKxaCWM8126231) |
+| 474 | 7×15 | vector | 7*15 Number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/87/L1ghbmUCrcuEXMwHAAAAAM86ISc4156032) |
+| 476 | 13×21 | image glyph |  | — | `0123456789.` | [file](https://f.divoom-gz.com/group1/M00/22/89/L1ghbmUC2NiEdbpGAAAAAJX-0O00576637) |
+| 478 | 7×9 | image glyph |  | — | `0123456789cf` | [file](https://f.divoom-gz.com/group1/M00/22/89/L1ghbmUC2RuEVW2pAAAAAPu_KWM6076448) |
+| 480 | 7×9 | image glyph |  | — | `0123456789cf.-/` | [file](https://f.divoom-gz.com/group1/M00/22/89/L1ghbmUC2zeEY76cAAAAAMBzS-o5090102) |
+| 482 | 29×50 | vector | 29*50 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/24/1C/eEwpPWUDztqENrh1AAAAACyEVDQ7323556) |
+| 484 | 12×23 | vector | 12*23 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/22/92/L1ghbmUDz82EBGDPAAAAAPCEfzQ5444330) |
+| 486 | 19×27 | vector | 19*27  letter | — | `JANFEBMRPYULGSOCTVD` | [file](https://f.divoom-gz.com/group1/M00/22/92/L1ghbmUD0AiEcTyqAAAAAPMi4w45030563) |
+| 488 | 14×24 | vector | 14*24 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/24/1C/eEwpPWUD0E2EXBXOAAAAAO7754g6545835) |
+| 490 | 12×29 | vector | 12*29 numbers/humidity symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/22/92/L1ghbmUD0JCEP-yCAAAAAKs5Fas2491923) |
+| 492 | 12×26 | vector | 12*26 numbers | — | `0123456789%` | [file](https://f.divoom-gz.com/group1/M00/24/1C/eEwpPWUD0NaEMmiWAAAAAMd4FG80207157) |
+| 494 | 4×6 | vector | 4*6 English letter symbols | — | `SQUADFPOL/` | [file](https://f.divoom-gz.com/group1/M00/24/52/eEwpPWUKXTWEFOsUAAAAACeFV-g7199616) |
+| 496 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/9C/L1ghbmUjuPGEX75UAAAAAKT6P0Y884.bin) |
+| 498 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/25/26/eEwpPWUjuTmEfm7JAAAAAIDLBUw252.bin) |
+| 500 | 128×128 | 2 |  | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/9C/L1ghbmUjuVeEAVlKAAAAAIZ-uFw229.bin) |
+| 502 | 14×22 | vector | 14*22 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/A2/L1ghbmUkqESEU5YoAAAAAKtk1102333050) |
+| 504 | 5×8 | vector | 5*8 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/25/2C/eEwpPWUkqLWELCgYAAAAAGjWVKQ8561909) |
+| 506 | 5×8 | vector | 5*8 numbers/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/23/A3/L1ghbmUkthmECepcAAAAAPRIIfo9251584) |
+| 508 | 7×8 | vector | 7*8 Three uppercase English letters | — | `MTWFSONUEDHRIAP` | [file](https://f.divoom-gz.com/group1/M00/25/5D/eEwpPWUqQgOESFMKAAAAANrQK6I5992853) |
+| 510 | 10×9 | vector | 10*9 Three uppercase English letters | — | `MTWFSONUEDHRIAP` | [file](https://f.divoom-gz.com/group1/M00/25/88/eEwpPWUuTomEAe4GAAAAACGZJUY6192513) |
+| 512 | 7×9 | vector | 7*9 numbers/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/23/FE/L1ghbmUuTbKEamVqAAAAAN9dlZM0943044) |
+| 514 | 7×9 | vector | 7*9 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/25/88/eEwpPWUuTW-EAwC5AAAAAAOyDXk8070756) |
+| 516 | 18×25 | vector | 18*25 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/23/FE/L1ghbmUuTvSEflStAAAAAPGWRzg3207501) |
+| 518 | 12×18 | vector | 12*18 numerals/uppercase English letters | — | `0123456789DHMS` | [file](https://f.divoom-gz.com/group1/M00/24/15/L1ghbmUwp_iESQhrAAAAAG0DHXA3381261) |
+| 520 | 24×32 | vector | 24*32 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/24/22/L1ghbmUx-MeEfMC5AAAAAMzo31s2617865) |
+| 522 | 24×32 | vector | 24*32 numerals/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/25/E7/eEwpPWU3gIiERP3CAAAAAL6o0Ak7748922) |
+| 524 | 8×16 | vector | 8*16 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/25/E8/eEwpPWU3jK-EVgfHAAAAAErcxtw4117695) |
+| 526 | 5×7 | vector | 组件2温度数字5*7 | — | `0123456789cf%-` | [file](https://f.divoom-gz.com/group1/M00/00/08/rBAAM2VAn_aEerBDAAAAAKu9mCs1755740) |
+| 528 | 15×19 | vector | 15*19 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/08/rBAAM2VA4AiETQDjAAAAAEBiQVM2413005) |
+| 530 | 15×19 | vector | 15*19 numerals/temperature symbols | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/26/89/eEwpPWVA4NuEGxWwAAAAALBmwEA3202449) |
+| 532 | 7×9 | vector | 7*9 Numbers, hours, minutes | — | `0123456789hm` | [file](https://f.divoom-gz.com/group1/M00/26/89/eEwpPWVA4FmEOry8AAAAAPV8Kxs9539275) |
+| 534 | 7×9 | vector | 7*9 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/00/08/rBAAM2VA4IuEcya_AAAAACuQR3c8966572) |
+| 536 | 16×17 | vector | 16*17 Three-digit capital letter | — | `MONTUEWDHFRISA` | [file](https://f.divoom-gz.com/group1/M00/00/09/rBAAM2VA4RmEDOLPAAAAAGedcHM5912560) |
+| 538 | 54×77 | 2 | 54*77 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/26/89/eEwpPWVA4VqEPoOSAAAAAEfhpj85969887) |
+| 540 | 11×16 | vector | 组件3小时数字11*16 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/26/9A/eEwpPWVCAzmEKSeMAAAAANVQbWk6741344) |
+| 542 | 9×14 | vector | 组件3分钟数字9*14 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/0B/rBAAM2VCA8yEOJpzAAAAACHxMlg9573405) |
+| 544 | 5×7 | vector | 组件3噪音数字5*7 | — | `0123456789dB` | [file](https://f.divoom-gz.com/group1/M00/26/9A/eEwpPWVCA_aEaFRvAAAAAK-2IH40219276) |
+| 546 | 3×5 | vector | 组件4温度湿度3*5 | — | `0123456789cf%-.` | [file](https://f.divoom-gz.com/group1/M00/00/13/rBAAM2VF2_SEOHV8AAAAAIARx189988437) |
+| 548 | 9×14 | vector | 组件6噪音数字9*14 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/13/rBAAM2VF4wmEANNGAAAAAFirpCo1384922) |
+| 550 | 6×10 | vector | 组件9时间数字6*10 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/13/rBAAM2VF-BWEeCavAAAAAAQ1mAc0005003) |
+| 552 | 4×9 | vector | 组件9噪音数字4*9 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/26/E0/eEwpPWVF_-yEGEFKAAAAAHZmmGo7355071) |
+| 554 | 11×11 | vector | 160表盘时间/日期星期11*11 | — | `0123456789-/.MonTueWdhFriSat` | [file](https://f.divoom-gz.com/group1/M00/27/0A/eEwpPWVIgdGEUcv8AAAAAFPOV5s4628137) |
+| 556 | 6×9 | vector | 整体天气表盘屏幕5潮汐时间数字6*9 | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/00/19/rBAAM2VJsieEW79kAAAAAIrN-Bc1541101) |
+| 558 | 8×11 | vector | 8*11 numerals | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/00/19/rBAAM2VJqOGEEO47AAAAAMydqWs3094448) |
+| 560 | 13×20 | vector | 13*20 numerals | — | `0123456789hm` | [file](https://f.divoom-gz.com/group1/M00/27/1B/eEwpPWVJqZKEXX1jAAAAAOUQXJ80608855) |
+| 562 | 20×30 | vector | 20*30 numerals/temperature symbol | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/27/1B/eEwpPWVJqr-EOKknAAAAAERHmgE5595747) |
+| 564 | 8×11 | vector | 8*11 numerals/temperature symbol | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/00/19/rBAAM2VJq5eEDScoAAAAAFD2Nrs7454177) |
+| 566 | 8×12 | vector | 整体天气表盘屏幕2温度数字8*12 | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/27/1B/eEwpPWVJq1KEFcKFAAAAAHVzqnE0372815) |
+| 568 | 16×14 | vector | 整体天气表盘屏幕3大写英文16*14 | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/00/19/rBAAM2VJr3mEZi6dAAAAALgw7cQ4201204) |
+| 570 | 11×14 | vector | 整体天气表盘屏幕3数字11*14 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/19/rBAAM2VJr5iEK5DrAAAAAEKAqLs2861790) |
+| 572 | 8×9 | vector | 整体天气表盘屏幕4大写字母8*9 | — | `MONTUWDHFRISA` | [file](https://f.divoom-gz.com/group1/M00/27/1B/eEwpPWVJr_6EXVVxAAAAAHevUfs6741732) |
+| 574 | 5×7 | vector | 组件2日期数字5*7 | — | `0123456789-./` | [file](https://f.divoom-gz.com/group1/M00/00/1A/rBAAM2VKC1-EJwUlAAAAAO-LmHk7863986) |
+| 576 | 14×22 | vector | 14 x 22 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/73/rBAAM2V617SEOffZAAAAAPVmCoA5887072) |
+| 578 | 5×6 | vector | 5*6 number symbol | — | `0123456789/.:kmsh` | [file](https://f.divoom-gz.com/group1/M00/00/75/rBAAM2V8D7CELBk1AAAAAEoRCY81037455) |
+| 580 | 5×5 | vector | 5*5 uppercase English letters | — | `RUNIGDSWM` | [file](https://f.divoom-gz.com/group1/M00/2B/16/eEwpPWV8D_qESoa6AAAAAMd49tY0449884) |
+| 582 | 10×16 | vector | 10*16  number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/00/7D/rBAAM2WAHaCEG92gAAAAAPy5Cu42813756) |
+| 584 | 7×22 | vector | 7*22Tivoo2Game points numbers | — | `0123456789-.km` | [file](https://f.divoom-gz.com/group1/M00/01/60/rBAAM2XyYM6EVP5fAAAAAE85EF81946120) |
+| 586 | 7×10 | vector | 5*10Tivoo2Total game points | — | `0123456789-.km` | [file](https://f.divoom-gz.com/group1/M00/38/44/eEwpPWXyYPeEM2jbAAAAAN_tdR86563263) |
+| 588 | 4×9 | vector | 4*9Tivoo2Gametime | — | `0123456789-` | [file](https://f.divoom-gz.com/group1/M00/01/5C/rBAAM2XxayOEQQ1hAAAAAOSSZ5s2520868) |
+| 590 | 16×16 | bitmap | Tahoma16 | — | `` | [file](https://f.divoom-gz.com/group1/M00/3A/34/eEwpPWYKLtGEYqBrAAAAAIdH46o0036317) |
+| 592 | 6×10 | vector | 6*10 numerals | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/01/F2/rBAAM2Y95yOESrxCAAAAANZvRkA0113094) |
+| 594 | 23×64 | vector | Night Number1 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/02/7B/rBAAM2Z9LqyER0KZAAAAAARHYek1448382) |
+| 596 | 23×64 | vector | Night Number2 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/41/FD/eEwpPWZ9Lr-EVHOtAAAAAOW2tmo1885786) |
+| 598 | 32×64 | vector | Night Number3 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/02/7B/rBAAM2Z9LtGEWa3pAAAAAFqOqaA8983074) |
+| 600 | 32×64 | vector | Night Number4 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/41/FD/eEwpPWZ9Lt-ENJn-AAAAAIJjNwY9956151) |
+| 602 | 13×30 | vector | 13*30世界时间2数字 | — | `0123456789:` | [file](https://f.divoom-gz.com/group1/M00/02/E2/rBAAM2azKFeEXKrSAAAAAIYVLtU7112614) |
+| 604 | 5×9 | vector | Barrage Numbers5*9 | — | `0123456789:cf-.` | [file](https://f.divoom-gz.com/group1/M00/03/06/rBAAM2a9aX2ELzgoAAAAAMBHPWo5168580) |
+| 606 | 22×23 | vector | Total power 22*23 | — | `0123456789.W` | [file](https://f.divoom-gz.com/group1/M00/48/CD/eEwpPWbZfU-ESul8AAAAAOV1bgI9580227) |
+| 608 | 16×14 | vector | Single power16*14 | — | `0123456789.W` | [file](https://f.divoom-gz.com/group1/M00/03/43/rBAAM2bZfX-EWoahAAAAAATvfjc4567513) |
+| 610 | 5×7 | vector | Voltage5*7 | — | `0123456789.AV` | [file](https://f.divoom-gz.com/group1/M00/48/CD/eEwpPWbZfZOEfAvyAAAAAAuB3ak2902990) |
+| 612 | 12×18 | vector | 12*18 time numbers | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/0E/D3/rBAAM2iVoL6EUTrcAAAAAGtDAM45050234) |
+| 614 | 7×8 | vector | 7*8 Month letter | — | `ABCDEFGJLMNOPRSTUVY` | [file](https://f.divoom-gz.com/group1/M00/07/12/Ci0s8WiVoPGEXzadAAAAAAbBUQc5037953) |
+| 616 | 5×7 | vector | 5*7 Day of the week letter plus number | — | `ADEFHIMNORSTU0123456789` | [file](https://f.divoom-gz.com/group1/M00/0E/D3/rBAAM2iVoSiEfTxIAAAAAJapDqo7093493) |
+| 620 | 25×30 | vector | 25*30 IBM numbers | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/07/DF/Ci0s8WixFtOEdqwCAAAAAIhAh4E2841402) |
+| 642 | 26×24 | vector | 液态玻璃屏幕4月份字母26*24 | — | `ABCDEFGHIJLMNOPRSTUVY` | [file](https://f.divoom-gz.com/group1/M00/09/AC/Ci0s8WkAIJmEEiQLAAAAAA-4Slk4634048) |
+| 644 | 21×29 | vector | 液态玻璃屏幕4日期数字21*29 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/11/6D/rBAAM2kAIOaEIMEeAAAAAJj2am88028310) |
+| 646 | 16×13 | vector | 液态玻璃屏幕4星期字母16*13 | — | `SUNMOTEWDHRFIA` | [file](https://f.divoom-gz.com/group1/M00/09/AC/Ci0s8WkAIcKEGfHMAAAAAD9L-_81310007) |
+| 648 | 4×7 | vector | 4*7 Ranking Numbers | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/09/CD/Ci0s8WkFeKeER-9WAAAAALWeetw2954545) |
+| 650 | 26×35 | vector | 26*35 number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/11/C7/rBAAM2kNnouEcyd1AAAAAKK58hY8672084) |
+| 652 | 7×7 | vector | 5*7 uppercase letters and numbers | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` | [file](https://f.divoom-gz.com/group1/M00/0A/06/Ci0s8WkNnfmEKQ8YAAAAALdWQ6o9598914) |
+| 654 | 31×26 | vector | 31*26 number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/11/E2/rBAAM2kRiXSEOxXGAAAAAACpIwc3242777) |
+| 656 | 12×11 | vector | 10*11大写字母数字 | — | `ABCDEFGHIJLMNOPRSTUVWY0123456789` | [file](https://f.divoom-gz.com/group1/M00/0A/2B/Ci0s8WkS9HKEaOKHAAAAAIsmdbg2011546) |
+| 658 | 25×38 | vector | 25*38 number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/11/EC/rBAAM2kTFBuEUPA_AAAAAN-B1tY5798811) |
+| 662 | 24×32 | image glyph |  | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/0B/45/Ci0s8Wk6kkiEIuw7AAAAAAvgJxw9528489) |
+| 664 | 11×11 | vector | 8*11大写字母数字 | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` | [file](https://f.divoom-gz.com/group1/M00/13/92/rBAAM2lKRmqEEUuuAAAAAPrloJM9577428) |
+| 666 | 5×6 | vector | 4*6 weeks, uppercase letters, numbers | — | `ADEFHIMNORSTUW0123456789cf` | [file](https://f.divoom-gz.com/group1/M00/0B/F1/Ci0s8WlMrCSEPAaKAAAAAFZ1g1M4615143) |
+| 668 | 8×11 | vector | 8*11 number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/14/8A/rBAAM2lfKPiEZHJ-AAAAAM6DA0c2940219) |
+| 672 | 11×14 | vector | 11*14 number | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/0D/23/Ci0s8WlooPqEG_OTAAAAAOEHEF85795010) |
+| 674 | 10×16 | vector | number10*16 | — | `0123456789m/s.` | [file](https://f.divoom-gz.com/group1/M00/0E/B8/Ci0s8WmnpcKED4UQAAAAAKvWMpw6384474) |
+| 676 | 24×33 | vector | number 24*33 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/16/37/rBAAM2me0QyEbnvpAAAAAKPKTYA8208207) |
+| 678 | 19×24 | vector | Digital temperature symbol 19*24 | — | `0123456789-cf` | [file](https://f.divoom-gz.com/group1/M00/0E/8C/Ci0s8WmfwgqEc_cQAAAAAIuUMrA7895276) |
+| 682 | 26×35 | vector | 26*35 numbers v2 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/11/3D/Ci0s8WoejguEGmenAAAAALecM9A0668664) |
+| 684 | 6×10 | vector | 世界杯数字（6*10） | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/11/73/Ci0s8Wooz2iEM1HDAAAAAF5g-d47681582) |
+| 686 | 10×10 | vector | 世界杯字母（10*10） | — | `ABCDEFGHIJKLMNOPQRSTUVWXYZ` | [file](https://f.divoom-gz.com/group1/M00/19/21/rBAAM2ooz7uEYhvIAAAAANCvmks7593391) |
+| 688 | 4×7 | vector | 26世界杯时间数字4*7 | — | `0123456789` | [file](https://f.divoom-gz.com/group1/M00/19/23/rBAAM2opIFKEd4LtAAAAAC957JI7621943) |

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -138,77 +139,84 @@ def main() -> int:
         except (TypeError, ValueError):
             return 0
 
-    def reps(members: list[dict]) -> str:
-        """A few representative ids spanning small / card-safe / large sizes."""
-        by_h = sorted(members, key=height)
-        picks: list[dict] = []
-        small = next((f for f in by_h if height(f) < 12), None)
-        card = next((f for f in by_h if 12 <= height(f) <= 16), None)
-        large = next((f for f in reversed(by_h) if height(f) > 16), None)
-        for f in (small, card, large):
-            if f is not None and f not in picks:
-                picks.append(f)
-        if not picks:
-            picks = by_h[:2]
-        return ", ".join(f"`{int(f['id'])}` ({height(f)}px)" for f in picks)
+    def family_name(f: dict) -> str:
+        """Font name with the leading size token stripped (e.g. '10pt standard
+        font' / '7*9 numerals' -> 'standard font' / 'numerals'), so the same
+        family at different sizes shares a name."""
+        n = str(f.get("name", ""))
+        n = re.sub(r"^\s*\d+\s*[x*×]\s*\d+\s*", "", n)  # '7*9 ', '18×22 '
+        n = re.sub(r"\d+\s*pt\b", "", n)                # '10pt '
+        return n.strip() or "unnamed"
 
-    by_cat: dict[str, list[dict]] = {}
-    for f in fonts:
-        for cat in categories(str(f.get("charset", "")), int(f.get("type", -1))):
-            by_cat.setdefault(cat, []).append(f)
+    def sizes_str(members: list[dict]) -> str:
+        """Ids of a family, sorted by height. Caps very large families to a
+        small/card/large spread so the overview stays readable."""
+        by_h = sorted(members, key=height)
+        if len(by_h) > 6:
+            keep = [by_h[0]]  # smallest
+            card = next((f for f in by_h if 12 <= height(f) <= 16), None)
+            if card and card not in keep:
+                keep.append(card)
+            keep.append(by_h[-1])  # largest
+            extra = len(by_h) - len(keep)
+            tail = f" (+{extra} more sizes)" if extra > 0 else ""
+            return ", ".join(f"`{int(f['id'])}` ({height(f)}px)" for f in keep) + tail
+        return ", ".join(f"`{int(f['id'])}` ({height(f)}px)" for f in by_h)
+
+    def usefulness(members: list[dict]) -> tuple:
+        cs = set(str(members[0].get("charset", "")))
+        return (len(members), any(c.islower() for c in cs), len(cs))
+
+    # Group each use-case's fonts into families (same charset + same name
+    # sans size = same font at different sizes).
     lines += [
         "## Quick picks by use case",
         "",
-        "A few representative ids per need (small · card-safe ~14px · large).",
-        "For every size available, find the charset in the grouped table below.",
+        "Grouped by **font family** — fonts on one line are the same font at",
+        "different sizes, so pick the `id` whose height fits (the card default",
+        "is 14px). Glyphs outside a font's charset are dropped silently.",
         "",
     ]
     for cat, label in CAT_LABELS.items():
-        members = by_cat.get(cat)
-        if members:
-            lines.append(f"- **{label}**: {reps(members)}")
+        members = [
+            f for f in fonts
+            if cat in categories(str(f.get("charset", "")), int(f.get("type", -1)))
+        ]
+        if not members:
+            continue
+        families: dict[tuple, list[dict]] = {}
+        for f in members:
+            families.setdefault((family_name(f), str(f.get("charset", ""))), []).append(f)
+        top = sorted(families.items(), key=lambda kv: usefulness(kv[1]), reverse=True)[:4]
+        lines.append(f"- **{label}**:")
+        for (fam, _cs), fam_members in top:
+            lines.append(f"    - _{fam}_: {sizes_str(fam_members)}")
 
-    # --- grouped catalog: one row per charset (only the size differs) --------
-    def usefulness(cs: str) -> tuple:
-        s = set(cs)
-        return (
-            any(c.islower() for c in s),   # full text first
-            any(c.isupper() for c in s),
-            len(s - set("0123456789")),    # more symbols = richer
-            len(s),
+    # --- full catalog: the raw endpoint data, one row per font --------------
+    lines += [
+        "",
+        "## Full catalog (raw)",
+        "",
+        "Every font id as returned by the endpoint. The `charset` is",
+        "authoritative; `style hint` is guessed from the name.",
+        "",
+        "| id | size | type | name | style hint | charset | file |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for f in sorted(fonts, key=lambda f: int(f["id"])):
+        fid = int(f["id"])
+        charset = str(f.get("charset", "")).replace("|", "\\|")
+        cell_charset = charset[:60] + ("…" if len(charset) > 60 else "")
+        file_url = f.get("fontUrl") or f.get("url") or ""
+        file_cell = f"[file]({CDN}{file_url})" if file_url else "—"
+        name = str(f.get("name", "?")).replace("|", "\\|")
+        size = f"{f.get('width', '?')}×{f.get('high', '?')}"
+        ftype = TYPE_LABELS.get(int(f.get("type", -1)), f.get("type"))
+        hint = style_hint(name) or "—"
+        lines.append(
+            f"| {fid} | {size} | {ftype} | {name} | {hint} "
+            f"| `{cell_charset}` | {file_cell} |"
         )
-
-    groups: dict[str, list[dict]] = {}
-    for f in fonts:
-        groups.setdefault(str(f.get("charset", "")), []).append(f)
-
-    lines += [
-        "",
-        "## Fonts grouped by charset",
-        "",
-        "Fonts that support the same glyphs are listed together — they differ",
-        "only in size, so pick the id whose height fits your layout (the card",
-        "default is 14px). Glyphs outside the charset are dropped silently.",
-        "",
-        "| Supported glyphs (charset) | Available as `id` (height) |",
-        "|---|---|",
-    ]
-    for cs in sorted(groups, key=usefulness, reverse=True):
-        members = sorted(groups[cs], key=height)
-        ids = ", ".join(f"`{int(f['id'])}` ({height(f)}px)" for f in members)
-        shown = cs.replace("|", "\\|")
-        if not shown:
-            shown = "*(unpublished — general bitmap text)*"
-        elif len(shown) > 52:
-            shown = shown[:52] + "…"
-        lines.append(f"| `{shown}` | {ids} |")
-
-    lines += [
-        "",
-        "Need an exact size, style, or download URL for a specific id? Those",
-        "columns are in the raw endpoint response; re-run the generator or query",
-        f"`{URL}` with `{{DeviceId, DeviceType:\"LCD\"}}` directly.",
-    ]
 
     path = os.path.join(out_dir, "FONTS_CATALOG.md")
     with open(path, "w", encoding="utf-8") as fh:
