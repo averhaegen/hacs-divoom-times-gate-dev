@@ -126,6 +126,30 @@ def render_sensor_grid(
     items: list[dict[str, Any]] = []
     font_default = int(page.get("font", 4))
     update_default = int(page.get("update_time", 10))
+    # Labels as device items (type 22): the device scrolls them automatically
+    # when the text is wider than TextWidth — long names stay readable instead
+    # of being truncated in the baked background.
+    scroll_labels = bool(page.get("scroll_labels", True))
+    label_font_id = int(page.get("label_font", 2))
+    label_color = str(page.get("label_color", "#808080"))
+
+    def label_item(i: int, text: str, x: int, y: int, w: int) -> None:
+        items.append(
+            {
+                "TextId": MAX_SLOTS + 2 + i,
+                "type": 22,
+                "x": x,
+                "y": y,
+                "dir": 0,
+                "font": label_font_id,
+                "TextWidth": max(16, w),
+                "Textheight": 14,
+                "speed": int(page.get("label_speed", 60)),
+                "align": 1,
+                "color": label_color,
+                "TextString": str(text)[:64],
+            }
+        )
 
     def value_item(slot: dict, i: int, x: int, y: int, w: int, color: str, align: int = 1) -> None:
         entity_id = slot["entity_id"]
@@ -194,7 +218,10 @@ def render_sensor_grid(
             icon_size = min(24, row_h - 4)
             draw_icon(draw, icon, (2, y + (row_h - icon_size) // 2), icon_size, color)
             text_x = 2 + icon_size + 5
-            draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=_LABEL_COLOR)
+            if scroll_labels:
+                label_item(i, label, text_x, y + 1, SCREEN_SIZE - text_x - 2)
+            else:
+                draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=_LABEL_COLOR)
             value_item(slot, i, text_x, y + 12, SCREEN_SIZE - text_x - 2, color)
             if i:
                 draw.line([(0, y), (SCREEN_SIZE, y)], fill=(35, 35, 35))
@@ -216,7 +243,10 @@ def render_sensor_grid(
                 icon_size = 32
                 draw_icon(draw, icon, (6, y + (h - icon_size) // 2), icon_size, color)
                 text_x = 6 + icon_size + 6
-                draw.text((text_x, y + 10), str(label)[:16], font=_label_font(11), fill=_LABEL_COLOR)
+                if scroll_labels:
+                    label_item(i, label, text_x, y + 10, SCREEN_SIZE - text_x - 2)
+                else:
+                    draw.text((text_x, y + 10), str(label)[:16], font=_label_font(11), fill=_LABEL_COLOR)
                 value_item(slot, i, text_x, y + 26, SCREEN_SIZE - text_x - 2, color)
             elif mode == "quad":
                 # Label on top (centered), large icon in the middle, value below.

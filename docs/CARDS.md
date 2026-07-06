@@ -55,6 +55,15 @@ the `dispdata_tpl` endpoint), so unit conversions, rounding and formatting
 always reflect the current state. Battery-class entities without an explicit
 icon get a dynamic fill-level icon (`mdi:battery-70` etc.), like HA's own UI.
 
+**Scrolling labels** (`scroll_labels: true`, the default in list/rows
+layouts): labels are sent as device text items (type 22) instead of being
+baked into the background — the device scrolls them automatically when the
+name is wider than the row, so long entity names stay fully readable.
+Options: `label_font` (default 2), `label_color` (default `#808080`),
+`label_speed` (scroll ms/step, default 60). Set `scroll_labels: false` for
+static truncated labels in the background. Grid cells keep baked centered
+labels.
+
 ### Notes
 
 - Icons come from the bundled Material Design Icons font (any `mdi:*` name);
