@@ -227,8 +227,9 @@ def _draw_component(
 
 def _load_image(hass, component, variables) -> Image.Image | None:
     if "image_asset" in component:
-        # A bundled icon, e.g. image_asset: sunpower.png (see img/).
-        name = _tpl(hass, component["image_asset"], variables)
+        # A bundled icon, e.g. image_asset: sunpower.png (see img/). Assets are
+        # flat filenames; basename() blocks `../` escaping the img/ directory.
+        name = os.path.basename(_tpl(hass, component["image_asset"], variables))
         return Image.open(os.path.join(os.path.dirname(__file__), "img", name))
     if "image_path" in component:
         return Image.open(_tpl(hass, component["image_path"], variables))

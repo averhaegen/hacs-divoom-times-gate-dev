@@ -7,9 +7,13 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import DivoomTimesGateConfigEntry
-from .const import CONF_LOCAL_TOKEN
+from .const import CONF_DISPDATA_SECRET, CONF_LOCAL_TOKEN, CONF_MAC
 
-TO_REDACT = {CONF_LOCAL_TOKEN}
+# The dispdata secret guards the unauthenticated HTTP views (any allowed
+# entity's state is readable with it), so it must never leave the box in a
+# shared diagnostics dump; the LocalToken is the device credential; the MAC
+# is identifying info.
+TO_REDACT = {CONF_LOCAL_TOKEN, CONF_DISPDATA_SECRET, CONF_MAC}
 
 
 async def async_get_config_entry_diagnostics(

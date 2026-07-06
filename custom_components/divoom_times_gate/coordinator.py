@@ -46,7 +46,7 @@ from .const import (
 from .defaults import DEFAULT_SCREENS
 from .device import TimesGate
 from .discovery import async_discover_devices
-from .dispdata import publish_card_background
+from .dispdata import publish_card_background, register_allowed_entity
 from .screens import (
     is_enabled,
     normalize_pages,
@@ -578,6 +578,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 state = self.hass.states.get(entity_id)
                 label = state.name if state is not None else entity_id
 
+            register_allowed_entity(self.hass, entity_id)
             poll_url = f"{base_url}/api/divoom_times_gate/dispdata/{secret}/{entity_id}"
             if label:
                 # The device's own HTTP client (issuing the poll GET) appears not to
@@ -711,6 +712,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 _LOGGER.error("dispdata_text: value item #%d on screen %s is missing entity_id", row, screen)
                 return "error", None, None
 
+            register_allowed_entity(self.hass, entity_id)
             poll_url = f"{base_url}/api/divoom_times_gate/dispdata/{secret}/{entity_id}"
             if label := raw.get("label"):
                 # See the space/underscore note in _build_dispdata_text — the

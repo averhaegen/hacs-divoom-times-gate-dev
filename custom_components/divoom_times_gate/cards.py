@@ -24,7 +24,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 
 from .const import NATIVE_KIND_TYPES, SCREEN_SIZE
-from .dispdata import register_value_template
+from .dispdata import register_allowed_entity, register_value_template
 from .mdi import draw_icon, icon_for_state
 
 _LOGGER = logging.getLogger(__name__)
@@ -216,6 +216,7 @@ def render_sensor_grid(
             register_value_template(hass, key, str(tpl))
             url = f"{tpl_base}/{key}"
         else:
+            register_allowed_entity(hass, entity_id)
             url = f"{poll_base}/{quote(entity_id)}"
         items.append(
             {

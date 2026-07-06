@@ -46,6 +46,21 @@ TPL_URL_PATTERN = "/api/divoom_times_gate/dispdata_tpl/{secret}/{key}"
 _TPL_KEY = "dispdata_templates"
 
 
+_ALLOWED_ENTITIES_KEY = "dispdata_entities"
+
+
+def register_allowed_entity(hass: HomeAssistant, entity_id: str) -> None:
+    """Allow ``entity_id`` on the dispdata view.
+
+    Called wherever a poll URL is built (dispdata_text sensors/items, card
+    slots), so the unauthenticated view only ever serves entities the user
+    actually put on a screen — not arbitrary ids probed with the secret.
+    """
+    hass.data.setdefault(DOMAIN, {}).setdefault(_ALLOWED_ENTITIES_KEY, set()).add(
+        entity_id
+    )
+
+
 def register_value_template(hass: HomeAssistant, key: str, template: str) -> None:
     """Register a Jinja template served at the dispdata_tpl endpoint.
 
@@ -87,6 +102,13 @@ class DispDataView(HomeAssistantView):
     async def get(self, request: web.Request, secret: str, entity_id: str) -> web.Response:
         secrets: set[str] = self._hass.data.get(DOMAIN, {}).get(_DATA_KEY, set())
         if secret not in secrets:
+            return web.json_response({"error": "forbidden"}, status=403)
+        allowed: set[str] = self._hass.data.get(DOMAIN, {}).get(
+            _ALLOWED_ENTITIES_KEY, set()
+        )
+        if entity_id not in allowed:
+            # Only entities that a configured screen actually polls are served;
+            # anything else is a probe (or a stale config) — deny.
             return web.json_response({"error": "forbidden"}, status=403)
 
         state = self._hass.states.get(entity_id)
