@@ -356,10 +356,9 @@ def _encode_gif(img: Image.Image) -> bytes:
     colour render (including white or a custom background), we reserve index 0
     as an unused sentinel and put the real colours in indices 1+.
 
-    The palette is kept **minimal** (only the colours actually used, padded to
-    the next power of two): a forced 256-entry palette **crashes the device's
-    GIF parser** (verified on device — a 256-colour background froze the unit,
-    a ~32-colour one rendered fine).
+    The palette is kept minimal (only the colours actually used, padded to the
+    next power of two) — smaller GIFs, less to fetch. (A full 256-entry palette
+    also renders fine; minimal is just leaner.)
     """
     q = img.convert("RGB").quantize(colors=255, method=Image.Quantize.FASTOCTREE)
     data = q.tobytes()
