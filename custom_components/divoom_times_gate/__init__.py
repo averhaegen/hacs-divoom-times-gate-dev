@@ -135,6 +135,17 @@ async def async_setup_entry(
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     async_register_services(hass)
+
+    # Push each Select's restored state (see select.py's restore_display/
+    # restore_screen) as a background task, not awaited here: platform setup
+    # above already restored all in-memory state, but the actual device I/O
+    # is deferred so a slow/unreachable device can't delay
+    # async_setup_entry/HA startup. Best-effort — errors are logged, not raised.
+    entry.async_create_background_task(
+        hass,
+        coordinator.async_apply_restored_state(),
+        name="divoom_times_gate_apply_restored_state",
+    )
     return True
 
 

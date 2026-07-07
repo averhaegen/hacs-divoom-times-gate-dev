@@ -7,7 +7,9 @@ import voluptuous as vol
 from PIL import Image, ImageDraw
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_call_later
 
 from .const import DOMAIN, SCREEN_COUNT, SCREEN_SIZE
@@ -19,11 +21,13 @@ SERVICE_SHOW_MESSAGE = "show_message"
 SERVICE_SHOW_IMAGE = "show_image"
 
 _SCREEN = vol.All(vol.Coerce(int), vol.Range(min=0, max=SCREEN_COUNT - 1))
+_DEVICE_ID_FIELD = {vol.Optional("device_id"): vol.All(cv.ensure_list, [cv.string])}
 
 _SET_CLOCK_FACE_SCHEMA = vol.Schema(
     {
         vol.Required("screen"): _SCREEN,
         vol.Required("clock_id"): vol.Coerce(int),
+        **_DEVICE_ID_FIELD,
     }
 )
 _SHOW_MESSAGE_SCHEMA = vol.Schema(
@@ -32,6 +36,7 @@ _SHOW_MESSAGE_SCHEMA = vol.Schema(
         vol.Required("text"): cv.string,
         vol.Optional("duration", default=10): vol.All(vol.Coerce(int), vol.Range(min=1)),
         vol.Optional("color", default="#FFFFFF"): cv.string,
+        **_DEVICE_ID_FIELD,
     }
 )
 _SHOW_IMAGE_SCHEMA = vol.Schema(
@@ -42,6 +47,7 @@ _SHOW_IMAGE_SCHEMA = vol.Schema(
         vol.Optional("fit", default="cover"): vol.In(["cover", "contain"]),
         # 0 = keep showing until the next config change / refresh
         vol.Optional("duration", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        **_DEVICE_ID_FIELD,
     }
 )
 
@@ -50,6 +56,41 @@ def _coordinators(hass: HomeAssistant):
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.runtime_data is not None:
             yield entry.runtime_data
+
+
+def _target_coordinators(hass: HomeAssistant, call: ServiceCall):
+    """Coordinators targeted by ``call``.
+
+    With no ``device_id``, falls back to every configured Times Gate (the
+    previous, broadcast-to-all behaviour) for backward compatibility. With
+    ``device_id`` (from the service's device target picker, or supplied
+    directly), only the matching device(s) are affected — otherwise two
+    Times Gates would both show the same message/image/face.
+    """
+    device_ids = call.data.get("device_id")
+    if not device_ids:
+        yield from _coordinators(hass)
+        return
+
+    device_registry = dr.async_get(hass)
+    domain_entry_ids = {entry.entry_id for entry in hass.config_entries.async_entries(DOMAIN)}
+    seen: set[str] = set()
+    for device_id in device_ids:
+        device = device_registry.async_get(device_id)
+        if device is None:
+            raise ServiceValidationError(f"Unknown device_id: {device_id}")
+        matched = device.config_entries & domain_entry_ids
+        if not matched:
+            raise ServiceValidationError(
+                f"Device {device_id} is not a Divoom Times Gate"
+            )
+        for entry_id in matched:
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry is not None and entry.runtime_data is not None:
+                yield entry.runtime_data
 
 
 def _render_message(text: str, color_hex: str) -> bytes:
@@ -79,7 +120,7 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def _set_clock_face(call: ServiceCall) -> None:
         screen = call.data["screen"]
         clock_id = call.data["clock_id"]
-        for coord in _coordinators(hass):
+        for coord in _target_coordinators(hass, call):
             await coord.device.set_clock_face(screen, clock_id)
 
     async def _show_message(call: ServiceCall) -> None:
@@ -87,7 +128,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         jpeg = await hass.async_add_executor_job(
             _render_message, call.data["text"], call.data["color"]
         )
-        for coord in _coordinators(hass):
+        for coord in _target_coordinators(hass, call):
             await coord.device.send_jpeg(jpeg, screen)
             coord.record_frame(screen, jpeg)
             # The temporary message bypassed the hash cache; invalidate so the
@@ -104,10 +145,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         page = {k: call.data[k] for k in ("image_path", "image_url", "fit") if k in call.data}
         if "image_path" not in page and "image_url" not in page:
             raise vol.Invalid("show_image needs image_path or image_url")
-        frames, speed = await hass.async_add_executor_job(
-            render_image_frames, hass, page
-        )
-        for coord in _coordinators(hass):
+        frames, speed = await render_image_frames(hass, page)
+        for coord in _target_coordinators(hass, call):
             await coord.device.send_animation(frames, screen, speed)
             coord.record_frame(screen, frames[0])
             # Bypassed the hash cache; make sure the next tick can repaint.

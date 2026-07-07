@@ -1,6 +1,9 @@
 set_clock_face:
   name: Set clock face
   description: Show a native device face on one screen (Independent Display).
+  target:
+    device:
+      integration: divoom_times_gate
   fields:
     screen:
       name: Screen
@@ -25,6 +28,9 @@ set_clock_face:
 show_message:
   name: Show message
   description: Flash a text message on one screen for a few seconds, then revert.
+  target:
+    device:
+      integration: divoom_times_gate
   fields:
     screen:
       name: Screen
@@ -65,6 +71,9 @@ show_message:
 show_image:
   name: Show image
   description: Show a photo or animated GIF on one screen (from a local path or URL). With duration 0 it stays until the next refresh/config change.
+  target:
+    device:
+      integration: divoom_times_gate
   fields:
     screen:
       name: Screen

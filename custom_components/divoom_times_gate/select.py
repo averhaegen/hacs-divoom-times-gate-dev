@@ -72,7 +72,10 @@ class DisplaySourceSelect(TimesGateEntity, SelectEntity, RestoreEntity):
         if (last := await self.async_get_last_state()) and last.state in self._map:
             self._attr_current_option = last.state
             kind, value = self._map[last.state]
-            await self.coordinator.async_set_display(kind, value)
+            # In-memory only: no device I/O here, so restoring 6 entities never
+            # blocks platform setup if the device is unreachable. The actual
+            # push happens once, afterwards, via async_apply_restored_state.
+            self.coordinator.restore_display(kind, value)
 
     async def async_select_option(self, option: str) -> None:
         kind, value = self._map[option]
@@ -104,7 +107,8 @@ class ScreenSelect(TimesGateEntity, SelectEntity, RestoreEntity):
         if (last := await self.async_get_last_state()) and last.state in self._map:
             self._attr_current_option = last.state
             kind, value = self._map[last.state]
-            await self.coordinator.async_set_screen(self._screen, kind, value)
+            # In-memory only — see DisplaySourceSelect.async_added_to_hass.
+            self.coordinator.restore_screen(self._screen, kind, value)
 
     async def async_select_option(self, option: str) -> None:
         kind, value = self._map[option]

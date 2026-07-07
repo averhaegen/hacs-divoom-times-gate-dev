@@ -26,7 +26,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -60,6 +60,13 @@ if TYPE_CHECKING:
     from . import DivoomTimesGateConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _gif_to_jpeg(gif: bytes) -> bytes:
+    """Convert a rendered card background (GIF) into a JPEG preview frame."""
+    with BytesIO() as buf:
+        Image.open(BytesIO(gif)).convert("RGB").save(buf, "JPEG", quality=95)
+        return buf.getvalue()
 
 
 class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
@@ -194,6 +201,18 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             await self._reassert_faces()
             await self.async_request_refresh()
 
+    def restore_display(self, kind: str, value: Any) -> None:
+        """Restore the device-level Display source from RestoreEntity state.
+
+        In-memory only — no device I/O (unlike ``async_set_display``), so it
+        can run synchronously from a Select's ``async_added_to_hass`` without
+        blocking platform setup while the device might be unreachable. See
+        ``async_apply_restored_state``, which does the actual device push
+        afterwards, as a background task.
+        """
+        self.display = (kind, value)
+        self.invalidate()
+
     def _dashboard_base_id(self) -> int | None:
         """Resolve the configured dashboard-base preset position to its id."""
         pos = self.config_entry.options.get(CONF_DASHBOARD_BASE)
@@ -218,6 +237,42 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             await self._push_black(screen)
         else:  # custom
             await self.async_request_refresh()
+
+    def restore_screen(self, screen: int, kind: str, value: Any) -> None:
+        """Restore a per-screen mode from RestoreEntity state (in-memory only).
+
+        See ``restore_display`` — no device I/O here; ``async_apply_restored_state``
+        pushes it afterwards, as a background task.
+        """
+        self.screen_modes[screen] = (kind, value)
+        self._rot_index[screen] = 0
+        self._rot_elapsed[screen] = 0
+        self.invalidate(screen)
+
+    async def async_apply_restored_state(self) -> None:
+        """Push the restored Display source / per-screen modes to the device.
+
+        Called once as a background task after platform setup completes (see
+        ``__init__.async_setup_entry``), so a slow/unreachable device can't
+        block HA startup — ``restore_display``/``restore_screen`` (called from
+        the Select entities' ``async_added_to_hass``) only update in-memory
+        state; this is the deferred, best-effort device push.
+        """
+        kind, value = self.display
+        try:
+            if kind == "overall":
+                await self.device.set_whole_face(int(value))
+            elif kind == "independent":
+                await self.device.set_independent_preset(int(value))
+            elif kind == "off":
+                await self.device.turn_off()
+            else:  # dashboard
+                if (base := self._dashboard_base_id()) is not None:
+                    await self.device.set_independent_preset(base)
+                await self._reassert_faces()
+                await self.async_request_refresh()
+        except Exception as err:  # noqa: BLE001 - best-effort, never raise from a background task
+            _LOGGER.warning("Applying restored display/screen state failed: %s", err)
 
     def _active_independence(self) -> int | None:
         """Independence id to scope per-screen faces, if known from config."""
@@ -324,6 +379,18 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             await self.device.reset_pic_counter()
             self._first_run = False
 
+        # Transport-level failures (timeouts/refused), not device-level
+        # rejections, mean the device is actually unreachable — mark entities
+        # unavailable rather than silently staying "available" forever.
+        # Reuses the same threshold as IP self-healing (device.consecutive_failures
+        # is reset to 0 by device._send() on any successful round-trip, even one
+        # the device itself rejects with a non-zero error_code).
+        if self.device.consecutive_failures >= self._HEAL_FAILURE_THRESHOLD:
+            raise UpdateFailed(
+                f"Times Gate at {self.config_entry.data.get(CONF_IP_ADDRESS)} "
+                f"unreachable ({self.device.consecutive_failures} consecutive failures)"
+            )
+
         # Native modes: leave the device alone so the face/preset persists.
         if self.display[0] != "dashboard":
             return {"display": self.display[0]}
@@ -415,7 +482,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             if ptype == "off":
                 jpeg = await self.hass.async_add_executor_job(render_black)
             else:
-                jpeg = await self.hass.async_add_executor_job(render_page, self.hass, page)
+                jpeg = await render_page(self.hass, page)
             digest = hashlib.md5(jpeg).hexdigest()
             if self._last_hashes.get(screen) == digest:
                 # Still record after a reload: hashes persist across reloads but
@@ -446,9 +513,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         by the same signature mechanism so an unchanged image sends nothing.
         """
         try:
-            frames, speed = await self.hass.async_add_executor_job(
-                render_image_frames, self.hass, page
-            )
+            frames, speed = await render_image_frames(self.hass, page)
         except (ValueError, OSError) as err:
             _LOGGER.error("image page on screen %s: %s", screen, err)
             return "error", None, None
@@ -482,7 +547,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         background or item layout actually changed — value updates happen
         device-side via polling and never repaint.
         """
-        from .cards import CARD_RENDERERS  # local import: PIL-heavy module
+        from .cards import CARD_RENDERERS, async_prerender_slots  # local import: PIL-heavy module
 
         card_type = str(page.get("card", "sensor_grid"))
         renderer = CARD_RENDERERS.get(card_type)
@@ -499,6 +564,10 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         except NoURLAvailableError:
             _LOGGER.error("card: could not resolve a local HA URL for the device")
             return "error", None, None
+
+        # Render any color_template on the loop first (Template.async_render
+        # isn't thread-safe) before handing the page to the executor-run renderer.
+        page = await async_prerender_slots(self.hass, page)
 
         poll_base = f"{base_url}/api/divoom_times_gate/dispdata/{secret}"
         try:
@@ -519,9 +588,9 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         command = self.device.build_item_list(screen, items, background_gif=background_url)
 
         # Preview: show the HA-rendered background (values live on-device).
-        with BytesIO() as buf:
-            Image.open(BytesIO(gif)).convert("RGB").save(buf, "JPEG", quality=95)
-            self.record_frame(screen, buf.getvalue())
+        # PIL work, so run it off the event loop like the renderer call above.
+        preview_jpeg = await self.hass.async_add_executor_job(_gif_to_jpeg, gif)
+        self.record_frame(screen, preview_jpeg)
         return "pending", command, signature
 
     _DISPDATA_ROW_Y = (8, 40, 70, 100)  # default y per row, up to 4 sensors, evenly spaced

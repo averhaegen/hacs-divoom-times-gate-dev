@@ -225,6 +225,12 @@ gallery, experimental native-face authoring). In priority order:
   cloud weather for the configured location (CurTemp/Pressure/Humidity/WindSpeed)
   — redundant with users' own weather sensors, so intentionally not exposed.
   `GetAllConf` is settings-only (exposed as controls, not sensors).
+- **`manifest.json` Pillow pin.** `requirements: ["Pillow>=10.1.0"]` is a floor
+  only (no ceiling) so HA core's own exact pin (`Pillow==X.Y.Z` in
+  `package_constraints.txt`) always wins. Keep this floor comfortably below
+  whatever the oldest HA version we support ships, so a future bump never
+  raises our minimum above HA's current pin (which would break dependency
+  resolution for the whole HA install, not just this integration).
 
 ## i18n
 

@@ -1,7 +1,7 @@
 {
   "domain": "divoom_times_gate",
   "name": "Divoom Times Gate",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "codeowners": [
     "@averhaegen"
   ],
@@ -13,5 +13,6 @@
   "requirements": [
     "Pillow>=10.1.0"
   ],
-  "dependencies": []
+  "dependencies": [],
+  "loggers": ["custom_components.divoom_times_gate"]
 }

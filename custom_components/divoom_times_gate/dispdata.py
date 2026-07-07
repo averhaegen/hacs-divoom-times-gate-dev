@@ -61,16 +61,21 @@ def register_allowed_entity(hass: HomeAssistant, entity_id: str) -> None:
     )
 
 
-def register_value_template(hass: HomeAssistant, key: str, template: str) -> None:
+def register_value_template(hass: HomeAssistant, secret: str, key: str, template: str) -> None:
     """Register a Jinja template served at the dispdata_tpl endpoint.
 
     Cards use this for per-slot ``value_template``: the device polls
     ``/dispdata_tpl/<secret>/<key>`` and the template renders fresh in HA on
     every poll (e.g. turning ``0.001`` kW into ``1 W``). Keyed by a content
-    hash, so identical templates share an entry and re-registration is a
-    no-op.
+    hash under its config entry's ``secret``, so identical templates share an
+    entry and re-registration is a no-op. Namespacing under ``secret`` lets
+    ``unregister_secret`` drop all of an entry's templates on unload/reload —
+    otherwise edited/removed cards would leak old templates in memory forever.
     """
-    hass.data.setdefault(DOMAIN, {}).setdefault(_TPL_KEY, {})[key] = template
+    templates: dict[str, dict[str, str]] = hass.data.setdefault(DOMAIN, {}).setdefault(
+        _TPL_KEY, {}
+    )
+    templates.setdefault(secret, {})[key] = template
 
 
 def publish_card_background(hass: HomeAssistant, digest: str, gif: bytes) -> None:
@@ -84,9 +89,12 @@ def publish_card_background(hass: HomeAssistant, digest: str, gif: bytes) -> Non
 
 
 def unregister_secret(hass: HomeAssistant, secret: str) -> None:
-    """Drop ``secret`` (e.g. on config entry removal)."""
+    """Drop ``secret`` (e.g. on config entry removal/reload), and any
+    value-templates registered under it, so they don't accumulate forever."""
     secrets: set[str] = hass.data.get(DOMAIN, {}).get(_DATA_KEY, set())
     secrets.discard(secret)
+    templates: dict[str, dict[str, str]] = hass.data.get(DOMAIN, {}).get(_TPL_KEY, {})
+    templates.pop(secret, None)
 
 
 class DispDataView(HomeAssistantView):
@@ -142,7 +150,7 @@ class DispDataTemplateView(HomeAssistantView):
         secrets: set[str] = self._hass.data.get(DOMAIN, {}).get(_DATA_KEY, set())
         if secret not in secrets:
             return web.json_response({"error": "forbidden"}, status=403)
-        template = self._hass.data.get(DOMAIN, {}).get(_TPL_KEY, {}).get(key)
+        template = self._hass.data.get(DOMAIN, {}).get(_TPL_KEY, {}).get(secret, {}).get(key)
         if template is None:
             return web.json_response({"error": "unknown template"}, status=404)
         try:

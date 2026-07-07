@@ -103,14 +103,31 @@ def _blend(a: str, b: str, t: float) -> tuple[int, int, int]:
     )
 
 
-def _resolve_color(hass: HomeAssistant, slot: dict[str, Any], default: str) -> str:
-    """Slot icon/value colour: ``color_template`` (rendered) > ``color`` > foreground."""
-    if tpl := slot.get("color_template"):
-        try:
-            return str(Template(str(tpl), hass).async_render()).strip() or default
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("sensor_grid color_template failed: %s", err)
+def _resolve_color(slot: dict[str, Any], default: str) -> str:
+    """Slot icon/value colour, already resolved by ``async_prerender_slots``."""
     return str(slot.get("color", default))
+
+
+async def async_prerender_slots(hass: HomeAssistant, page: dict[str, Any]) -> dict[str, Any]:
+    """Render each slot's ``color_template`` into a literal ``color``.
+
+    Must run on the event loop (``Template.async_render`` isn't thread-safe).
+    Returns a shallow-copied page whose slots no longer need HA/Template
+    access, safe to hand to a card renderer running in the executor.
+    """
+    slots = list(page.get("slots") or [])
+    resolved_slots = []
+    for slot in slots:
+        slot = dict(slot)
+        if tpl := slot.pop("color_template", None):
+            try:
+                slot["color"] = str(Template(str(tpl), hass).async_render()).strip() or slot.get(
+                    "color"
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("sensor_grid color_template failed: %s", err)
+        resolved_slots.append(slot)
+    return {**page, "slots": resolved_slots}
 
 
 def render_sensor_grid(
@@ -213,7 +230,11 @@ def render_sensor_grid(
         entity_id = slot["entity_id"]
         if tpl := slot.get("value_template"):
             key = hashlib.md5(str(tpl).encode()).hexdigest()[:12]
-            register_value_template(hass, key, str(tpl))
+            # poll_base ends in ".../dispdata/<secret>" — reuse it so
+            # templates are namespaced per config entry (see dispdata.py
+            # register_value_template) instead of growing unbounded.
+            secret = poll_base.rsplit("/", 1)[-1]
+            register_value_template(hass, secret, key, str(tpl))
             url = f"{tpl_base}/{key}"
         else:
             register_allowed_entity(hass, entity_id)
@@ -272,7 +293,7 @@ def render_sensor_grid(
             if not entity_id:
                 raise ValueError(f"sensor_grid slot #{i} is missing entity_id")
             state = hass.states.get(entity_id)
-            color = _resolve_color(hass, slot, foreground)
+            color = _resolve_color(slot, foreground)
             icon = slot.get("icon") or icon_for_state(state)
             label = slot.get("name")
             if label is None:
@@ -308,7 +329,7 @@ def render_sensor_grid(
             if not entity_id:
                 raise ValueError(f"sensor_grid slot #{i} is missing entity_id")
             state = hass.states.get(entity_id)
-            color = _resolve_color(hass, slot, foreground)
+            color = _resolve_color(slot, foreground)
             icon = slot.get("icon") or icon_for_state(state)
             label = slot.get("name")
             if label is None:
