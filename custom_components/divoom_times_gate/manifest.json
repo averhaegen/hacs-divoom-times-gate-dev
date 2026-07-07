@@ -13,6 +13,6 @@
   "requirements": [
     "Pillow>=10.1.0"
   ],
-  "dependencies": [],
+  "dependencies": ["http"],
   "loggers": ["custom_components.divoom_times_gate"]
 }
