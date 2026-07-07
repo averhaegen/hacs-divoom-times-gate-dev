@@ -117,6 +117,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         # IP self-healing state (see _maybe_heal_ip).
         self._heal_in_progress = False
         self._last_heal_attempt: Any = None
+        self._was_unavailable = False
 
     def record_frame(self, screen: int, jpeg: bytes | None) -> None:
         """Remember what HA last rendered for a screen (None = native content).
@@ -368,6 +369,10 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         finally:
             self._heal_in_progress = False
 
+    def _device_host(self) -> str:
+        """Return the configured device address for logs."""
+        return str(self.config_entry.data.get(CONF_IP_ADDRESS, "unknown"))
+
     # --- periodic render/push ---------------------------------------------
 
     async def _async_update_data(self) -> dict[int, str]:
@@ -383,10 +388,21 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         # is reset to 0 by device._send() on any successful round-trip, even one
         # the device itself rejects with a non-zero error_code).
         if self.device.consecutive_failures >= self._HEAL_FAILURE_THRESHOLD:
+            if not self._was_unavailable:
+                _LOGGER.warning(
+                    "Times Gate at %s became unavailable after %s consecutive failures",
+                    self._device_host(),
+                    self.device.consecutive_failures,
+                )
+                self._was_unavailable = True
             raise UpdateFailed(
-                f"Times Gate at {self.config_entry.data.get(CONF_IP_ADDRESS)} "
+                f"Times Gate at {self._device_host()} "
                 f"unreachable ({self.device.consecutive_failures} consecutive failures)"
             )
+
+        if self._was_unavailable:
+            _LOGGER.info("Times Gate at %s recovered", self._device_host())
+            self._was_unavailable = False
 
         # Native modes: leave the device alone so the face/preset persists.
         if self.display[0] != "dashboard":
