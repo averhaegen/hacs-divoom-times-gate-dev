@@ -1,18 +1,14 @@
 {
   "domain": "divoom_times_gate",
   "name": "Divoom Times Gate",
-  "version": "0.2.1",
-  "codeowners": [
-    "@averhaegen"
-  ],
+  "codeowners": ["@averhaegen"],
+  "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/averhaegen/hacs-divoom-times-gate-dev",
-  "issue_tracker": "https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "config_flow": true,
-  "requirements": [
-    "Pillow>=10.1.0"
-  ],
-  "dependencies": ["http"],
-  "loggers": ["custom_components.divoom_times_gate"]
+  "issue_tracker": "https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues",
+  "loggers": ["custom_components.divoom_times_gate"],
+  "requirements": ["Pillow>=10.1.0"],
+  "version": "0.2.1"
 }
