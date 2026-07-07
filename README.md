@@ -43,6 +43,58 @@ this integration relies on (reverse-engineered + confirmed against the
 3. Settings → Devices & Services → **Add Integration** → *Divoom Times Gate*.
 4. Enter the device **IP address** and the **LocalToken** from the Divoom app.
 
+## Installation & configuration parameters
+
+The integration has one short **installation** form, and the **Configure**
+dialog (options flow) for everything you can tweak later.
+
+### During installation (and HA "Reconfigure")
+
+| Field | What it does | Valid values / default |
+| --- | --- | --- |
+| **IP address** (`ip_address`) | The device's current LAN IP. If discovery finds your Times Gate first, HA offers it in a dropdown; you can also type it manually. | Required. Default: the first discovered Times Gate if HA finds one, otherwise blank. |
+| **LocalToken** (`local_token`) | Required on every local API call. This is the integer shown in the Divoom app under the device's settings. | Required integer. No default. |
+| **Refresh interval** (`refresh_interval`) | How often Home Assistant refreshes the integration while HA is managing the display. | Integer seconds. Default: `60`. In **Configure → Settings & faces**, HA validates `5`–`3600` seconds. |
+
+### In Configure → Settings & faces
+
+| Field | What it does | Valid values / default |
+| --- | --- | --- |
+| **Refresh interval (seconds)** (`refresh_interval`) | Same setting as above, but editable later from the options flow. | `5`–`3600` seconds. Default: `60`. |
+| **Dashboard base preset** (`dashboard_base`) | Optional native **Independent display** preset that HA overlays onto when **Display source** is **HA Dashboard**. Pick a static face (or blank preset) if you want to avoid native live faces reloading underneath the HA overlay. | Dropdown built from the device's current independent presets, plus **Leave device as-is**. Default: **Leave device as-is** (empty value). |
+| **Faces (favorites)** (`faces`) | The favorites lists used to build the native-face dropdowns in Home Assistant. `overall` populates **Display source → Overall Display: ...**; `per_screen` populates **Screen N → Face: ...**. | Object/YAML with two keys: `overall` and `per_screen`, each a list of `{name, clock_id}` objects. Default: a small starter set shipped with the integration (see below). |
+
+Default `faces` value:
+
+```yaml
+overall:
+  - name: Neon
+    clock_id: 1040
+  - name: Clock face
+    clock_id: 581
+  - name: City Time
+    clock_id: 697
+per_screen:
+  - name: Weather ONE
+    clock_id: 182
+  - name: Big Time
+    clock_id: 152
+  - name: Pinkclock
+    clock_id: 669
+  - name: DIY Digital Clock
+    clock_id: 284
+  - name: Retro web cute pastel
+    clock_id: 662
+```
+
+### In Configure → Screen 1–5
+
+Each screen has its own **Pages** (`screens`) editor. This is an object/YAML
+field: enter either a **single page object** or a **list of page objects** that
+rotate by each page's `duration` (seconds). The default for each screen is the
+integration's shipped example page set; as noted above, those examples use the
+author's entity IDs and are meant to be replaced with your own.
+
 ## Display modes (Display source select)
 
 The **Display source** select controls what the whole device shows. When it's
@@ -261,6 +313,19 @@ Each supports **colour + brightness**, plus an **effect** list:
   chosen colour)
 
 The two zones are independent (e.g. blue surround + green back at the same time).
+
+## Removing the integration
+
+To remove the integration from Home Assistant, go to **Settings → Devices &
+Services**, find **Divoom Times Gate**, open the **...** menu, and choose
+**Delete**.
+
+If you also want to remove the downloaded custom integration from HACS
+afterward, go to **HACS → Integrations**, open **Divoom Times Gate**, open the
+**...** menu, and choose **Remove**.
+
+Removing the integration does **not** reset or change anything on the physical
+Times Gate itself — Home Assistant simply stops managing it locally.
 
 ## Credits
 
