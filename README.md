@@ -165,24 +165,24 @@ colours/icons/fonts, value templates, headers — in **[docs/CARDS.md](docs/CARD
 
 The page schema matches
 [pixoo-homeassistant](https://github.com/gickowtf/pixoo-homeassistant), so pages
-are portable between a Pixoo 64 and a Times Gate.
+are portable between a Pixoo 64 and a Times Gate. Components pages always render
+on a 64×64 Pixoo canvas and are then upscaled to the Times Gate's 128×128.
 
 ```yaml
 - page_type: components
-  size: 128            # 128 = native (default); 64 = Pixoo canvas, scaled up
   enabled: "{{ true }}"
   variables:
     soc: "{{ states('sensor.battery')|int }}"
   components:
     - type: text
       content: "{{ soc }}%"
-      position: [64, 26]
+      position: [32, 18]
       align: center        # left | center | right
-      font: 42             # see "Fonts" below
+      font: eleven_pix     # see "Fonts" below
       color: "{% if soc|int < 20 %}red{% else %}green{% endif %}"
     - type: rectangle
-      position: [20, 84]
-      size: [88, 12]
+      position: [10, 42]
+      size: [44, 6]
       color: [80, 80, 80]
       filled: false
     - type: image
@@ -190,16 +190,12 @@ are portable between a Pixoo 64 and a Times Gate.
       position: [0, 0]
 ```
 
-### Fonts — two modes
+### Fonts — bitmap Pixoo fonts
 
-- **Scalable (native, recommended):** set `font` to a **number** (the pixel
-  size), e.g. `font: 42`. Smooth anti-aliased text, mixed case. Best on the
-  Times Gate's full 128×128.
-- **Bitmap (Pixoo-compatible):** set `font` to a **name** — `pico_8`, `gicko`,
-  `five_pix`, `eleven_pix`, `clock`, `pix24`. These match the Pixoo's pixel
-  fonts (text is uppercased, like the Pixoo). Use with `size: 64` so a page
-  copied from a Pixoo config renders identically (it's scaled up to 128 with
-  nearest-neighbour).
+Set `font` to a bitmap font name — `pico_8`, `gicko`, `five_pix`,
+`eleven_pix`, `clock`, `pix24`. These match the Pixoo's pixel fonts; text is
+uppercased like the Pixoo and the 64×64 result is scaled up to 128 with
+nearest-neighbour.
 
 `dispdata_text` and `card` pages use **device font ids** instead (rendered by
 the device, not HA). See **[docs/FONTS.md](docs/FONTS.md)** for a
@@ -238,7 +234,7 @@ Give a screen multiple pages to rotate through them:
 - - page_type: components
     duration: 20
     components:
-      - { type: text, content: "{{ states('sensor.power') }} W", position: [64, 50], align: center, font: 30 }
+      - { type: text, content: "{{ states('sensor.power') }} W", position: [32, 26], align: center, font: eleven_pix }
   - page_type: clock
     clock_id: 182
     duration: 10
@@ -259,12 +255,10 @@ house, industry, trash, weather). Reference them in an `image` component with
 ```
 
 The **PV / solar card** is a `components` page using these icons + bitmap fonts.
-Use `size: 64` so it renders at the original (Pixoo) scale and is upscaled to 128.
 Adjust the `variables` to your own sensors:
 
 ```yaml
 - page_type: components
-  size: 64
   variables:
     power: "{{ states('sensor.solaredge_i1_ac_power')|int }}"
     storage: "{{ states('sensor.YOUR_BATTERY_SOC')|int }}"          # percentage

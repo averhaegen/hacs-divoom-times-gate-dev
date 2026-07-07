@@ -1,10 +1,7 @@
 """Default screen configuration.
 
-The 5 defaults mirror the author's setup and render at native 128x128 with
-scalable fonts (``font`` is the target pixel size; text auto-shrinks to fit the
-screen width, so long values never overflow). The same page schema also supports
-Pixoo-style bitmap fonts (``font: pico_8`` etc.) on a 64 canvas (``size: 64``)
-for drop-in portability with gickowtf/pixoo-homeassistant configs.
+The 5 defaults mirror the author's setup and use Pixoo-compatible bitmap fonts
+on a 64x64 canvas, which the renderer then scales to the Times Gate's 128x128.
 """
 from __future__ import annotations
 
@@ -34,7 +31,6 @@ _OUT = f"{_NETATMO}_netatmo_outdoor_module_temperatuur"
 DEFAULT_SCREENS: list[dict[str, Any]] = [
     {
         "page_type": "components",
-        "size": 128,
         "variables": {
             "soc": f"{{{{ states('{_HAME}_battery_state_of_charge')|int }}}}",
             "col": (
@@ -43,25 +39,24 @@ DEFAULT_SCREENS: list[dict[str, Any]] = [
             ),
         },
         "components": [
-            {"type": "text", "content": "HOME BATTERY", "position": [64, 4], "align": "center", "font": 16, "color": "gray"},
-            {"type": "text", "content": "{{ soc }}%", "position": [64, 20], "align": "center", "font": 52, "color": "{{ col }}"},
-            {"type": "rectangle", "position": [20, 84], "size": [88, 12], "color": [80, 80, 80], "filled": False},
-            {"type": "rectangle", "position": [21, 85], "size": ["{{ (soc|int * 86 / 100)|int }}", 10], "color": "{{ col }}", "filled": True},
-            {"type": "text", "content": "{{ states('" + _HAME + "_combined_power')|int }}W", "position": [64, 104], "align": "center", "font": 15, "color": "white"},
+            {"type": "text", "content": "HOME BATTERY", "position": [32, 2], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "text", "content": "{{ soc }}%", "position": [32, 14], "align": "center", "font": "eleven_pix", "color": "{{ col }}"},
+            {"type": "rectangle", "position": [10, 42], "size": [44, 6], "color": [80, 80, 80], "filled": False},
+            {"type": "rectangle", "position": [11, 43], "size": ["{{ (soc|int * 42 / 100)|int }}", 4], "color": "{{ col }}", "filled": True},
+            {"type": "text", "content": "{{ states('" + _HAME + "_combined_power')|int }}W", "position": [32, 56], "align": "center", "font": "pico_8", "color": "white"},
         ],
     },
     {
         "page_type": "components",
-        "size": 128,
         "components": [
-            {"type": "text", "content": "SOLAR", "position": [64, 4], "align": "center", "font": 16, "color": "gray"},
-            {"type": "text", "content": "{{ states('sensor.solaredge_i1_ac_power')|int }} W", "position": [64, 34], "align": "center", "font": 40, "color": "yellow"},
-            {"type": "text", "content": "Today {{ states('sensor.energy_production_today')|round(1) }} kWh", "position": [64, 102], "align": "center", "font": 15, "color": "white"},
+            {"type": "text", "content": "SOLAR", "position": [32, 2], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "text", "content": "{{ states('sensor.solaredge_i1_ac_power')|int }}", "position": [32, 14], "align": "center", "font": "eleven_pix", "color": "yellow"},
+            {"type": "text", "content": "W", "position": [32, 28], "align": "center", "font": "pico_8", "color": "yellow"},
+            {"type": "text", "content": "TODAY {{ states('sensor.energy_production_today')|round(1) }} KWH", "position": [32, 56], "align": "center", "font": "pico_8", "color": "white"},
         ],
     },
     {
         "page_type": "components",
-        "size": 128,
         "variables": {
             "net": (
                 "{{ ((states('sensor.energyhome_electrical_power_from_grid')|float"
@@ -70,31 +65,29 @@ DEFAULT_SCREENS: list[dict[str, Any]] = [
             ),
         },
         "components": [
-            {"type": "text", "content": "GRID POWER", "position": [64, 4], "align": "center", "font": 16, "color": "gray"},
-            {"type": "text", "content": "{{ net }}", "position": [64, 22], "align": "center", "font": 50, "color": "blue"},
-            {"type": "text", "content": "kW", "position": [64, 76], "align": "center", "font": 15, "color": "gray"},
-            {"type": "text", "content": "Month {{ states('sensor.energy_monthly')|round(0) }} kWh", "position": [64, 104], "align": "center", "font": 15, "color": "white"},
+            {"type": "text", "content": "GRID POWER", "position": [32, 2], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "text", "content": "{{ net }}", "position": [32, 14], "align": "center", "font": "eleven_pix", "color": "blue"},
+            {"type": "text", "content": "KW", "position": [32, 28], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "text", "content": "MONTH {{ states('sensor.energy_monthly')|round(0) }} KWH", "position": [32, 56], "align": "center", "font": "pico_8", "color": "white"},
         ],
     },
     {
         "page_type": "components",
-        "size": 128,
         "components": [
-            {"type": "text", "content": "CLIMATE", "position": [64, 3], "align": "center", "font": 15, "color": "gray"},
-            {"type": "text", "content": "IN {{ states('" + _NETATMO + "_temperatuur')|round(1) }}C", "position": [64, 18], "align": "center", "font": 30, "color": "white"},
-            {"type": "text", "content": "{{ states('" + _NETATMO + "_luchtvochtigheid')|int }}% RH", "position": [64, 52], "align": "center", "font": 14, "color": "gray"},
-            {"type": "rectangle", "position": [16, 72], "size": [96, 1], "color": [60, 60, 60], "filled": True},
-            {"type": "text", "content": "OUT {{ states('" + _OUT + "')|round(1) }}C", "position": [64, 80], "align": "center", "font": 28, "color": "blue"},
-            {"type": "text", "content": "CO2 {{ states('" + _NETATMO + "_kooldioxide')|int }} ppm", "position": [64, 112], "align": "center", "font": 13, "color": "gray"},
+            {"type": "text", "content": "CLIMATE", "position": [32, 2], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "text", "content": "IN {{ states('" + _NETATMO + "_temperatuur')|round(1) }}C", "position": [32, 12], "align": "center", "font": "gicko", "color": "white"},
+            {"type": "text", "content": "{{ states('" + _NETATMO + "_luchtvochtigheid')|int }}% RH", "position": [32, 22], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "rectangle", "position": [8, 33], "size": [48, 1], "color": [60, 60, 60], "filled": True},
+            {"type": "text", "content": "OUT {{ states('" + _OUT + "')|round(1) }}C", "position": [32, 39], "align": "center", "font": "gicko", "color": "blue"},
+            {"type": "text", "content": "CO2 {{ states('" + _NETATMO + "_kooldioxide')|int }} PPM", "position": [32, 56], "align": "center", "font": "pico_8", "color": "gray"},
         ],
     },
     {
         "page_type": "components",
-        "size": 128,
         "components": [
-            {"type": "text", "content": "WEATHER", "position": [64, 4], "align": "center", "font": 16, "color": "gray"},
-            {"type": "text", "content": "{{ states('weather.forecast_thuis_boom')|upper|replace('-',' ') }}", "position": [64, 32], "align": "center", "font": 22, "color": "cyan"},
-            {"type": "text", "content": "{{ states('" + _OUT + "')|round(1) }}C", "position": [64, 64], "align": "center", "font": 36, "color": "white"},
+            {"type": "text", "content": "WEATHER", "position": [32, 2], "align": "center", "font": "pico_8", "color": "gray"},
+            {"type": "text", "content": "{{ states('weather.forecast_thuis_boom')|replace('-',' ') }}", "position": [32, 18], "align": "center", "font": "five_pix", "color": "cyan"},
+            {"type": "text", "content": "{{ states('" + _OUT + "')|round(1) }}C", "position": [32, 38], "align": "center", "font": "eleven_pix", "color": "white"},
         ],
     },
 ]
