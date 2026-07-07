@@ -18,6 +18,9 @@ give you pixel-level drawing.
 > author's entity IDs as worked examples — edit them via **Configure** to match
 > your own sensors.
 
+> ℹ️ This is an unofficial, community-maintained integration. It is not
+> affiliated with, endorsed by, or supported by Divoom.
+
 ## How it works
 
 The Times Gate exposes a local HTTP API (`POST http://<ip>/post`). Key facts
