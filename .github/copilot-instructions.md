@@ -33,8 +33,8 @@ Validate changes by:
 - **`screens.py`** + **`canvas.py`** — render one screen from a Pixoo-compatible
   "page" config (`page_type: components | clock | off`, etc.) into a PIL image.
   Pages are designed to be portable from `gickowtf/pixoo-homeassistant`
-  (Pixoo 64×64 configs drop in via `size: 64` and get nearest-neighbour scaled
-  to the Times Gate's native 128×128).
+  (Pixoo 64×64 configs drop in and get nearest-neighbour scaled to the Times
+  Gate's native 128×128).
 - **`cards.py`** — higher-level "card" page type (`page_type: card`): turns a
   handful of sensors into a prebuilt themed layout. Uses a hybrid rendering
   pattern — HA renders/serves a static background GIF (icons, labels, frames)

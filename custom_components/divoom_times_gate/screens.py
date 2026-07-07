@@ -4,7 +4,6 @@ A screen is a "page" dict using the same schema as
 gickowtf/pixoo-homeassistant, so configs are portable between the two devices:
 
     page_type: components        # components | clock | off
-    size: 64                     # canvas size; 64 (Pixoo-native, default) or 128
     enabled: "{{ ... }}"         # optional template; if false the screen is skipped
     variables: {name: "{{ ... }}"}
     components:
@@ -13,9 +12,9 @@ gickowtf/pixoo-homeassistant, so configs are portable between the two devices:
       - type: rectangle  # position [x,y], size [w,h], color, filled
       - type: templatable# template -> list of component dicts
 
-Pixoo pages are designed for 64x64; we render at ``size`` then scale to the
-device's 128 with nearest-neighbour, so a copied Pixoo page looks identical
-(just pixel-doubled). Set ``size: 128`` for native-resolution screens.
+Pixoo component pages are always rendered on a 64x64 canvas, then scaled to the
+device's 128 with nearest-neighbour so copied Pixoo pages stay pixel-identical
+(just doubled).
 """
 from __future__ import annotations
 
@@ -30,7 +29,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from PIL import Image, ImageOps, ImageSequence
 
-from .canvas import PixelCanvas, font_by_name, is_scalable_font
+from .canvas import PixelCanvas, font_by_name
 from .const import SCREEN_SIZE
 from .vendor_pixoo._colors import render_color
 
@@ -148,7 +147,7 @@ def _render_image_frames_sync(
 
 
 async def render_page(hass: HomeAssistant, page: dict[str, Any]) -> bytes:
-    """Render a components page to a 128x128 JPEG (scaled from its canvas size).
+    """Render a components page to a 128x128 JPEG (always scaled from 64x64).
 
     Templates (``variables``, per-component ``content``/``color``/position/
     ``templatable`` expansion/image source) are all rendered here, on the
@@ -188,7 +187,7 @@ def _resolve_page(hass: HomeAssistant, page: dict[str, Any]) -> dict[str, Any]:
             resolved_components.append(resolved)
         index += 1
 
-    return {"size": int(page.get("size", 64)), "components": resolved_components}
+    return {"components": resolved_components}
 
 
 def _resolve_component(
@@ -208,7 +207,6 @@ def _resolve_component(
             "color": render_color(component.get("color"), hass, variables=variables),
             "align": component.get("align", "").lower(),
             "font": component.get("font"),
-            "max_width": component.get("max_width"),
             "position": tuple(component["position"]),
         }
 
@@ -254,7 +252,7 @@ def _resolve_component(
 
 def _render_resolved_page(resolved: dict[str, Any]) -> bytes:
     """Draw a pre-resolved (template-free) page. Runs in the executor."""
-    canvas = PixelCanvas(resolved["size"])
+    canvas = PixelCanvas(64)
     for component in resolved["components"]:
         try:
             _draw_component(canvas, component)
@@ -275,18 +273,9 @@ def _draw_component(canvas: PixelCanvas, component: dict[str, Any]) -> None:
         text = component["content"]
         color = component["color"]
         align = component["align"]
-        font_spec = component["font"]
-        if is_scalable_font(font_spec):
-            # Native scalable TrueType: keep original case, auto-fit to width.
-            max_width = component["max_width"]
-            canvas.draw_text_scalable(
-                text, component["position"], color, int(font_spec), align,
-                int(max_width) if max_width else None,
-            )
-        else:
-            # Bitmap font: Pixoo uppercases all text — match for visual parity.
-            font = font_by_name(font_spec)
-            canvas.draw_text(text.upper(), component["position"], color, font, align)
+        font_spec = component["font"] if isinstance(component["font"], str) else None
+        font = font_by_name(font_spec)
+        canvas.draw_text(text.upper(), component["position"], color, font, align)
 
     elif ctype == "image":
         img = _load_image_resolved(component["source"])
