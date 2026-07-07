@@ -148,6 +148,11 @@ options-flow YAML editor, diagnostics).
 - [ ] **CI** — GitHub Actions: hassfest, HACS validation, ruff, mypy --strict.
 - [ ] **Bronze** — brands (icon/logo PR to home-assistant/brands), removal docs,
   config-flow test coverage.
+- [ ] **Final repo name + brands submission** — decide the definitive repo
+  (this is the `-dev` repo) and whether the `divoom_times_gate` domain stays;
+  then finalize the draft icon in `brands/` (validate design with Alexander
+  first) and submit the one-shot PR to home-assistant/brands. Releases are
+  live since v0.2.0, so HACS shows proper version numbers already.
 - [ ] **Silver** — reauthentication flow (LocalToken can change → catch
   `"DeviceToken is err"`), log-when-unavailable, test coverage.
 - [~] **Gold** — discovery **done** (cloud LAN lookup picker in the config
