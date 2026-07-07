@@ -29,7 +29,7 @@ rules:
   config-entry-unloading: done
   integration-owner: done
   entity-unavailable: done
-  log-when-unavailable: todo
+  log-when-unavailable: done
   parallel-updates: done
   reauthentication-flow: todo
   test-coverage: todo
