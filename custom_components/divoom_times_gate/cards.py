@@ -13,15 +13,14 @@ readability on 128px, not a device limit (TextId < 40 per docs/API.md §4.10).
 from __future__ import annotations
 
 import hashlib
-import logging
 from io import BytesIO
+import logging
 from typing import Any
 from urllib.parse import quote
 
-from PIL import Image, ImageDraw, ImageFont
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
+from PIL import Image, ImageDraw, ImageFont
 
 from .const import NATIVE_KIND_TYPES, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
@@ -362,7 +361,7 @@ def render_sensor_grid(
         # Separator lines between cells (subtle, dark gray).
         if len(slots) > 2:
             draw.line([(SCREEN_SIZE // 2, 0), (SCREEN_SIZE // 2, SCREEN_SIZE)], fill=sep_color)
-        for _, cy, _, ch in cells[1::2]:
+        for _, cy, _, _ch in cells[1::2]:
             if cy > 0:
                 draw.line([(0, cy), (SCREEN_SIZE, cy)], fill=sep_color)
 

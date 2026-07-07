@@ -1,0 +1,23 @@
+target-version = "py313"
+line-length = 100
+
+extend-exclude = [
+    "custom_components/divoom_times_gate/vendor_pixoo/_font.py",
+]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line length handled by formatter, not worth failing CI over
+]
+
+[lint.isort]
+force-sort-within-sections = true

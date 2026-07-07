@@ -3,17 +3,16 @@ from __future__ import annotations
 
 from io import BytesIO
 
-import voluptuous as vol
-from PIL import Image, ImageDraw
-
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_call_later
+from PIL import Image, ImageDraw
+import voluptuous as vol
 
-from .const import DOMAIN, SCREEN_COUNT, SCREEN_SIZE
 from .canvas import _scalable_font  # reuse the scalable font loader
+from .const import DOMAIN, SCREEN_COUNT, SCREEN_SIZE
 from .screens import render_image_frames
 
 SERVICE_SET_CLOCK_FACE = "set_clock_face"

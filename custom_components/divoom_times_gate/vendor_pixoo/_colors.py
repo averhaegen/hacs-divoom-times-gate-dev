@@ -2,11 +2,12 @@
 # https://github.com/gickowtf/pixoo-homeassistant — unmodified except this header.
 # Kept verbatim so Times Gate screen configs render identically to the Pixoo.
 
+import logging
+
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template
 
-import logging
 _LOGGER = logging.getLogger(__name__)
 
 # https://drafts.csswg.org/css-color-4/#named-colors

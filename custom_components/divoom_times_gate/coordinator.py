@@ -13,14 +13,12 @@ every tick (with page rotation); "face"/"off" screens are set once on change.
 """
 from __future__ import annotations
 
-import hashlib
-import logging
 from datetime import timedelta
+import hashlib
 from io import BytesIO
+import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
-
-from PIL import Image
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -28,6 +26,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from PIL import Image
 
 from .const import (
     CONF_DASHBOARD_BASE,
@@ -35,10 +34,8 @@ from .const import (
     CONF_DISPDATA_SECRET,
     CONF_IP_ADDRESS,
     CONF_MAC,
-    CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
     DEFAULT_DURATION,
-    DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
     NATIVE_KIND_TYPES,
     SCREEN_COUNT,

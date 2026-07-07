@@ -7,8 +7,8 @@ by hand and let us read the device's native faces.
 """
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
+import logging
 
 import aiohttp
 

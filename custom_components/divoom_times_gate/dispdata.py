@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 
 from aiohttp import web
-
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError

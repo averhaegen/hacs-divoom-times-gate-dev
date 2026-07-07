@@ -11,14 +11,13 @@ table below covers the common sensor device classes instead.
 """
 from __future__ import annotations
 
+from functools import lru_cache
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 
-from PIL import ImageDraw, ImageFont
-
 from homeassistant.core import State
+from PIL import ImageDraw, ImageFont
 
 _LOGGER = logging.getLogger(__name__)
 

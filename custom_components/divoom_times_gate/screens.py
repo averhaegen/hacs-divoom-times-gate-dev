@@ -20,16 +20,15 @@ device's 128 with nearest-neighbour, so a copied Pixoo page looks identical
 from __future__ import annotations
 
 import base64
+from io import BytesIO
 import logging
 import os
-import urllib.request
-from io import BytesIO
 from typing import Any
-
-from PIL import Image, ImageOps, ImageSequence
+import urllib.request
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
+from PIL import Image, ImageOps, ImageSequence
 
 from .canvas import PixelCanvas, font_by_name, is_scalable_font
 from .const import SCREEN_SIZE
