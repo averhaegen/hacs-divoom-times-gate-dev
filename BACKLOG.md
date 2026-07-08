@@ -188,6 +188,60 @@ options-flow YAML editor, diagnostics).
   far. No update-*trigger* endpoint has been found yet (only update-*check*).
   Decision (2026-07-08): worth documenting, not worth building yet — revisit
   if/when account-auth becomes worthwhile for other reasons too.
+- [ ] **`UserLogin` single-session conflict — confirmed live, is a hard
+  blocker as-is.** Only one `Token` is valid per Divoom account at a time —
+  logging in externally (e.g. from HA) immediately invalidates whatever
+  token the real phone app is holding, and vice versa. Confirmed live: a
+  test login from this dev environment instantly kicked the user's phone
+  app with a visible **"Information mismatch, please login again"** error.
+  Force-quit/reopen of the phone app does *not* trigger a fresh `UserLogin`
+  (it silently reuses its cached token), so this conflict only fires on an
+  actual login event — but any HA-side re-auth (e.g. after its own token
+  goes stale) would cause it again. This makes a naive "HA logs into your
+  personal Divoom account" design actively hostile to normal phone app use,
+  not just a security tradeoff — **treat this as a hard blocker**, not a
+  risk to mitigate, unless solved via account separation (see next item).
+- [ ] **Possible fix: Divoom's "Add friend's device" / share-code feature
+  (buddy system).** The app has a device-level "share code" ("scan this
+  share code to connect to your device and send photos or pixel
+  animations — friends only need to do this once") under device settings,
+  backed by APK-confirmed commands `ApplyBuddy`/`ConfirmBuddy`/`RefuseBuddy`/
+  `RemoveBuddy`/`GetBuddyInfo` (found via `Grayda/pixoo_api`'s decompiled
+  command list — a separate mechanism from `Device/ShareDevice`, also in
+  that list but not yet located in the app's UI). If a second, dedicated
+  "Home Assistant" Divoom account could be buddy-linked to the device this
+  way, HA could authenticate as *that* account — a fully separate token
+  pool from the user's personal phone session, solving the conflict above
+  entirely, with a smaller blast radius (throwaway account) if ever leaked.
+  **Unverified**: the share-code wording ("send photos or pixel
+  animations") suggests this may only grant one-directional content-push
+  access, not the read access `Device/GetListV2`/`Device/GetUpdateInfo`
+  would need for a buddy-linked account's own `Token`. Needs a second
+  Divoom account to actually test. Parked 2026-07-08 pending that test —
+  do this before any further cloud-auth design work, since it changes the
+  entire feasibility picture if it works.
+- [ ] **Research pass done — no existing OSS project polls firmware
+  endpoints; best practice found is a 23h token cache + negative-cache
+  cooldown, but none solve the session-conflict problem.** Surveyed
+  `ztomer/divoom_lib`, `konst3658-crypto/divoom-times-frame-research`,
+  `tidyhf/Pixoo64-Advanced-Tools`, `fabkury/makapix`, `redphx/apixoo`,
+  `Grayda/pixoo_api` (both repos spot-checked and confirmed to exist).
+  None implement `Device/GetListV2`/`Device/GetUpdateInfo` at all — no
+  prior art for polling behavior/frequency. `ztomer/divoom_lib` is the
+  most security-mature (email+password in `~/.config/divoom-control/
+  config.ini` at `0o600`, session cached to `auth_token.json` at `0o600`
+  with a 23h TTL, a 120s negative-auth-fail cooldown to avoid hammering
+  Divoom's servers, log-redaction helper for tokens, and an alternate
+  **guest login** path (`User/NewGuest`, HMAC-MD5(UTC) signed with a
+  hardcoded APK key, no account needed at all) — but nobody has verified
+  whether a guest token can read `Device/GetListV2`/`GetUpdateInfo` for a
+  specific device, so it's unclear if guest login sidesteps the whole
+  credentials question too. No project handles the single-session-token
+  conflict (`ReturnCode: 11`) automatically. No Divoom ToS statement
+  found anywhere prohibiting third-party/unofficial API use, but also none
+  confirming it's fine — `docs/legal/` now has the real privacy
+  policy/user agreement (captured 2026-07-08) for a proper review before
+  building anything here.
 - [x] **"Replicate 5 custom text screens" investigated — not viable as a
   content-read.** `Channel/Get5LcdInfoV2` (cloud) does return live per-screen
   `ClockId`s for each "Control" preset (confirmed screens 0/1/3/4 populated,
