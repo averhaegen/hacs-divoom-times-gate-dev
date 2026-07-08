@@ -41,6 +41,11 @@ THEMES: dict[str, dict[str, str]] = {
     "forest": {"background": "#0C1F17", "foreground": "#4ADE80"},    # green
     "sunset": {"background": "#2A1020", "foreground": "#FF8C69"},    # warm coral
     "terminal": {"background": "#001200", "foreground": "#33FF66"},  # CRT green
+    # Colours sampled from the Divoom app's own "Cyberpunk"/"Neon"/"Sci-Fi"
+    # dial themes (2026-07-08 reference screenshot) for a matching look.
+    "cyberpunk": {"background": "#000000", "foreground": "#FAFA50"},  # hazard yellow
+    "neon": {"background": "#000000", "foreground": "#E619B3"},       # magenta glow
+    "sci_fi": {"background": "#000000", "foreground": "#33E6FA"},     # circuit cyan
 }
 DEFAULT_THEME = "dark"
 

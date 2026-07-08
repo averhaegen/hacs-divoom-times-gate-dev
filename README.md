@@ -149,7 +149,7 @@ without drawing anything by hand:
 ```yaml
 - page_type: card
   card: sensor_grid
-  theme: navy            # dark | light | navy | forest | sunset | terminal
+  theme: navy            # dark | light | navy | forest | sunset | terminal | cyberpunk | neon | sci_fi
   slots:
     - entity_id: sensor.solar_power
       color: "#FFB300"

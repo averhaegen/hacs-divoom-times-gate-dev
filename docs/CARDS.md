@@ -27,7 +27,7 @@ The 8-slot ceiling is a readability choice, not a device limit.
 ```yaml
 page_type: card
 card: sensor_grid        # currently the only card type
-theme: dark              # dark | light | navy | forest | sunset | terminal
+theme: dark              # dark | light | navy | forest | sunset | terminal | cyberpunk | neon | sci_fi
 # background: "#0B1E3B"  # override the theme's canvas colour
 # foreground: "#FFB300"  # override the theme's default icon/value colour
 layout: auto             # auto | list | grid
@@ -66,6 +66,12 @@ automatically.
 | `forest` | dark green | green |
 | `sunset` | dark plum | coral |
 | `terminal` | near-black | CRT green |
+| `cyberpunk` | black | hazard yellow |
+| `neon` | black | magenta glow |
+| `sci_fi` | black | circuit cyan |
+
+The last three are sampled from the Divoom app's own Cyberpunk/Neon/Sci-Fi
+dial themes for a matching look.
 
 `value_template` values are rendered fresh in HA on every device poll (via
 the `dispdata_tpl` endpoint), so unit conversions, rounding and formatting
