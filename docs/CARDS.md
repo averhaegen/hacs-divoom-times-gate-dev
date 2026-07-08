@@ -31,13 +31,18 @@ theme: dark              # dark | light | navy | forest | sunset | terminal | cy
 # background: "#0B1E3B"  # override the theme's canvas colour
 # primary: "#FFB300"     # override the theme's icon/value colour
 # secondary: "#8C6200"   # override the theme's label colour
-# foreground: "#FFB300"  # legacy alias for `primary` (pre-2026-07-08 configs)
 layout: auto             # auto | list | grid
 header: time_short       # list layout: native element top-right (hh:mm).
                          # Any dispdata native kind (time, weekday_3,
                          # temperature, ...) or "none" to disable.
 update_time: 10          # poll interval (s), page default
 font: 4                  # device font id for values (see docs/FONTS.md)
+# Note: this is a numeric device font id (native Pixoo fonts, see
+# docs/FONTS.md) — a different naming system from `components` pages,
+# where `font:` is one of six bitmap font *names* (pico_8, gicko, ...).
+# Card/dispdata_text pages always use numeric ids; components pages
+# always use names. They are not interchangeable.
+label_render: native      # native (device-scrolled text item, default) | static (baked into background, no scroll)
 slots:
   - entity_id: sensor.solar_power
     name: Solar          # label; default: the entity's friendly name
@@ -58,8 +63,8 @@ slots:
 `primary` / `secondary` directly (each overrides the theme individually).
 `primary` is the default for icons and values; `secondary` is the default
 label colour; a per-slot `color` or `color_template` still overrides
-`primary` for that entity. `foreground` is still accepted as a legacy alias
-for `primary`. Separators derive automatically from `background`/`primary`.
+`primary` for that entity. Separators derive automatically from
+`background`/`primary`.
 
 | Theme | Background | Primary (icon/value) | Secondary (label) |
 |---|---|---|---|
@@ -82,15 +87,16 @@ the `dispdata_tpl` endpoint), so unit conversions, rounding and formatting
 always reflect the current state. Battery-class entities without an explicit
 icon get a dynamic fill-level icon (`mdi:battery-70` etc.), like HA's own UI.
 
-**Scrolling labels** (`scroll_labels: true`, the default in list/rows
+**Label rendering** (`label_render: native`, the default in list/rows
 layouts): labels are sent as device text items (type 22) instead of being
 baked into the background — the device scrolls them automatically when the
 name is wider than the row, so long entity names stay fully readable.
-Options: `label_font` (default 2), `label_color` (default: a dimmed
-foreground), `label_speed` (scroll ms/step, default 60). Set
-`scroll_labels: false` for static truncated labels in the background. Grid
-cells keep baked centered labels. (Note: label scrolling depends on device
-firmware support — not observed on all units yet.)
+Options: `label_font` (default 2), `label_color` (default: the theme's
+`secondary`), `label_speed` (scroll ms/step, default 60, native only). Set
+`label_render: static` for labels baked directly into the background image —
+never scrolls, always truncated to a fixed length. Grid cells always keep
+baked centered labels regardless of `label_render`. (Note: label scrolling
+depends on device firmware support — not observed on all units yet.)
 
 ### Notes
 

@@ -195,21 +195,26 @@ def render_sensor_grid(
     # `primary`/`secondary` override individually. `background` fills the
     # canvas, `primary` is the default for icons + values (per-slot `color`/
     # `color_template` still override those), `secondary` is the default
-    # label colour. `foreground` is still accepted as a legacy alias for
-    # `primary` (pre-2026-07-08 configs).
+    # label colour.
     theme = THEMES.get(str(page.get("theme", DEFAULT_THEME)).lower(), THEMES[DEFAULT_THEME])
     background = str(page.get("background") or theme["background"])
-    primary = str(page.get("primary") or page.get("foreground") or theme["primary"])
+    primary = str(page.get("primary") or theme["primary"])
     secondary = str(page.get("secondary") or theme.get("secondary") or _hex(_dim(primary)))
     img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), background)
     draw = ImageDraw.Draw(img)
     items: list[dict[str, Any]] = []
     font_default = int(page.get("font", 4))
     update_default = int(page.get("update_time", 10))
-    # Labels as device items (type 22): the device scrolls them automatically
-    # when the text is wider than TextWidth — long names stay readable instead
-    # of being truncated in the baked background.
-    scroll_labels = bool(page.get("scroll_labels", True))
+    # `label_render` controls where a slot's label is drawn:
+    #   "native" (default) — sent as a device text item (type 22); the device
+    #     itself scrolls it automatically when the name is wider than the
+    #     row, so long entity names stay fully readable.
+    #   "static" — baked directly into the HA-rendered background image;
+    #     never scrolls, always truncated to a fixed length.
+    label_render = str(page.get("label_render", "native")).lower()
+    if label_render not in ("native", "static"):
+        raise ValueError(f"sensor_grid: unknown label_render {label_render!r}")
+    native_labels = label_render == "native"
     label_font_id = int(page.get("label_font", 2))
     # Labels default to the theme's secondary colour (readable on any
     # background, and distinct from the value/icon colour for two-tone
@@ -320,7 +325,7 @@ def render_sensor_grid(
             text_x = 2 + icon_size + 5
 
             if stacked:
-                if scroll_labels:
+                if native_labels:
                     label_item(i, label, text_x, y + 1, right - text_x)
                 else:
                     draw.text((text_x, y + 1), str(label)[:18], font=_label_font(11), fill=label_color)
@@ -352,7 +357,7 @@ def render_sensor_grid(
                 icon_size = 32
                 draw_icon(draw, icon, (6, y + (h - icon_size) // 2), icon_size, color)
                 text_x = 6 + icon_size + 6
-                if scroll_labels:
+                if native_labels:
                     label_item(i, label, text_x, y + 10, SCREEN_SIZE - text_x - 2)
                 else:
                     draw.text((text_x, y + 10), str(label)[:16], font=_label_font(11), fill=label_color)

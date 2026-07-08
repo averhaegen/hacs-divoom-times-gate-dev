@@ -181,8 +181,8 @@ gallery, experimental native-face authoring). In priority order:
   in the HA-rendered background, cardbg HTTP view (digest URL as
   cache-buster), type-23 value overlays, per-slot color/color_template.
   Device-verified 2026-07-05 (background GIF fetch, icons, type-23 polling).
-  Since extended with: named themes + `background`/`foreground` (palette
-  index-0 transparency worked around via a reserved sentinel), MDI icons with
+  Since extended with: named themes + `background`/`primary`/`secondary`
+  (palette index-0 transparency worked around via a reserved sentinel), MDI icons with
   dynamic battery levels, per-slot `value_template`, `page_type: image` +
   `show_image` service. Still open from the original MVP:
   - Animated background (Solar card with moving sun rays) — needs an
