@@ -268,24 +268,40 @@ options-flow YAML editor, diagnostics).
   problem is purely how a non-phone client (HA) would obtain one without
   either storing the user's real password or forcing a `UserLogin` that
   kicks the phone.
-- [ ] **Next lead to try: is there a refresh/re-issue mechanism that lets
-  two clients hold valid tokens for the same account simultaneously
-  (rather than one login invalidating the other)?** E.g. a `Token/Refresh`-
-  style call, a device-scoped token distinct from the account-wide one, or
-  multiple concurrent "device" sessions per account (some mobile-app
-  ecosystems allow N active sessions, each independently refreshable,
-  instead of Divoom's apparent single-slot model). Per `Grayda/pixoo_api`'s
-  notes, the `Token` itself appears to just be a Unix timestamp of when
-  `UserLogin` was called — worth checking whether the server actually
-  invalidates by exact-token-mismatch or by "only the most recent
-  timestamp wins," which would confirm there's no separate refresh
-  concept, just last-login-wins. No known OSS project or captured traffic
-  shows a distinct refresh endpoint yet — would need either a fresh
-  APK decompile pass (looking for `Token/Refresh`, `User/RefreshToken`,
-  or similar) or another live mitmproxy capture session on an action that
-  might trigger silent token renewal (e.g. leave the app backgrounded for
-  a long time, or force a network reconnect) to see if it ever
-  re-requests a token without a full `UserLogin`.
+- [x] **Refresh-token angle tested live — dead end, confirmed structurally
+  impossible with this API.** Probed 14 plausible refresh/re-auth endpoint
+  names (`User/RefreshToken`, `Token/Refresh`, `User/RenewToken`,
+  `User/KeepAlive`, `User/Heartbeat`, `APP/RefreshToken`, `User/CheckToken`,
+  `User/CheckLogin`, `User/ValidateToken`, `User/AutoLogin`,
+  `User/TokenLogin`, `User/GetToken`, `User/ReLogin`, `User/Refresh`)
+  against `appin.divoom-gz.com` with a valid live token attached — every
+  single one returned the same routing-404
+  (`{"ReturnCode":10,"ReturnMessage":"Command is not
+  match","Name":"IndexDefaultMethod"}`), meaning none of these routes
+  exist server-side. More importantly, re-examined what the phone actually
+  does on relaunch (already established earlier: force-quit/reopen fires
+  **zero** network calls related to auth) — this proves there is no
+  server-side refresh *concept* to find. The phone's "auto-login" is
+  entirely client-side: it just caches the one `Token`/`UserId` pair
+  locally after the last real `UserLogin` and re-sends that same literal
+  value on every subsequent API call, forever, with no renewal round-trip.
+  Combined with `Grayda/pixoo_api`'s note that `Token` looks like a bare
+  Unix timestamp, this points to the server implementing a flat
+  "does this Token match the last one issued for this UserId?" check —
+  i.e. **one account = one valid Token slot, last `UserLogin` wins,
+  no independent per-client sessions, no OAuth-style access/refresh
+  split.** There is no way for two clients (a phone + HA) to each hold
+  their own independently-valid token for the same account with this API
+  as it currently stands. **Overall conclusion for this whole investigation
+  thread (guest login + refresh token, both closed 2026-07-08):** the
+  cloud firmware endpoints are real and useful in isolation, but cloud
+  auth cannot be added to this integration today without either (a) the
+  user accepting that HA and the phone app can never both be freshly
+  logged in without kicking the other, or (b) the buddy/share-code lead
+  above (still unverified, needs a second account to test) turning out to
+  grant a buddy account read access to `Device/GetListV2`/`GetUpdateInfo`
+  for someone else's device. Until one of those is resolved, cloud-auth
+  firmware features should stay out of scope for the integration.
 - [x] **"Replicate 5 custom text screens" investigated — not viable as a
   content-read.** `Channel/Get5LcdInfoV2` (cloud) does return live per-screen
   `ClockId`s for each "Control" preset (confirmed screens 0/1/3/4 populated,
