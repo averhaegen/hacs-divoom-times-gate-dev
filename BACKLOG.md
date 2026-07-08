@@ -242,6 +242,50 @@ options-flow YAML editor, diagnostics).
   confirming it's fine — `docs/legal/` now has the real privacy
   policy/user agreement (captured 2026-07-08) for a proper review before
   building anything here.
+- [x] **Guest login (`User/NewGuest`) tested live — dead end, endpoint no
+  longer exists on Divoom's current backend.** Replayed
+  `ztomer/divoom_lib`'s documented HMAC-MD5(UTC) algorithm exactly
+  (`HMAC_KEY = b"DivoomBluetoothDevice<>?"` from their APK analysis)
+  against `appin.divoom-gz.com`, both with and without a valid session
+  token attached, and using both server-reported and local UTC. Every
+  attempt returned `{"ReturnCode":10,"ReturnMessage":"Command is not
+  match","Name":"IndexDefaultMethod"}` — a **routing 404**, not an auth
+  rejection (contrast with real endpoints like `Device/GetUpdateInfo`
+  called with no token, which correctly resolve and return
+  `{"ReturnCode":11,"ReturnMessage":"Token is not match"}`). Also
+  confirmed as a side-effect that `APP/GetServerUTC` itself now requires
+  a valid `Token`/`UserId` (`ReturnCode:11` without one, `ReturnCode:0`
+  with a real token) — contradicting `ztomer/divoom_lib`'s assumption
+  that it's a public unauthenticated endpoint. Conclusion: guest login
+  is either removed or moved to a path/host we haven't found; not worth
+  further guessing without new evidence (e.g. a newer decompiled APK).
+  Also separately confirmed (2026-07-08) that a real phone session token,
+  extracted live from a mitmproxy capture of the user's own login, reads
+  `Device/GetListV2` (`DeviceVersion: 4000170`) and `Device/GetUpdateInfo`
+  fine with **no session-conflict side effect** — only a fresh
+  `UserLogin` call invalidates the other party's token, confirming
+  read-only polling calls are safe once a token is already in hand; the
+  problem is purely how a non-phone client (HA) would obtain one without
+  either storing the user's real password or forcing a `UserLogin` that
+  kicks the phone.
+- [ ] **Next lead to try: is there a refresh/re-issue mechanism that lets
+  two clients hold valid tokens for the same account simultaneously
+  (rather than one login invalidating the other)?** E.g. a `Token/Refresh`-
+  style call, a device-scoped token distinct from the account-wide one, or
+  multiple concurrent "device" sessions per account (some mobile-app
+  ecosystems allow N active sessions, each independently refreshable,
+  instead of Divoom's apparent single-slot model). Per `Grayda/pixoo_api`'s
+  notes, the `Token` itself appears to just be a Unix timestamp of when
+  `UserLogin` was called — worth checking whether the server actually
+  invalidates by exact-token-mismatch or by "only the most recent
+  timestamp wins," which would confirm there's no separate refresh
+  concept, just last-login-wins. No known OSS project or captured traffic
+  shows a distinct refresh endpoint yet — would need either a fresh
+  APK decompile pass (looking for `Token/Refresh`, `User/RefreshToken`,
+  or similar) or another live mitmproxy capture session on an action that
+  might trigger silent token renewal (e.g. leave the app backgrounded for
+  a long time, or force a network reconnect) to see if it ever
+  re-requests a token without a full `UserLogin`.
 - [x] **"Replicate 5 custom text screens" investigated — not viable as a
   content-read.** `Channel/Get5LcdInfoV2` (cloud) does return live per-screen
   `ClockId`s for each "Control" preset (confirmed screens 0/1/3/4 populated,
