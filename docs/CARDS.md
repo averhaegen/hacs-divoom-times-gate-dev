@@ -29,7 +29,9 @@ page_type: card
 card: sensor_grid        # currently the only card type
 theme: dark              # dark | light | navy | forest | sunset | terminal | cyberpunk | neon | sci_fi
 # background: "#0B1E3B"  # override the theme's canvas colour
-# foreground: "#FFB300"  # override the theme's default icon/value colour
+# primary: "#FFB300"     # override the theme's icon/value colour
+# secondary: "#8C6200"   # override the theme's label colour
+# foreground: "#FFB300"  # legacy alias for `primary` (pre-2026-07-08 configs)
 layout: auto             # auto | list | grid
 header: time_short       # list layout: native element top-right (hh:mm).
                          # Any dispdata native kind (time, weekday_3,
@@ -40,7 +42,7 @@ slots:
   - entity_id: sensor.solar_power
     name: Solar          # label; default: the entity's friendly name
     icon: mdi:solar-power  # default: entity icon, else device_class icon
-    color: "#FFB300"     # icon + value colour (overrides foreground)
+    color: "#FFB300"     # icon + value colour (overrides theme's primary)
   - entity_id: sensor.home_battery_soc
     color_template: >-   # state-dependent colour (icon + value)
       {% set s = states('sensor.home_battery_soc') | int %}
@@ -53,25 +55,27 @@ slots:
 ```
 
 **Colours & themes.** Pick a named `theme` (below) or set `background` /
-`foreground` directly (either overrides the theme). `foreground` is the
-default for icons and values; a per-slot `color` or `color_template` still
-overrides it for that entity. Labels and separators derive from the theme
-automatically.
+`primary` / `secondary` directly (each overrides the theme individually).
+`primary` is the default for icons and values; `secondary` is the default
+label colour; a per-slot `color` or `color_template` still overrides
+`primary` for that entity. `foreground` is still accepted as a legacy alias
+for `primary`. Separators derive automatically from `background`/`primary`.
 
-| Theme | Background | Foreground |
-|---|---|---|
-| `dark` (default) | black | white |
-| `light` | white | near-black |
-| `navy` | deep blue | amber |
-| `forest` | dark green | green |
-| `sunset` | dark plum | coral |
-| `terminal` | near-black | CRT green |
-| `cyberpunk` | black | hazard yellow |
-| `neon` | black | magenta glow |
-| `sci_fi` | black | circuit cyan |
+| Theme | Background | Primary (icon/value) | Secondary (label) |
+|---|---|---|---|
+| `dark` (default) | black | white | dim white |
+| `light` | white | near-black | dimmer near-black |
+| `navy` | deep blue | amber | dim amber |
+| `forest` | dark green | green | dim green |
+| `sunset` | dark plum | coral | dim coral |
+| `terminal` | near-black | CRT green | dim CRT green |
+| `cyberpunk` | black | cyan | hazard yellow |
+| `neon` | black | magenta glow | circuit cyan |
+| `sci_fi` | black | circuit cyan | bright cyan highlight |
 
 The last three are sampled from the Divoom app's own Cyberpunk/Neon/Sci-Fi
-dial themes for a matching look.
+dial themes for a matching look — those three genuinely use two accent
+colours in the source app (value vs. label), unlike the first six.
 
 `value_template` values are rendered fresh in HA on every device poll (via
 the `dispdata_tpl` endpoint), so unit conversions, rounding and formatting

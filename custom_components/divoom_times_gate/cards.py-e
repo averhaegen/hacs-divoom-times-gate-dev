@@ -32,8 +32,8 @@ MAX_SLOTS = 8
 _DEFAULT_FOREGROUND = "#FFFFFF"
 _DEFAULT_BACKGROUND = "#000000"
 
-# Named colour themes (page option ``theme:``). ``background``/``primary``/
-# ``secondary`` in the page override the chosen theme's values individually.
+# Named colour themes (page option ``theme:``). ``background``/``foreground``
+# in the page override the chosen theme's values individually.
 THEMES: dict[str, dict[str, str]] = {
     # "primary" is the default icon/value colour; "secondary" is the default
     # label colour. Both are overridable per-page (see render_sensor_grid).
@@ -95,7 +95,7 @@ def _hex(rgb: tuple[int, int, int]) -> str:
 
 
 def _dim(color: str, factor: float = 0.55) -> tuple[int, int, int]:
-    """A dimmed version of a hex colour (fallback secondary/label colour)."""
+    """A dimmed version of a hex colour, for labels against the foreground."""
     r, g, b = _rgb(color)
     return (int(r * factor), int(g * factor), int(b * factor))
 
@@ -217,8 +217,8 @@ def render_sensor_grid(
     # MUST be a hex string: type-22 label items send this straight to the
     # device, which rejects a list/tuple colour ("Request data illegal json").
     label_color = str(page.get("label_color") or "") or secondary
-    # Dividers: a subtle line blended between bg and primary — matches any
-    # theme (a dimmed primary alone looked muddy/grey on coloured backgrounds).
+    # Dividers: a subtle line blended between bg and fg — matches any theme
+    # (a dimmed foreground alone looked muddy/grey on coloured backgrounds).
     sep_color = _blend(background, primary, 0.22)
 
     def label_item(i: int, text: str, x: int, y: int, w: int) -> None:
@@ -291,7 +291,7 @@ def render_sensor_grid(
                 "Textheight": 16,
                 "speed": 50,
                 "align": 5,  # right (Times Gate: 1 left / 3 centre / 5 right)
-                "color": str(page.get("header_color") or primary),
+                "color": str(page.get("header_color") or foreground),
             }
         )
 
@@ -306,7 +306,7 @@ def render_sensor_grid(
             if not entity_id:
                 raise ValueError(f"sensor_grid slot #{i} is missing entity_id")
             state = hass.states.get(entity_id)
-            color = _resolve_color(slot, primary)
+            color = _resolve_color(slot, foreground)
             icon = slot.get("icon") or icon_for_state(state)
             label = slot.get("name")
             if label is None:
@@ -342,7 +342,7 @@ def render_sensor_grid(
             if not entity_id:
                 raise ValueError(f"sensor_grid slot #{i} is missing entity_id")
             state = hass.states.get(entity_id)
-            color = _resolve_color(slot, primary)
+            color = _resolve_color(slot, foreground)
             icon = slot.get("icon") or icon_for_state(state)
             label = slot.get("name")
             if label is None:
