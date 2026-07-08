@@ -31,6 +31,8 @@ theme: dark              # dark | light | navy | forest | sunset | terminal | cy
 # background: "#0B1E3B"  # override the theme's canvas colour
 # primary: "#FFB300"     # override the theme's icon/value colour
 # secondary: "#8C6200"   # override the theme's label colour
+# dividers: true          # false hides the separator lines between rows/cells
+# divider_color: "#333333" # override the default blended divider colour
 layout: auto             # auto | list | grid
 header: time_short       # list layout: native element top-right (hh:mm).
                          # Any dispdata native kind (time, weekday_3,
@@ -63,8 +65,9 @@ slots:
 `primary` / `secondary` directly (each overrides the theme individually).
 `primary` is the default for icons and values; `secondary` is the default
 label colour; a per-slot `color` or `color_template` still overrides
-`primary` for that entity. Separators derive automatically from
-`background`/`primary`.
+`primary` for that entity. Divider lines between rows/cells derive
+automatically from `background`/`primary`, or set `divider_color` to
+override, or `dividers: false` to hide them entirely.
 
 | Theme | Background | Primary (icon/value) | Secondary (label) |
 |---|---|---|---|

@@ -224,7 +224,15 @@ def render_sensor_grid(
     label_color = str(page.get("label_color") or "") or secondary
     # Dividers: a subtle line blended between bg and primary — matches any
     # theme (a dimmed primary alone looked muddy/grey on coloured backgrounds).
-    sep_color = _blend(background, primary, 0.22)
+    # `dividers: false` disables them entirely; `divider_color` overrides the
+    # blended default.
+    show_dividers = bool(page.get("dividers", True))
+    if page.get("divider_color"):
+        sep_color: str | tuple[int, int, int] = str(page["divider_color"])
+    elif show_dividers:
+        sep_color = _blend(background, primary, 0.22)
+    else:
+        sep_color = background
 
     def label_item(i: int, text: str, x: int, y: int, w: int) -> None:
         items.append(
