@@ -196,6 +196,18 @@ gallery, experimental native-face authoring). In priority order:
   device_classes, options), registry, `page_type: card` in the coordinator.
 - [ ] **Gallery cards** — battery, range_bar, grid_power, energy_cost,
   climate, weather, gauge, text_value (variants = same card, more slots).
+- [ ] **Split value/unit text boxes** — option to render a slot's value and
+  unit as two independent text components instead of one concatenated
+  string (e.g. `72` + `°F`, `12` + `km/h`). Motivation: several bitmap fonts
+  ship dedicated glyphs for `°C`/`°F`/arrows/units that look better isolated
+  than mixed into a variable-width value string, and letting each box
+  align independently (value right-aligned in its box, unit left-aligned
+  in its own, positioned right after) keeps the layout tidy regardless of
+  how many digits the value has. Needs: a `value`/`unit` pair (or
+  `unit_position: right|stacked`) in the component/card slot schema,
+  independent `font`/`color` per box (so the unit can use a symbol font
+  while the value uses a numeric one), and fallback to today's single
+  concatenated string when `unit` isn't set (no breaking change).
 - [ ] **Multi-frame animation renderer** — `Draw/SendHttpGif` with shared
   `PicID` / incrementing `PicOffset` (≤ ~40 frames) as fallback for layouts
   overlays can't express (charts, sparklines).
