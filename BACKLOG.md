@@ -171,6 +171,34 @@ options-flow YAML editor, diagnostics).
   discovery (match on MAC OUI) as the zero-touch variant.
 - [ ] **Platinum** — strict typing across the codebase, enforced by mypy in CI.
 
+## Firmware / device introspection (exploratory, 2026-07-08)
+
+- [ ] **Firmware version + update trigger.** Goal: surface current firmware
+  version (and eventually trigger an OTA update) from HA, since the Divoom app
+  shows an update is available for this Times Gate. Live-probed the real
+  device (`Channel/GetAllConf`, `Device/GetDeviceTime`, `Device/GetWeatherInfo`
+  all work but expose no version field) plus ~10 plausible local/cloud command
+  guesses (`Device/GetDeviceInfo`, `GetSysVersion`, `GetHardWareInfo`,
+  `Device/GetVersion`, etc.) — all rejected as unknown commands. The cloud LAN
+  discovery call (`Device/ReturnSameLANDevice`) does return a `Hardware: 400`
+  field, but that's a hardware revision, not firmware. No public repo turned up
+  the real command name either. Next step: capture the real Divoom app's own
+  traffic with mitmproxy (TLS-intercept on iPhone) while triggering its
+  "check for update" action, to find the actual command/endpoint it calls.
+  A TP-Link Omada router can only see *that* the app talks to
+  `*.divoom-gz.com`, not the decrypted request/response — not useful here
+  without also intercepting TLS.
+- [x] **"Replicate 5 custom text screens" investigated — not viable as a
+  content-read.** `Channel/Get5LcdInfoV2` (cloud) does return live per-screen
+  `ClockId`s for each "Control" preset (confirmed screens 0/1/3/4 populated,
+  matching what's set in the app), but each screen only resolves to a
+  `ClockImagePixelId` — a CDN path (`f.divoom-gz.com/...`) to a pre-rendered
+  face design in Divoom's own proprietary compressed pixel/animation format,
+  not the literal typed text. There's no way to recover the original text
+  string via the API. Building "custom text screens" in HA isn't blocked by
+  this though — it's just our own `card`/`components` page types doing the
+  same job independently (already supported).
+
 ## Card gallery (v2) — see docs/SPEC_CARD_GALLERY.md
 
 Agreed direction 2026-07-03 (three tiers: pixoo-compat frozen, native card
