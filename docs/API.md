@@ -598,6 +598,49 @@ The device fetches the command array from `CommandUrl` and runs it (see §0.5).
 { "Command": "Device/SysReboot", "LocalToken": <LocalToken> }
 ```
 
+### 6.2 `Device/GetListV2` — current firmware version (CLOUD, account auth) ✅
+
+`POST https://appin.divoom-gz.com/Device/GetListV2`
+
+```json
+{ "Token": <user-account-Token>, "UserId": <UserId> }
+```
+
+Returns every device on the account, each with a `DeviceVersion` field —
+confirmed on a real Times Gate: `"DeviceVersion": 4000170` (numeric encoding,
+reads as roughly `4.0.170`). Also usefully returns each device's current
+`DevicePrivateIP` and `LocalToken`, i.e. this single call could replace our
+own cloud LAN-discovery call (§0.4) with one that also gives firmware version.
+
+> ⚠️ **Different auth than everything else in this doc.** `Token`/`UserId`
+> are a **Divoom account session token**, obtained by logging into a Divoom
+> account (not the device's `LocalToken`). Our integration currently has no
+> account-login flow — adding this would mean storing Divoom account
+> credentials/session tokens, a materially bigger scope than any other
+> feature here. See `BACKLOG.md` for the "firmware version / OTA" idea.
+
+### 6.3 `Device/GetUpdateInfo` — check for firmware update (CLOUD, account auth) ✅
+
+`POST https://appin.divoom-gz.com/Device/GetUpdateInfo`
+
+```json
+{ "Token": <user-account-Token>, "UserId": <UserId>,
+  "Command": "Device/GetUpdateInfo", "Language": "en",
+  "DeviceId": <DeviceId>, "TestFlag": 0 }
+```
+
+Confirmed response on a real Times Gate with a pending update:
+```json
+{ "ReturnCode": 0, "ReturnMessage": "", "CanUpdate": 1,
+  "Version": "1:Fix bugs", "DeviceId": <DeviceId>,
+  "Command": "Device/GetUpdateInfo" }
+```
+`CanUpdate` (`0`/`1`) flags whether an update is pending; `Version` is a
+short changelog blurb (`"<id>:<text>"`), **not** a version number — use
+§6.2's `DeviceVersion` for the actual current version. No local-API
+equivalent is known; same account-auth caveat as §6.2 applies. This only
+*checks* for an update — no update-*trigger* endpoint has been found yet.
+
 ---
 
 ## 7. Errors & gotchas summary

@@ -173,21 +173,21 @@ options-flow YAML editor, diagnostics).
 
 ## Firmware / device introspection (exploratory, 2026-07-08)
 
-- [ ] **Firmware version + update trigger.** Goal: surface current firmware
-  version (and eventually trigger an OTA update) from HA, since the Divoom app
-  shows an update is available for this Times Gate. Live-probed the real
-  device (`Channel/GetAllConf`, `Device/GetDeviceTime`, `Device/GetWeatherInfo`
-  all work but expose no version field) plus ~10 plausible local/cloud command
-  guesses (`Device/GetDeviceInfo`, `GetSysVersion`, `GetHardWareInfo`,
-  `Device/GetVersion`, etc.) — all rejected as unknown commands. The cloud LAN
-  discovery call (`Device/ReturnSameLANDevice`) does return a `Hardware: 400`
-  field, but that's a hardware revision, not firmware. No public repo turned up
-  the real command name either. Next step: capture the real Divoom app's own
-  traffic with mitmproxy (TLS-intercept on iPhone) while triggering its
-  "check for update" action, to find the actual command/endpoint it calls.
-  A TP-Link Omada router can only see *that* the app talks to
-  `*.divoom-gz.com`, not the decrypted request/response — not useful here
-  without also intercepting TLS.
+- [ ] **Firmware version + update trigger — found the endpoints, blocked on
+  account auth.** Captured the real Divoom app's traffic via mitmproxy
+  (TLS-intercept on iPhone) — guessing local/cloud command names got nowhere,
+  but the real app calls two cloud endpoints, now documented in
+  `docs/API.md` §6.2/§6.3: `Device/GetListV2` returns each device's current
+  `DeviceVersion` (confirmed `4000170` on this Times Gate); `Device/GetUpdateInfo`
+  returns `CanUpdate` + a changelog blurb (not a version number). **Both
+  require a Divoom account session `Token`/`UserId`** — a completely
+  different auth mechanism from the device's own `LocalToken` that our
+  integration uses everywhere else. Building this feature means adding a
+  Divoom account login flow (storing account credentials/session token in
+  HA), a materially bigger scope than anything else in the integration so
+  far. No update-*trigger* endpoint has been found yet (only update-*check*).
+  Decision (2026-07-08): worth documenting, not worth building yet — revisit
+  if/when account-auth becomes worthwhile for other reasons too.
 - [x] **"Replicate 5 custom text screens" investigated — not viable as a
   content-read.** `Channel/Get5LcdInfoV2` (cloud) does return live per-screen
   `ClockId`s for each "Control" preset (confirmed screens 0/1/3/4 populated,
