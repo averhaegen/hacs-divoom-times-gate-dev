@@ -11,6 +11,13 @@ CONF_DEVICE_ID = "device_id"
 CONF_DASHBOARD_BASE = "dashboard_base"  # preset position (0-4) used as overlay base
 CONF_DISPDATA_SECRET = "dispdata_secret"  # URL guard for the type-23 DispData view
 
+# Outcome of an authenticated probe against the device (TimesGate.check_auth).
+# The device never raises, so these three markers are how the rest of the
+# integration tells "no answer at all" apart from "answered, token rejected".
+AUTH_OK = "ok"
+AUTH_INVALID = "invalid_auth"
+AUTH_UNREACHABLE = "unreachable"
+
 DEFAULT_HARDWARE = 400
 DEFAULT_REFRESH_INTERVAL = 60
 DEFAULT_BRIGHTNESS = 100

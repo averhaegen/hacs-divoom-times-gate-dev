@@ -22,6 +22,7 @@ from urllib.parse import quote
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -29,6 +30,7 @@ from homeassistant.util import dt as dt_util
 from PIL import Image
 
 from .const import (
+    AUTH_INVALID,
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_DISPDATA_SECRET,
@@ -450,6 +452,18 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 for screen, (_, signature) in pending.items():
                     self._last_hashes[screen] = signature
                 self._last_ptype.update(self._pending_ptype)
+            elif (
+                status != "exception"
+                and await self.device.check_auth() == AUTH_INVALID
+            ):
+                # The device answered but refused the batch. That is usually a
+                # bad command, so confirm with a plain read before blaming the
+                # token: only if that read is refused too has the LocalToken
+                # gone stale (the user re-paired in the Divoom app), and then
+                # the entry needs a fresh token, not a retry.
+                raise ConfigEntryAuthFailed(
+                    f"Times Gate at {self._device_host()} rejected the LocalToken"
+                )
             for screen in pending:
                 results[screen] = status
         else:
