@@ -377,6 +377,7 @@ async def test_options_flow_opens_a_menu(hass, mock_config_entry) -> None:
         "screen_2",
         "screen_3",
         "screen_4",
+        "presets",
         "energy",
         "settings",
         "save",

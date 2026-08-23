@@ -50,7 +50,8 @@
           "screen_4": "Screen 5",
           "settings": "Settings & faces",
           "save": "Save & close",
-          "energy": "Build energy screens"
+          "energy": "Build energy screens",
+          "presets": "Presets"
         }
       },
       "screen_0": {
@@ -100,6 +101,14 @@
       "energy": {
         "title": "Build energy screens",
         "description": "Read your Home Assistant energy dashboard and fill all five screens with a price panel, a house power panel, a battery panel, a solar panel and a day-ahead price graph. Found: {found}. Submit to replace the current screens; they stay editable afterwards."
+      },
+      "presets": {
+        "title": "Presets",
+        "description": "A preset is a named set of five screens. Pick which one the clock shows, or edit the mapping to add, rename and remove them. Editing a screen changes the preset selected here.",
+        "data": {
+          "active_preset": "Active preset",
+          "presets": "Presets"
+        }
       }
     }
   }

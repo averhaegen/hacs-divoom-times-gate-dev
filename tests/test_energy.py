@@ -348,3 +348,70 @@ async def test_energy_panel_prepare_renders_price_bounds(hass) -> None:
     )
 
     assert prepared["price_min"] == 0.05
+
+
+async def test_options_flow_edits_the_active_preset(hass, mock_config_entry) -> None:
+    """Editing a screen must land in the preset the clock is showing."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        options={
+            "presets": {
+                "default": [{"page_type": "off"}] * 5,
+                "energy": [{"page_type": "clock"}] * 5,
+            },
+            "active_preset": "energy",
+        },
+    )
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "screen_0"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"screens": {"page_type": "off"}}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+
+    presets = result["data"]["presets"]
+    assert presets["energy"][0] == {"page_type": "off"}
+    assert presets["energy"][1]["page_type"] == "clock"
+    assert presets["default"] == [{"page_type": "off"}] * 5
+
+
+async def test_options_flow_switches_preset(hass, mock_config_entry) -> None:
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        options={
+            "presets": {
+                "default": [{"page_type": "off"}] * 5,
+                "energy": [{"page_type": "clock"}] * 5,
+            },
+            "active_preset": "default",
+        },
+    )
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "presets"}
+    )
+    assert result["step_id"] == "presets"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "active_preset": "energy",
+            "presets": {
+                "default": [{"page_type": "off"}] * 5,
+                "energy": [{"page_type": "clock"}] * 5,
+            },
+        },
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+
+    assert result["data"]["active_preset"] == "energy"
+    assert result["data"]["screens"] == [{"page_type": "clock"}] * 5

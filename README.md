@@ -517,10 +517,45 @@ artwork behind them is only re-sent when it actually changes.
 
 ## Presets
 
-A preset is a named set of five screens. Generating the energy screens stores
-them as the `energy` preset and keeps whatever you had as `default`, and a
-**Screen preset** select entity switches between them. Add your own under the
-`presets` option:
+A preset is a named set of five screens. Only one preset drives the clock at a
+time, so you can keep an energy layout, a night layout and a weekend layout
+side by side and switch between them without retyping any screen.
+
+### Switching
+
+The integration creates a **Screen preset** select entity. Change it from a
+dashboard, a script or an automation and all five screens follow at the next
+refresh. For example, show the night preset after midnight:
+
+```yaml
+automation:
+  - alias: Night screens
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+    actions:
+      - action: select.select_option
+        target:
+          entity_id: select.times_gate_screen_preset
+        data:
+          option: night
+```
+
+### Editing
+
+Open **Settings > Devices & services > Divoom Times Gate > Configure**. The
+menu has a **Presets** step and five screen editors.
+
+- **Presets** picks the active preset and shows the whole mapping of names to
+  screen lists, which is where you add, rename, copy and delete presets. Type a
+  new name in the active-preset box to create one.
+- **Screen 1** to **Screen 5** always edit the preset selected in that step. If
+  you switch preset and then edit a screen, you are editing the new one.
+- **Build energy screens** writes its five screens to the `energy` preset,
+  makes it active and leaves your other presets alone.
+
+The mapping is a plain name-to-screens object, so a preset holds exactly what a
+single screen editor holds, five times over:
 
 ```yaml
 presets:
@@ -530,7 +565,19 @@ presets:
     - page_type: "off"
     - page_type: "off"
     - page_type: "off"
+  weekend:
+    - page_type: card
+      card: weather
+      entity_id: weather.home
+    - page_type: components
+      components: []
+    - page_type: "off"
+    - page_type: "off"
+    - page_type: "off"
 ```
+
+Configurations written before presets existed keep working: their screens
+become the `default` preset the first time you open the options.
 
 ## Credits
 
