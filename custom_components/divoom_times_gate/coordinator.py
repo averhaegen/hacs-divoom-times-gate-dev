@@ -609,10 +609,10 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int | str, str]]):
         background or item layout actually changed — value updates happen
         device-side via polling and never repaint.
         """
-        from .cards import CARD_RENDERERS, async_prerender_slots  # local import: PIL-heavy module
+        from .cards import get_card_renderer  # local import: PIL-heavy module
 
         card_type = str(page.get("card", "sensor_grid"))
-        renderer = CARD_RENDERERS.get(card_type)
+        renderer, async_prepare = get_card_renderer(card_type)
         if renderer is None:
             _LOGGER.error("Unknown card type %r on screen %s", card_type, screen)
             return "error", None, None
@@ -629,7 +629,11 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int | str, str]]):
 
         # Render any color_template on the loop first (Template.async_render
         # isn't thread-safe) before handing the page to the executor-run renderer.
-        page = await async_prerender_slots(self.hass, page)
+        try:
+            page = await async_prepare(self.hass, page)
+        except ValueError as err:
+            _LOGGER.error("card on screen %s: %s", screen, err)
+            return "error", None, None
 
         poll_base = f"{base_url}/api/divoom_times_gate/dispdata/{secret}"
         try:

@@ -428,3 +428,16 @@ def _encode_gif(img: Image.Image) -> bytes:
 CARD_RENDERERS = {
     "sensor_grid": render_sensor_grid,
 }
+
+
+def get_card_renderer(card_type: str) -> tuple[Any | None, Any]:
+    """Resolve ``(renderer, async_prepare)`` for a card type.
+
+    The graph card is imported here rather than at module level because it
+    imports back from this module for the shared drawing helpers.
+    """
+    if card_type == "graph":
+        from .graphs import async_prepare_graph, render_graph
+
+        return render_graph, async_prepare_graph
+    return CARD_RENDERERS.get(card_type), async_prerender_slots
