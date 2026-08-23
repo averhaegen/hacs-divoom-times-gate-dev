@@ -21,42 +21,46 @@ from .entity import TimesGateEntity
 PARALLEL_UPDATES = 1
 
 # Edgelight effect IDs (0-11), used directly as SelectEffect when light_index=1.
+# Labels carry the colour behaviour: "(custom color)" effects render in the
+# colour you set on the light, "(fixed color)" effects ignore it and play their
+# own palette. Verified on-device; see RGB_LIGHTS.md §1b.
 EDGELIGHT_EFFECTS: dict[str, int] = {
-    "0. Sparkle": 0,
-    "1. Pendulum": 1,
-    "2. Rainbow": 2,
-    "3. Beetle": 3,
-    "4. Bulb": 4,
-    "5. Flame": 5,
-    "6. Waves": 6,
-    "7. Rain": 7,
-    "8. Heart": 8,
-    "9. Infinity": 9,
-    "10. Rocket": 10,
-    "11. Color wheel": 11,
+    "0. Sparkle (fixed color)": 0,
+    "1. Pendulum (fixed color)": 1,
+    "2. Rainbow (fixed color)": 2,
+    "3. Beetle (fixed color)": 3,
+    "4. Bulb (custom color)": 4,
+    "5. Flame (fixed color)": 5,
+    "6. Waves (fixed color)": 6,
+    "7. Rain (fixed color)": 7,
+    "8. Heart (custom color)": 8,
+    "9. Infinity (custom color)": 9,
+    "10. Rocket (fixed color)": 10,
+    "11. Color wheel (custom color)": 11,
 }
-DEFAULT_EDGELIGHT_EFFECT = "4. Bulb"
+DEFAULT_EDGELIGHT_EFFECT = "4. Bulb (custom color)"
 # Edgelight secondary theme when the Backlight is set (Scenario 2). Verified
 # on-device 2026-07-04: there is NO "edgelight off" secondary value (0-8 all
 # render an effect) — 1 (dim red) is the least intrusive. See RGB_LIGHTS.md §2e.
 EDGELIGHT_SECONDARY_OFF = 1
 
 # Backlight effect IDs (0-11), used directly as SelectEffect when light_index=2.
+# Same labelling scheme as EDGELIGHT_EFFECTS; see RGB_LIGHTS.md §1a.
 BACKLIGHT_EFFECTS: dict[str, int] = {
-    "0. Beetle": 0,
-    "1. Atom": 1,
-    "2. Pendulum": 2,
-    "3. Sparkle": 3,
-    "4. Rainbow": 4,
-    "5. Bulb": 5,
-    "6. Infinity": 6,
-    "7. Chat": 7,
-    "8. Antenna": 8,
-    "9. Waves": 9,
-    "10. Rain": 10,
-    "11. Circles": 11,
+    "0. Beetle (fixed color)": 0,
+    "1. Atom (fixed color)": 1,
+    "2. Pendulum (fixed color)": 2,
+    "3. Sparkle (fixed color)": 3,
+    "4. Rainbow (custom color)": 4,
+    "5. Bulb (custom color)": 5,
+    "6. Infinity (custom color)": 6,
+    "7. Chat (custom color)": 7,
+    "8. Antenna (custom color)": 8,
+    "9. Waves (custom color)": 9,
+    "10. Rain (custom color)": 10,
+    "11. Circles (custom color)": 11,
 }
-DEFAULT_BACKLIGHT_EFFECT = "5. Bulb"
+DEFAULT_BACKLIGHT_EFFECT = "5. Bulb (custom color)"
 # Backlight "off" theme when the Edgelight is set (Scenario 1). Verified
 # on-device 2026-07-04: 0 = off (the doc's original 6 renders the orange
 # Fireplace theme instead). See RGB_LIGHTS.md §2e.

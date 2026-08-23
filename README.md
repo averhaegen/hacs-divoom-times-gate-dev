@@ -434,22 +434,24 @@ Two independent RGB light entities, one per lighting zone:
 - **Backlight**, the lighting behind the 5 screens.
 
 Each takes a colour and a brightness, and each has its own list of 12 device
-effects. The lists differ per zone, because the device numbers them differently:
+effects. The lists differ per zone, because the device numbers them differently.
+Effects marked "custom color" render in the colour you set on the light. Effects
+marked "fixed color" ignore it and play their own palette.
 
 | Effect id | Edgelight | Backlight |
 | --- | --- | --- |
-| 0 | Sparkle | Beetle |
-| 1 | Pendulum | Atom |
-| 2 | Rainbow | Pendulum |
-| 3 | Beetle | Sparkle |
-| 4 | Bulb (default) | Rainbow |
-| 5 | Flame | Bulb (default) |
-| 6 | Waves | Infinity |
-| 7 | Rain | Chat |
-| 8 | Heart | Antenna |
-| 9 | Infinity | Waves |
-| 10 | Rocket | Rain |
-| 11 | Color wheel | Circles |
+| 0 | Sparkle (fixed color) | Beetle (fixed color) |
+| 1 | Pendulum (fixed color) | Atom (fixed color) |
+| 2 | Rainbow (fixed color) | Pendulum (fixed color) |
+| 3 | Beetle (fixed color) | Sparkle (fixed color) |
+| 4 | Bulb (custom color, default) | Rainbow (custom color) |
+| 5 | Flame (fixed color) | Bulb (custom color, default) |
+| 6 | Waves (fixed color) | Infinity (custom color) |
+| 7 | Rain (fixed color) | Chat (custom color) |
+| 8 | Heart (custom color) | Antenna (custom color) |
+| 9 | Infinity (custom color) | Waves (custom color) |
+| 10 | Rocket (fixed color) | Rain (custom color) |
+| 11 | Color wheel (custom color) | Circles (custom color) |
 
 The **Edgelight color cycle** and **Backlight color cycle** switches make a zone
 cycle through colours instead of holding the one you picked. The **Button
