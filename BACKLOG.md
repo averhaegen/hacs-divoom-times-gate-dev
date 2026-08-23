@@ -145,7 +145,8 @@ options-flow YAML editor, diagnostics).
   page — key trade-off: `components` supports live conditional colour,
   `dispdata_text` doesn't (colour is fixed at setup time).
 
-- [ ] **CI** — GitHub Actions: hassfest, HACS validation, ruff, mypy --strict.
+- [x] **CI** — GitHub Actions: hassfest, HACS validation, ruff, pytest.
+- [ ] **CI typing** — add `mypy --strict` to the workflow (see Platinum below).
 - [ ] **Bronze** — brands (icon/logo PR to home-assistant/brands), removal docs,
   config-flow test coverage.
 - [ ] **Final repo name + brands submission** — decide the definitive repo

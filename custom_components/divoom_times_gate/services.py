@@ -4,7 +4,7 @@ from __future__ import annotations
 from io import BytesIO
 
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_call_later
@@ -92,6 +92,23 @@ def _target_coordinators(hass: HomeAssistant, call: ServiceCall):
                 yield entry.runtime_data
 
 
+def _raise_for_device_error(result: dict | None, action: str) -> None:
+    """Turn a device-level rejection into an error the caller can see.
+
+    ``TimesGate._send`` never raises: it logs and returns ``error_code`` set to
+    a non-zero value (or the string ``"exception"`` for transport failures).
+    Without this check a service action against an unreachable device would
+    report success and silently do nothing.
+    """
+    if result is None:
+        return
+    error_code = result.get("error_code")
+    if error_code in (0, None):
+        return
+    detail = result.get("exception") or f"error_code {error_code}"
+    raise HomeAssistantError(f"Times Gate rejected {action}: {detail}")
+
+
 def _render_message(text: str, color_hex: str) -> bytes:
     img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), (0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -120,7 +137,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         screen = call.data["screen"]
         clock_id = call.data["clock_id"]
         for coord in _target_coordinators(hass, call):
-            await coord.device.set_clock_face(screen, clock_id)
+            result = await coord.device.set_clock_face(screen, clock_id)
+            _raise_for_device_error(result, SERVICE_SET_CLOCK_FACE)
 
     async def _show_message(call: ServiceCall) -> None:
         screen = call.data["screen"]
@@ -128,7 +146,8 @@ def async_register_services(hass: HomeAssistant) -> None:
             _render_message, call.data["text"], call.data["color"]
         )
         for coord in _target_coordinators(hass, call):
-            await coord.device.send_jpeg(jpeg, screen)
+            result = await coord.device.send_jpeg(jpeg, screen)
+            _raise_for_device_error(result, SERVICE_SHOW_MESSAGE)
             coord.record_frame(screen, jpeg)
             # The temporary message bypassed the hash cache; invalidate so the
             # screen repaints its normal content when we revert.
@@ -143,10 +162,11 @@ def async_register_services(hass: HomeAssistant) -> None:
         screen = call.data["screen"]
         page = {k: call.data[k] for k in ("image_path", "image_url", "fit") if k in call.data}
         if "image_path" not in page and "image_url" not in page:
-            raise vol.Invalid("show_image needs image_path or image_url")
+            raise ServiceValidationError("show_image needs image_path or image_url")
         frames, speed = await render_image_frames(hass, page)
         for coord in _target_coordinators(hass, call):
-            await coord.device.send_animation(frames, screen, speed)
+            result = await coord.device.send_animation(frames, screen, speed)
+            _raise_for_device_error(result, SERVICE_SHOW_IMAGE)
             coord.record_frame(screen, frames[0])
             # Bypassed the hash cache; make sure the next tick can repaint.
             coord.invalidate(screen)

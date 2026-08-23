@@ -9,6 +9,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_DEVICE_ID,
@@ -32,6 +33,18 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BUTTON, Platform.IMAGE, Platform.SELECT, Platform.SWITCH]
 
 type DivoomTimesGateConfigEntry = ConfigEntry[TimesGateCoordinator]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's service actions.
+
+    Registering here rather than in async_setup_entry means the actions stay
+    visible in the UI and in scripts even while every config entry is
+    unloaded, so an automation referring to one fails with a clear error
+    instead of "action not found".
+    """
+    async_register_services(hass)
+    return True
 
 
 async def _try_heal_ip(hass, entry, session) -> TimesGate | None:
@@ -134,7 +147,6 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
-    async_register_services(hass)
 
     # Push each Select's restored state (see select.py's restore_display/
     # restore_screen) as a background task, not awaited here: platform setup

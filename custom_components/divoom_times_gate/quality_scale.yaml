@@ -14,16 +14,12 @@ rules:
   dependency-transparency: done
   common-modules: done
   appropriate-polling: done
-  action-setup:
-    status: exempt
-    comment: No service actions registered yet.
+  action-setup: done
   brands: todo
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
-  docs-actions:
-    status: exempt
-    comment: No service actions registered yet.
+  docs-actions: done
 
   # --- Silver ---
   config-entry-unloading: done
@@ -33,9 +29,7 @@ rules:
   parallel-updates: done
   reauthentication-flow: todo
   test-coverage: todo
-  action-exceptions:
-    status: exempt
-    comment: No service actions registered yet.
+  action-exceptions: done
   docs-configuration-parameters: done
   docs-installation-parameters: done
 
