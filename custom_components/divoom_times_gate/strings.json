@@ -43,48 +43,50 @@
       "init": {
         "title": "Times Gate configuration",
         "menu_options": {
+          "preset": "Preset (switch, add, copy, rename, delete)",
           "screen_0": "Screen 1",
           "screen_1": "Screen 2",
           "screen_2": "Screen 3",
           "screen_3": "Screen 4",
           "screen_4": "Screen 5",
-          "settings": "Settings & faces",
-          "save": "Save & close",
           "energy": "Build energy screens",
-          "presets": "Presets"
-        }
+          "settings": "Settings & faces",
+          "advanced": "Edit all presets (advanced)",
+          "save": "Save & close"
+        },
+        "description": "Editing preset **{preset}**. Screens: {screens}. Nothing is applied until you choose Save & close."
       },
       "screen_0": {
         "title": "Screen 1",
-        "description": "This screen's content: a single page, or a list of pages that rotate (by each page's 'duration'). See the README for the page schema.",
+        "description": "Screen 1 of preset **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
         "data": {
           "screens": "Pages"
         }
       },
       "screen_1": {
         "title": "Screen 2",
-        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "description": "Screen 2 of preset **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
         "data": {
           "screens": "Pages"
         }
       },
       "screen_2": {
         "title": "Screen 3",
-        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "description": "Screen 3 of preset **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
         "data": {
           "screens": "Pages"
         }
       },
       "screen_3": {
         "title": "Screen 4",
-        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "description": "Screen 4 of preset **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
         "data": {
           "screens": "Pages"
         }
       },
       "screen_4": {
         "title": "Screen 5",
-        "description": "This screen's content: a single page, or a list of pages that rotate.",
+        "description": "Screen 5 of preset **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
         "data": {
           "screens": "Pages"
         }
@@ -100,15 +102,42 @@
       },
       "energy": {
         "title": "Build energy screens",
-        "description": "Read your Home Assistant energy dashboard and fill all five screens with a price panel, a house power panel, a battery panel, a solar panel and a day-ahead price graph. Found: {found}. Submit to replace the current screens; they stay editable afterwards."
-      },
-      "presets": {
-        "title": "Presets",
-        "description": "A preset is a named set of five screens. Pick which one the clock shows, or edit the mapping to add, rename and remove them. Editing a screen changes the preset selected here.",
+        "description": "Read your Home Assistant energy dashboard and fill five screens with a price panel, a house power panel, a battery panel, a solar panel and a day-ahead price graph. Found: {found}. The screens are written to the preset you name below, which becomes the one you are editing. Existing presets are left alone.",
         "data": {
-          "active_preset": "Active preset",
+          "preset_name": "Write to preset"
+        }
+      },
+      "preset": {
+        "title": "Preset",
+        "description": "A preset is a named set of five screens. Switch to another one, or pick an action to add, copy, rename or delete a preset. Currently editing **{preset}**: {screens}.",
+        "data": {
+          "active_preset": "Preset",
+          "preset_action": "Action",
+          "preset_name": "New name (for add, copy and rename)"
+        }
+      },
+      "advanced": {
+        "title": "All presets",
+        "description": "Every preset as one mapping of name to a list of five pages. Use this to paste a set of screens in or copy one out. Currently editing **{preset}**.",
+        "data": {
           "presets": "Presets"
         }
+      }
+    },
+    "error": {
+      "preset_name_required": "Give the new preset a name.",
+      "preset_name_taken": "A preset with that name already exists.",
+      "preset_last": "This is the only preset left, so it cannot be deleted."
+    }
+  },
+  "selector": {
+    "preset_action": {
+      "options": {
+        "switch": "Switch to this preset",
+        "create": "Add an empty preset",
+        "copy": "Copy this preset",
+        "rename": "Rename this preset",
+        "delete": "Delete this preset"
       }
     }
   }

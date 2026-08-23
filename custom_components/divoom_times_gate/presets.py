@@ -40,6 +40,27 @@ def read_presets(options: dict[str, Any]) -> dict[str, list[Any]]:
     return presets
 
 
+def describe_page(page: Any) -> str:
+    """A few words naming what a screen holds, for the options menu."""
+    if isinstance(page, list):
+        if not page:
+            return "empty"
+        parts = [describe_page(item) for item in page]
+        return " + ".join(parts)
+    if not isinstance(page, dict):
+        return "empty"
+    kind = str(page.get("page_type") or "components")
+    if kind == "card":
+        return str(page.get("card") or "card")
+    if kind == "graph":
+        return str(page.get("title") or "graph")
+    if kind == "energy_panel":
+        return str(page.get("mode") or "energy")
+    if kind == "image":
+        return "image"
+    return kind
+
+
 def active_screens(options: dict[str, Any]) -> list[Any]:
     """The screen list for whichever preset is active."""
     presets = read_presets(options)

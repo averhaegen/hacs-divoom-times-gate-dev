@@ -372,16 +372,20 @@ async def test_options_flow_opens_a_menu(hass, mock_config_entry) -> None:
 
     assert result["type"] is FlowResultType.MENU
     assert result["menu_options"] == [
+        "preset",
         "screen_0",
         "screen_1",
         "screen_2",
         "screen_3",
         "screen_4",
-        "presets",
         "energy",
         "settings",
+        "advanced",
         "save",
     ]
+    # The menu names the preset being edited and what each screen holds.
+    assert result["description_placeholders"]["preset"]
+    assert result["description_placeholders"]["screens"]
 
 
 @pytest.mark.parametrize("index", [0, 1, 2, 3, 4])

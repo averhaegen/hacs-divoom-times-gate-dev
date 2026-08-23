@@ -43,6 +43,12 @@ DEFAULT_REFRESH_INTERVAL = 60
 DEFAULT_BRIGHTNESS = 100
 DEFAULT_DURATION = 15  # seconds a page shows before a screen rotates to the next
 
+# Device font ids passed to Draw/SendHttpItemList. See docs/API.md §4.9 for the
+# ids this firmware renders. 160 reads better than the old default 4 at the size
+# a card value occupies; 2 is narrow enough for a label above it.
+DEFAULT_DEVICE_FONT = 160
+DEFAULT_LABEL_FONT = 2
+
 SCREEN_COUNT = 5
 SCREEN_SIZE = 128
 SCREENS = [0, 1, 2, 3, 4]

@@ -23,7 +23,7 @@ from homeassistant.helpers.template import Template
 from PIL import Image, ImageDraw, ImageFont
 
 from .canvas import LoadedFont, font_by_name
-from .const import NATIVE_KIND_TYPES, SCREEN_SIZE
+from .const import DEFAULT_DEVICE_FONT, DEFAULT_LABEL_FONT, NATIVE_KIND_TYPES, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .mdi import draw_icon, icon_for_state
 from .vendor_pixoo._font import retrieve_glyph, retrieve_glyph_width
@@ -264,7 +264,7 @@ def render_sensor_grid(
     img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), background)
     draw = ImageDraw.Draw(img)
     items: list[dict[str, Any]] = []
-    font_default = int(page.get("font", 4))
+    font_default = int(page.get("font", DEFAULT_DEVICE_FONT))
     update_default = int(page.get("update_time", 10))
     # `label_render` controls where a slot's label is drawn:
     #   "native" (default) — sent as a device text item (type 22); the device
@@ -276,7 +276,7 @@ def render_sensor_grid(
     if label_render not in ("native", "static"):
         raise ValueError(f"sensor_grid: unknown label_render {label_render!r}")
     native_labels = label_render == "native"
-    label_font_id = int(page.get("label_font", 2))
+    label_font_id = int(page.get("label_font", DEFAULT_LABEL_FONT))
     # Labels default to the theme's secondary colour (readable on any
     # background, and distinct from the value/icon colour for two-tone
     # themes like cyberpunk/neon/sci_fi).

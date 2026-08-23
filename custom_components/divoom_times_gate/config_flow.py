@@ -49,7 +49,15 @@ from .defaults import DEFAULT_FACES, DEFAULT_SCREENS
 from .device import TimesGate
 from .discovery import DiscoveredDevice, async_discover_devices
 from .energy import async_discover
-from .presets import active_screens, build_energy_preset, read_presets
+from .presets import (
+    active_screens,
+    build_energy_preset,
+    describe_page,
+    read_presets,
+)
+
+PRESET_ACTION = "preset_action"
+PRESET_NAME = "preset_name"
 
 
 class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -254,10 +262,17 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         screens = list(active_screens(opts) or DEFAULT_SCREENS)
         while len(screens) < SCREEN_COUNT:
             screens.append({"page_type": "off"})
+        screens = screens[:SCREEN_COUNT]
+        name = str(opts.get(CONF_ACTIVE_PRESET) or "")
+        if name not in presets:
+            name = DEFAULT_PRESET if DEFAULT_PRESET in presets else (
+                sorted(presets)[0] if presets else DEFAULT_PRESET
+            )
+        presets.setdefault(name, screens)
         self._data = {
-            CONF_SCREENS: screens[:SCREEN_COUNT],
+            CONF_SCREENS: screens,
             CONF_PRESETS: presets,
-            CONF_ACTIVE_PRESET: str(opts.get(CONF_ACTIVE_PRESET) or ""),
+            CONF_ACTIVE_PRESET: name,
             CONF_FACES: opts.get(CONF_FACES) or DEFAULT_FACES,
             CONF_DASHBOARD_BASE: opts.get(CONF_DASHBOARD_BASE, ""),
             CONF_REFRESH_INTERVAL: opts.get(
@@ -268,6 +283,33 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             ),
         }
 
+    def _fold(self) -> None:
+        """Write the screens being edited back into the preset they belong to."""
+        assert self._data is not None
+        name = str(self._data[CONF_ACTIVE_PRESET] or DEFAULT_PRESET)
+        self._data[CONF_ACTIVE_PRESET] = name
+        self._data[CONF_PRESETS][name] = list(self._data[CONF_SCREENS])
+
+    def _load(self, name: str) -> None:
+        """Make ``name`` the preset the screen editors act on."""
+        assert self._data is not None
+        screens = list(self._data[CONF_PRESETS].get(name) or [])
+        while len(screens) < SCREEN_COUNT:
+            screens.append({"page_type": "off"})
+        self._data[CONF_ACTIVE_PRESET] = name
+        self._data[CONF_SCREENS] = screens[:SCREEN_COUNT]
+
+    def _placeholders(self) -> dict[str, str]:
+        """Name the preset being edited and what each of its screens holds."""
+        assert self._data is not None
+        parts = []
+        for index, page in enumerate(self._data[CONF_SCREENS], start=1):
+            parts.append(f"{index} {describe_page(page)}")
+        return {
+            "preset": str(self._data[CONF_ACTIVE_PRESET] or DEFAULT_PRESET),
+            "screens": ", ".join(parts),
+        }
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -275,16 +317,18 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "preset",
                 "screen_0",
                 "screen_1",
                 "screen_2",
                 "screen_3",
                 "screen_4",
-                "presets",
                 "energy",
                 "settings",
+                "advanced",
                 "save",
             ],
+            description_placeholders=self._placeholders(),
         )
 
     async def _screen_step(
@@ -296,6 +340,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             pages = user_input.get(CONF_SCREENS)
             if isinstance(pages, (list, dict)):
                 self._data[CONF_SCREENS][index] = pages
+                self._fold()
                 return await self.async_step_init()
         schema = vol.Schema(
             {
@@ -304,8 +349,13 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                 ): ObjectSelector()
             }
         )
+        placeholders = self._placeholders()
+        placeholders["current"] = describe_page(self._data[CONF_SCREENS][index])
         return self.async_show_form(
-            step_id=f"screen_{index}", data_schema=schema, last_step=False
+            step_id=f"screen_{index}",
+            data_schema=schema,
+            description_placeholders=placeholders,
+            last_step=False,
         )
 
     async def async_step_screen_0(
@@ -333,10 +383,81 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         return await self._screen_step(4, user_input)
 
-    async def async_step_presets(
+    async def async_step_preset(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Name, switch and edit whole sets of five screens."""
+        """Switch between named sets of five screens, or add and remove one."""
+        self._ensure()
+        assert self._data is not None
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._fold()
+            chosen = str(user_input.get(CONF_ACTIVE_PRESET) or DEFAULT_PRESET)
+            action = str(user_input.get(PRESET_ACTION) or "switch")
+            name = str(user_input.get(PRESET_NAME) or "").strip()
+            presets = self._data[CONF_PRESETS]
+            if action == "switch":
+                self._load(chosen)
+                return await self.async_step_init()
+            if action == "delete":
+                if len(presets) < 2:
+                    errors["base"] = "preset_last"
+                else:
+                    presets.pop(chosen, None)
+                    self._load(sorted(presets)[0])
+                    return await self.async_step_init()
+            elif not name:
+                errors[PRESET_NAME] = "preset_name_required"
+            elif name in presets:
+                errors[PRESET_NAME] = "preset_name_taken"
+            elif action == "create":
+                presets[name] = [{"page_type": "off"} for _ in range(SCREEN_COUNT)]
+                self._load(name)
+                return await self.async_step_init()
+            elif action == "copy":
+                presets[name] = list(presets.get(chosen) or [])
+                self._load(name)
+                return await self.async_step_init()
+            elif action == "rename":
+                presets[name] = presets.pop(chosen, list(self._data[CONF_SCREENS]))
+                self._load(name)
+                return await self.async_step_init()
+
+        names = sorted(self._data[CONF_PRESETS]) or [DEFAULT_PRESET]
+        actions = ["switch", "create", "copy", "rename", "delete"]
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_ACTIVE_PRESET,
+                    default=self._data[CONF_ACTIVE_PRESET] or names[0],
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[SelectOptionDict(value=n, label=n) for n in names],
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(PRESET_ACTION, default="switch"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=actions,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key="preset_action",
+                    )
+                ),
+                vol.Optional(PRESET_NAME, default=""): str,
+            }
+        )
+        return self.async_show_form(
+            step_id="preset",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders=self._placeholders(),
+            last_step=False,
+        )
+
+    async def async_step_advanced(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit every preset at once, for copying a set of screens in or out."""
         self._ensure()
         assert self._data is not None
         if user_input is not None:
@@ -347,38 +468,24 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                     for name, screens in presets.items()
                     if isinstance(screens, list)
                 }
-            chosen = str(user_input.get(CONF_ACTIVE_PRESET) or "")
-            if chosen != self._data[CONF_ACTIVE_PRESET]:
-                # Switching preset replaces what the screen editors show.
-                self._data[CONF_ACTIVE_PRESET] = chosen
-                screens = list(
-                    self._data[CONF_PRESETS].get(chosen) or self._data[CONF_SCREENS]
-                )
-                while len(screens) < SCREEN_COUNT:
-                    screens.append({"page_type": "off"})
-                self._data[CONF_SCREENS] = screens[:SCREEN_COUNT]
+                name = str(self._data[CONF_ACTIVE_PRESET] or DEFAULT_PRESET)
+                self._load(name if name in self._data[CONF_PRESETS] else
+                           (sorted(self._data[CONF_PRESETS]) or [DEFAULT_PRESET])[0])
             return await self.async_step_init()
 
-        names = sorted(self._data[CONF_PRESETS]) or [DEFAULT_PRESET]
+        self._fold()
         schema = vol.Schema(
             {
                 vol.Required(
-                    CONF_ACTIVE_PRESET,
-                    default=self._data[CONF_ACTIVE_PRESET] or names[0],
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[SelectOptionDict(value=n, label=n) for n in names],
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=True,
-                    )
-                ),
-                vol.Required(
                     CONF_PRESETS, default=self._data[CONF_PRESETS]
-                ): ObjectSelector(),
+                ): ObjectSelector()
             }
         )
         return self.async_show_form(
-            step_id="presets", data_schema=schema, last_step=False
+            step_id="advanced",
+            data_schema=schema,
+            description_placeholders=self._placeholders(),
+            last_step=False,
         )
 
     async def async_step_energy(
@@ -394,17 +501,12 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         assert self._data is not None
         found = await async_discover(self.hass)
         if user_input is not None:
-            screens = build_energy_preset(found)
-            presets = dict(self._data.get(CONF_PRESETS) or {})
-            if self._data[CONF_ACTIVE_PRESET] not in (ENERGY_PRESET, ""):
-                # Keep whatever the user was editing under its own name.
-                presets[self._data[CONF_ACTIVE_PRESET]] = self._data[CONF_SCREENS]
-            elif not presets:
-                presets[DEFAULT_PRESET] = self._data[CONF_SCREENS]
-            presets[ENERGY_PRESET] = screens
-            self._data[CONF_PRESETS] = presets
-            self._data[CONF_ACTIVE_PRESET] = ENERGY_PRESET
-            self._data[CONF_SCREENS] = screens
+            # Keep whatever was being edited under its own name before the
+            # generated screens take over.
+            self._fold()
+            name = str(user_input.get(PRESET_NAME) or "").strip() or ENERGY_PRESET
+            self._data[CONF_PRESETS][name] = build_energy_preset(found)
+            self._load(name)
             return await self.async_step_init()
 
         parts = []
@@ -422,7 +524,9 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             parts.append("water")
         return self.async_show_form(
             step_id="energy",
-            data_schema=vol.Schema({}),
+            data_schema=vol.Schema(
+                {vol.Optional(PRESET_NAME, default=ENERGY_PRESET): str}
+            ),
             description_placeholders={
                 "found": ", ".join(parts) or "nothing (check your energy dashboard)"
             },
@@ -479,13 +583,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         self._ensure()
         # _ensure() always populates _data.
         assert self._data is not None
-        data = dict(self._data)
         # The screen editors always act on the active preset, so fold the edits
         # back into it before saving.
-        presets = dict(data.get(CONF_PRESETS) or {})
-        name = str(data.get(CONF_ACTIVE_PRESET) or "")
-        if presets or name:
-            presets[name or DEFAULT_PRESET] = data[CONF_SCREENS]
-            data[CONF_PRESETS] = presets
-            data[CONF_ACTIVE_PRESET] = name or DEFAULT_PRESET
-        return self.async_create_entry(title="", data=data)
+        self._fold()
+        return self.async_create_entry(title="", data=dict(self._data))

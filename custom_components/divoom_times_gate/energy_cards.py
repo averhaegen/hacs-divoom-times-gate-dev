@@ -22,7 +22,7 @@ from homeassistant.helpers.template import Template
 from PIL import Image, ImageDraw
 
 from .cards import _blend, _encode_gif, _hex, _rgb, draw_glyph_text
-from .const import ENERGY_COLORS, SCREEN_SIZE
+from .const import DEFAULT_DEVICE_FONT, DEFAULT_LABEL_FONT, ENERGY_COLORS, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_energy, format_price
 
@@ -170,7 +170,7 @@ def _draw_price(
         x=0,
         y=28,
         width=SCREEN_SIZE,
-        font=int(page.get("font", 4)),
+        font=int(page.get("font", DEFAULT_DEVICE_FONT)),
         color=value_color,
         align=2,
     )
@@ -212,7 +212,7 @@ def _draw_power(
         x=0,
         y=20,
         width=SCREEN_SIZE,
-        font=int(page.get("font", 4)),
+        font=int(page.get("font", DEFAULT_DEVICE_FONT)),
         color="#FFFFFF",
         align=2,
     )
@@ -234,7 +234,7 @@ def _draw_power(
             x=60,
             y=y - 8,
             width=64,
-            font=int(page.get("row_font", 2)),
+            font=int(page.get("row_font", DEFAULT_LABEL_FONT)),
             color=color,
             align=3,
         )
@@ -279,7 +279,7 @@ def _draw_battery(
         x=0,
         y=52,
         width=SCREEN_SIZE,
-        font=int(page.get("font", 4)),
+        font=int(page.get("font", DEFAULT_DEVICE_FONT)),
         color=color,
         align=2,
     )
@@ -294,7 +294,7 @@ def _draw_battery(
         x=0,
         y=102,
         width=SCREEN_SIZE,
-        font=int(page.get("row_font", 2)),
+        font=int(page.get("row_font", DEFAULT_LABEL_FONT)),
         color=color,
         align=2,
     )
@@ -336,7 +336,7 @@ def _draw_solar(
         x=0,
         y=30,
         width=SCREEN_SIZE,
-        font=int(page.get("font", 4)),
+        font=int(page.get("font", DEFAULT_DEVICE_FONT)),
         color=color,
         align=2,
     )

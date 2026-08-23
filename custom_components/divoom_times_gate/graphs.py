@@ -33,7 +33,7 @@ from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 
 from .cards import _blend, _encode_gif, _rgb, draw_glyph_text
-from .const import SCREEN_SIZE
+from .const import DEFAULT_DEVICE_FONT, DEFAULT_LABEL_FONT, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_auto
 
@@ -358,7 +358,7 @@ def render_graph(
                     "x": 2,
                     "y": max(0, value_y),
                     "dir": 0,
-                    "font": int(page.get("font", 4)),
+                    "font": int(page.get("font", DEFAULT_DEVICE_FONT)),
                     "TextWidth": SCREEN_SIZE - 4,
                     "Textheight": 16,
                     "speed": 50,
@@ -442,7 +442,7 @@ def _draw_footer_slots(
                 "x": x + 2,
                 "y": band_top + 14,
                 "dir": 0,
-                "font": int(slot.get("font", 2)),
+                "font": int(slot.get("font", DEFAULT_LABEL_FONT)),
                 "TextWidth": cell - 4,
                 "Textheight": 14,
                 "speed": 50,

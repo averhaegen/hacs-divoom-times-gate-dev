@@ -544,15 +544,21 @@ automation:
 ### Editing
 
 Open **Settings > Devices & services > Divoom Times Gate > Configure**. The
-menu has a **Presets** step and five screen editors.
+menu header names the preset you are editing and lists what each of its five
+screens holds, so you always know which set you are changing.
 
-- **Presets** picks the active preset and shows the whole mapping of names to
-  screen lists, which is where you add, rename, copy and delete presets. Type a
-  new name in the active-preset box to create one.
-- **Screen 1** to **Screen 5** always edit the preset selected in that step. If
-  you switch preset and then edit a screen, you are editing the new one.
-- **Build energy screens** writes its five screens to the `energy` preset,
-  makes it active and leaves your other presets alone.
+- **Preset** switches to another preset, and carries an action to add an empty
+  preset, copy the current one, rename it or delete it. Switching keeps the
+  edits you already made to the preset you are leaving.
+- **Screen 1** to **Screen 5** edit the five screens of that preset. Each step
+  repeats the preset name and the current page type in its description.
+- **Build energy screens** generates five screens and writes them to the preset
+  you name in that step, defaulting to `energy`. Your other presets are left
+  alone.
+- **Edit all presets (advanced)** shows the whole mapping of names to screen
+  lists at once, for pasting a set of screens in or copying one out.
+
+Nothing is written to the config entry until you pick **Save & close**.
 
 The mapping is a plain name-to-screens object, so a preset holds exactly what a
 single screen editor holds, five times over:
