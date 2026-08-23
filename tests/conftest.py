@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.divoom_times_gate.config_flow import DivoomTimesGateConfigFlow
 from custom_components.divoom_times_gate.const import (
+    AUTH_OK,
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_FACES,
@@ -76,6 +77,20 @@ class FakeTimesGate:
     async def ping(self) -> bool:
         self._record("ping")
         return True
+
+    async def check_auth(self) -> str:
+        self._record("check_auth")
+        return AUTH_OK
+
+    def build_clear_http_text(self, screen: int, text_id: int = -1) -> dict[str, Any]:
+        return {
+            "Command": "Draw/ClearHttpText",
+            "LcdId": screen,
+            "TextId": int(text_id),
+        }
+
+    async def clear_http_text(self, screen: int, text_id: int = -1) -> dict[str, Any]:
+        return self._record("clear_http_text", screen, text_id)
 
     async def get_conf(self) -> dict[str, Any]:
         return self._record("get_conf")
