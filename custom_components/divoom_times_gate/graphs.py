@@ -169,6 +169,7 @@ async def async_prepare_graph(hass: HomeAssistant, page: dict[str, Any]) -> dict
             values, times = await _series_from_history(hass, statistic_id, start, end)
 
     prepared = {**page, "_values": values, "_times": [t.isoformat() for t in times]}
+    prepared["_footer_totals"] = await _footer_totals(hass, page)
     if tpl := page.get("color_template"):
         try:
             prepared["color"] = str(Template(str(tpl), hass).async_render()).strip() or page.get(
@@ -177,6 +178,30 @@ async def async_prepare_graph(hass: HomeAssistant, page: dict[str, Any]) -> dict
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("graph color_template failed: %s", err)
     return prepared
+
+
+async def _footer_totals(hass: HomeAssistant, page: dict[str, Any]) -> dict[str, float]:
+    """Read today's total for every footer slot that names a statistic.
+
+    Gas often has no entity at all: Home Assistant integrations may publish it
+    straight into long-term statistics, which the energy dashboard reads but no
+    entity mirrors. Such a slot cannot be polled by the device, so the value is
+    baked into the artwork and refreshes whenever the statistic moves.
+    """
+    stats = [
+        str(slot["stat"])
+        for slot in (page.get("footer_slots") or [])
+        if isinstance(slot, dict) and slot.get("stat") and not slot.get("entity_id")
+    ]
+    if not stats:
+        return {}
+    from .energy import async_daily_totals
+
+    try:
+        return await async_daily_totals(hass, stats)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("graph footer statistics failed: %s", err)
+        return {}
 
 
 def _axis_bounds(page: dict[str, Any], values: list[float]) -> tuple[float, float]:
@@ -386,6 +411,18 @@ def _draw_footer_slots(
                 fill=_blend(background, slot_color, 0.75),
             )
         entity_id = str(slot.get("entity_id") or "")
+        if not entity_id and not slot.get("value_template") and slot.get("stat"):
+            total = (page.get("_footer_totals") or {}).get(str(slot["stat"]))
+            text = "-" if total is None else f"{total:.1f}"
+            if unit := slot.get("unit"):
+                text = f"{text} {unit}"
+            draw.text(
+                (x + 3, band_top + 14),
+                text,
+                font=_label_font(12),
+                fill=_blend(background, slot_color, 1.0),
+            )
+            continue
         if template := slot.get("value_template"):
             key = hashlib.md5(str(template).encode()).hexdigest()[:12]
             secret = poll_base.rsplit("/", 1)[-1]

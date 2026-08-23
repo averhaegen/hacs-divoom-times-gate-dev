@@ -90,6 +90,18 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
     return panel, graph
 
 
+def _footer_slot(stat: str, name: str, color: str, unit: str) -> dict[str, Any]:
+    """Describe one footer value, polled live where possible.
+
+    A statistic id without a dot has no entity behind it, which is how gas
+    usually arrives. The device cannot poll that, so the slot falls back to
+    today's total read from long-term statistics and drawn into the artwork.
+    """
+    if "." in stat:
+        return {"entity_id": stat, "name": name, "color": color}
+    return {"stat": stat, "name": name, "color": color, "unit": unit}
+
+
 def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
     """Build the five energy screens from the discovered sources.
 
@@ -143,16 +155,11 @@ def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
     )
 
     footer: list[dict[str, Any]] = []
-    if found.gas_stat and "." in found.gas_stat:
-        footer.append(
-            {"entity_id": found.gas_stat, "name": "Gas", "color": ENERGY_COLORS["gas"]}
-        )
+    if found.gas_stat:
+        footer.append(_footer_slot(found.gas_stat, "Gas", ENERGY_COLORS["gas"], "m³"))
     for stat in found.water_stats:
-        if "." in stat:
-            footer.append(
-                {"entity_id": stat, "name": "Water", "color": ENERGY_COLORS["water"]}
-            )
-            break
+        footer.append(_footer_slot(stat, "Water", ENERGY_COLORS["water"], "L"))
+        break
     price_graph["footer_slots"] = footer
     if not footer:
         price_graph["footer_height"] = 0

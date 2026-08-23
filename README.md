@@ -502,6 +502,11 @@ screens:
 4. Solar production, with today's yield and the day's curve behind it.
 5. The day-ahead price graph, with gas and water along the bottom.
 
+Gas often has no entity at all: some integrations, Niko Home Control among
+them, publish it straight into long-term statistics. The device can only poll
+entities, so such a value is read from the recorder and drawn into the artwork
+instead, refreshing whenever the statistic moves rather than every 10 seconds.
+
 Colours follow the ones the energy dashboard uses, so blue means import and
 purple means export. Screens for a source you do not have stay blank. The
 generated pages are ordinary screen configurations, so you can edit any of them

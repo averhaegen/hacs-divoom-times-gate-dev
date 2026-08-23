@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from custom_components.divoom_times_gate import energy, energy_cards, presets
+from custom_components.divoom_times_gate import energy, energy_cards, graphs, presets
 from custom_components.divoom_times_gate.const import (
     CONF_ACTIVE_PRESET,
     CONF_PRESETS,
@@ -219,14 +219,61 @@ def test_build_energy_preset_blanks_missing_sources() -> None:
     assert screens[4]["footer_height"] == 0
 
 
-def test_build_energy_preset_skips_a_statistic_id_footer() -> None:
+def test_build_energy_preset_reads_a_statistic_only_gas_from_the_recorder() -> None:
     found = energy.parse_sources(
         {"energy_sources": [{"type": "gas", "stat_energy_from": "nhc2:abc_gasvolume"}]}
     )
 
-    screens = presets.build_energy_preset(found)
+    slot = presets.build_energy_preset(found)[4]["footer_slots"][0]
 
-    assert screens[4]["footer_slots"] == []
+    assert slot["stat"] == "nhc2:abc_gasvolume"
+    assert "entity_id" not in slot
+    assert slot["unit"] == "m\u00b3"
+
+
+async def test_graph_footer_totals_cover_statistic_only_slots(hass) -> None:
+    page = {
+        "card": "graph",
+        "data_template": "[1, 2, 3]",
+        "footer_height": 32,
+        "footer_slots": [
+            {"stat": "nhc2:abc_gasvolume", "name": "Gas", "unit": "m\u00b3"},
+            {"entity_id": "sensor.water", "name": "Water"},
+        ],
+    }
+
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_daily_totals",
+        return_value={"nhc2:abc_gasvolume": 3.25},
+    ) as totals:
+        prepared = await graphs.async_prepare_graph(hass, page)
+
+    assert totals.call_args[0][1] == ["nhc2:abc_gasvolume"]
+    assert prepared["_footer_totals"] == {"nhc2:abc_gasvolume": 3.25}
+
+    gif, items = graphs.render_graph(hass, prepared, "http://h/dispdata/secret")
+
+    assert gif.startswith(b"GIF")
+    # Only the water slot is polled; gas is drawn into the artwork.
+    assert [item["TextId"] for item in items if item["TextId"] >= 10] == [11]
+
+
+async def test_graph_footer_totals_survive_a_recorder_failure(hass) -> None:
+    page = {
+        "card": "graph",
+        "data_template": "[1, 2]",
+        "footer_height": 32,
+        "footer_slots": [{"stat": "nhc2:abc", "name": "Gas"}],
+    }
+
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_daily_totals",
+        side_effect=RuntimeError("recorder is busy"),
+    ):
+        prepared = await graphs.async_prepare_graph(hass, page)
+
+    assert prepared["_footer_totals"] == {}
+    assert graphs.render_graph(hass, prepared, "http://h/dispdata/s")[0].startswith(b"GIF")
 
 
 def test_with_energy_preset_keeps_the_previous_screens() -> None:
