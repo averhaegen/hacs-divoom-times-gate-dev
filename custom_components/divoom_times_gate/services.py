@@ -1,7 +1,10 @@
 """Services for Divoom Times Gate: set_clock_face, show_message, show_image."""
 from __future__ import annotations
 
+from collections.abc import Iterator
+from datetime import datetime
 from io import BytesIO
+from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -13,6 +16,8 @@ import voluptuous as vol
 
 from .canvas import _scalable_font  # reuse the scalable font loader
 from .const import DOMAIN, SCREEN_COUNT, SCREEN_SIZE
+from .coordinator import TimesGateCoordinator
+from .device import DeviceResponse
 from .screens import render_image_frames
 
 SERVICE_SET_CLOCK_FACE = "set_clock_face"
@@ -20,7 +25,7 @@ SERVICE_SHOW_MESSAGE = "show_message"
 SERVICE_SHOW_IMAGE = "show_image"
 
 _SCREEN = vol.All(vol.Coerce(int), vol.Range(min=0, max=SCREEN_COUNT - 1))
-_DEVICE_ID_FIELD = {vol.Optional("device_id"): vol.All(cv.ensure_list, [cv.string])}
+_DEVICE_ID_FIELD: dict[Any, Any] = {vol.Optional("device_id"): vol.All(cv.ensure_list, [cv.string])}
 
 _SET_CLOCK_FACE_SCHEMA = vol.Schema(
     {
@@ -51,13 +56,15 @@ _SHOW_IMAGE_SCHEMA = vol.Schema(
 )
 
 
-def _coordinators(hass: HomeAssistant):
+def _coordinators(hass: HomeAssistant) -> Iterator[TimesGateCoordinator]:
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.runtime_data is not None:
             yield entry.runtime_data
 
 
-def _target_coordinators(hass: HomeAssistant, call: ServiceCall):
+def _target_coordinators(
+    hass: HomeAssistant, call: ServiceCall
+) -> Iterator[TimesGateCoordinator]:
     """Coordinators targeted by ``call``.
 
     With no ``device_id``, falls back to every configured Times Gate (the
@@ -92,7 +99,7 @@ def _target_coordinators(hass: HomeAssistant, call: ServiceCall):
                 yield entry.runtime_data
 
 
-def _raise_for_device_error(result: dict | None, action: str) -> None:
+def _raise_for_device_error(result: DeviceResponse | None, action: str) -> None:
     """Turn a device-level rejection into an error the caller can see.
 
     ``TimesGate._send`` never raises: it logs and returns ``error_code`` set to
@@ -153,7 +160,9 @@ def async_register_services(hass: HomeAssistant) -> None:
             # screen repaints its normal content when we revert.
             coord.invalidate(screen)
 
-            async def _restore(_now, c=coord) -> None:
+            async def _restore(
+                _now: datetime, c: TimesGateCoordinator = coord
+            ) -> None:
                 await c.async_request_refresh()
 
             async_call_later(hass, call.data["duration"], _restore)
@@ -171,7 +180,9 @@ def async_register_services(hass: HomeAssistant) -> None:
             # Bypassed the hash cache; make sure the next tick can repaint.
             coord.invalidate(screen)
             if call.data["duration"]:
-                async def _restore(_now, c=coord) -> None:
+                async def _restore(
+                _now: datetime, c: TimesGateCoordinator = coord
+            ) -> None:
                     await c.async_request_refresh()
 
                 async_call_later(hass, call.data["duration"], _restore)

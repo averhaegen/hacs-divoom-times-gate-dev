@@ -52,7 +52,9 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     _discovered: list[DiscoveredDevice] = []
 
-    async def async_step_user(self, user_input=None) -> ConfigFlowResult:
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         session = async_get_clientsession(self.hass)
 
@@ -95,7 +97,7 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Discovered devices become a dropdown (still allows typing an IP manually).
         if self._discovered:
-            ip_field = SelectSelector(
+            ip_field: SelectSelector | type[str] = SelectSelector(
                 SelectSelectorConfig(
                     options=[
                         SelectOptionDict(value=d.ip, label=f"{d.name} ({d.ip})")
@@ -127,7 +129,9 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
         """Start reauth: the device stopped accepting the stored LocalToken."""
         return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(self, user_input=None) -> ConfigFlowResult:
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Ask for a fresh LocalToken and write it to the existing entry.
 
         The token changes when the user re-pairs the device in the Divoom app.
@@ -164,7 +168,9 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Change IP/token/interval on the existing entry (HA 'Reconfigure')."""
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
@@ -253,7 +259,9 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             ),
         }
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         self._ensure()
         return self.async_show_menu(
             step_id="init",
@@ -268,7 +276,9 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             ],
         )
 
-    async def _screen_step(self, index: int, user_input: dict[str, Any] | None):
+    async def _screen_step(
+        self, index: int, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
         self._ensure()
         assert self._data is not None
         if user_input is not None:
@@ -287,22 +297,34 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             step_id=f"screen_{index}", data_schema=schema, last_step=False
         )
 
-    async def async_step_screen_0(self, user_input=None):
+    async def async_step_screen_0(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         return await self._screen_step(0, user_input)
 
-    async def async_step_screen_1(self, user_input=None):
+    async def async_step_screen_1(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         return await self._screen_step(1, user_input)
 
-    async def async_step_screen_2(self, user_input=None):
+    async def async_step_screen_2(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         return await self._screen_step(2, user_input)
 
-    async def async_step_screen_3(self, user_input=None):
+    async def async_step_screen_3(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         return await self._screen_step(3, user_input)
 
-    async def async_step_screen_4(self, user_input=None):
+    async def async_step_screen_4(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         return await self._screen_step(4, user_input)
 
-    async def async_step_settings(self, user_input=None):
+    async def async_step_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         self._ensure()
         assert self._data is not None
         if user_input is not None:
@@ -344,6 +366,10 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             step_id="settings", data_schema=schema, last_step=False
         )
 
-    async def async_step_save(self, user_input=None):
+    async def async_step_save(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         self._ensure()
+        # _ensure() always populates _data.
+        assert self._data is not None
         return self.async_create_entry(title="", data=self._data)

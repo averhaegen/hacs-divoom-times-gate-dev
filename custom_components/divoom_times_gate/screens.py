@@ -46,10 +46,14 @@ from .vendor_pixoo._colors import render_color
 
 _LOGGER = logging.getLogger(__name__)
 
-_RESAMPLE = {
-    "nearest": Image.NEAREST, "pixel_art": Image.NEAREST, "box": Image.BOX,
-    "bilinear": Image.BILINEAR, "hamming": Image.HAMMING, "bicubic": Image.BICUBIC,
-    "lanczos": Image.LANCZOS, "antialias": Image.LANCZOS,
+# Image.NEAREST and friends are the same objects as Image.Resampling.NEAREST;
+# Pillow copies them onto the module at runtime, where a checker cannot see them.
+_RESAMPLE: dict[str, Image.Resampling] = {
+    "nearest": Image.Resampling.NEAREST, "pixel_art": Image.Resampling.NEAREST,
+    "box": Image.Resampling.BOX,
+    "bilinear": Image.Resampling.BILINEAR, "hamming": Image.Resampling.HAMMING,
+    "bicubic": Image.Resampling.BICUBIC,
+    "lanczos": Image.Resampling.LANCZOS, "antialias": Image.Resampling.LANCZOS,
 }
 
 
@@ -346,7 +350,7 @@ def _draw_component(canvas: PixelCanvas, component: dict[str, Any]) -> None:
         img = _load_image_resolved(component["source"])
         if img is None:
             return
-        resample = _RESAMPLE.get(component["resample_mode"], Image.BOX)
+        resample = _RESAMPLE.get(component["resample_mode"], Image.Resampling.BOX)
         width, height = component["width"], component["height"]
         if width and height:
             img = img.resize((int(width), int(height)), resample)
@@ -367,7 +371,9 @@ def _draw_component(canvas: PixelCanvas, component: dict[str, Any]) -> None:
             canvas.draw_line((pos[0], pos[1] + size[1]), pos, color)
 
 
-def _resolve_image_source(hass, component, variables) -> dict[str, str] | None:
+def _resolve_image_source(
+    hass: HomeAssistant, component: dict[str, Any], variables: dict[str, Any]
+) -> dict[str, str] | None:
     """Render an image component/page's source field(s) into a literal dict.
 
     Runs on the event loop (templates only, no I/O). The returned dict has a
@@ -429,11 +435,13 @@ _PV_GREY = (131, 131, 131)
 _PV_YELLOW = (255, 175, 0)
 
 
-def _fill(bounds, color) -> dict[str, Any]:
+def _fill(bounds: Any, color: Any) -> dict[str, Any]:
     return {"type": "fill_rect", "bounds": bounds, "color": color}
 
 
-def _text(content, position, color, font) -> dict[str, Any]:
+def _text(
+    content: Any, position: Any, color: Any, font: str
+) -> dict[str, Any]:
     """A draw op for a fixed-layout page. Never uppercased: upstream's pages
     pass their strings through verbatim, and five_pix/pico_8 have lowercase
     glyphs, so forcing upper would change the pixels."""
@@ -448,7 +456,7 @@ def _text(content, position, color, font) -> dict[str, Any]:
     }
 
 
-def _asset(name: str, position) -> dict[str, Any]:
+def _asset(name: str, position: Any) -> dict[str, Any]:
     return {
         "type": "image",
         "source": {"image_asset": name},

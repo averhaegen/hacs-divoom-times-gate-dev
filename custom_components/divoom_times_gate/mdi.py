@@ -60,7 +60,8 @@ DEVICE_CLASS_ICONS: dict[str, str] = {
 @lru_cache(maxsize=1)
 def _codepoints() -> dict[str, int]:
     try:
-        return json.loads(_CODEPOINTS_PATH.read_text())
+        codepoints: dict[str, int] = json.loads(_CODEPOINTS_PATH.read_text())
+        return codepoints
     except (OSError, ValueError) as err:
         _LOGGER.error("MDI codepoints map failed to load: %s", err)
         return {}
@@ -116,7 +117,7 @@ def icon_for_state(state: State | None) -> str:
     if state is None:
         return DEFAULT_ICON
     if icon := state.attributes.get("icon"):
-        return icon
+        return str(icon)
     if device_class := state.attributes.get("device_class"):
         if dynamic := _DYNAMIC_ICONS.get(device_class):
             return dynamic(state)

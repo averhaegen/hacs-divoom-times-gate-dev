@@ -22,6 +22,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from PIL import Image, ImageDraw, ImageFont
 
+from .canvas import LoadedFont
 from .const import NATIVE_KIND_TYPES, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .mdi import draw_icon, icon_for_state
@@ -54,7 +55,7 @@ THEMES: dict[str, dict[str, str]] = {
 DEFAULT_THEME = "dark"
 
 
-def _label_font(size: int) -> ImageFont.ImageFont:
+def _label_font(size: int) -> LoadedFont:
     try:
         return ImageFont.load_default(size)
     except (AttributeError, OSError):
@@ -252,7 +253,7 @@ def render_sensor_grid(
             }
         )
 
-    def value_item(slot: dict, i: int, x: int, y: int, w: int, color: str, align: int = 1) -> None:
+    def value_item(slot: dict[str, Any], i: int, x: int, y: int, w: int, color: str, align: int = 1) -> None:
         entity_id = slot["entity_id"]
         if tpl := slot.get("value_template"):
             key = hashlib.md5(str(tpl).encode()).hexdigest()[:12]
@@ -374,8 +375,8 @@ def render_sensor_grid(
                 # Label on top (centered), large icon in the middle, value below.
                 label_txt = str(label)[:11]
                 lf = _label_font(10)
-                lw = draw.textlength(label_txt, font=lf)
-                draw.text((x + (w - lw) // 2, y + 2), label_txt, font=lf, fill=label_color)
+                label_w = int(draw.textlength(label_txt, font=lf))
+                draw.text((x + (w - label_w) // 2, y + 2), label_txt, font=lf, fill=label_color)
                 icon_size = 26
                 draw_icon(draw, icon, (x + (w - icon_size) // 2, y + 14), icon_size, color)
                 value_item(slot, i, x + 2, y + h - 20, w - 4, color, align=3)

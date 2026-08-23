@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from typing import Any
 
 import aiohttp
 
@@ -30,6 +31,16 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# A parsed device response. ``error_code`` is deliberately ``int | str``: the
+# device returns 0 or a non-zero int, and ``_send`` substitutes the string
+# "exception" when the transport itself failed (see ``_send``, which never
+# raises). Values are otherwise whatever the device's JSON carries.
+type DeviceResponse = dict[str, Any]
+
+# A command payload as built by the ``build_*`` methods, ready for ``_send`` or
+# for nesting inside a ``Draw/CommandList`` batch.
+type CommandPayload = dict[str, Any]
 
 
 class TimesGate:
@@ -57,14 +68,14 @@ class TimesGate:
         # device likely moved to a new DHCP lease.
         self.consecutive_failures = 0
 
-    async def _send(self, command: dict) -> dict:
+    async def _send(self, command: CommandPayload) -> DeviceResponse:
         """POST a command with the LocalToken injected. Returns parsed JSON."""
         payload = {**command, "LocalToken": self._local_token}
         try:
             async with self._session.post(
                 self._url, json=payload, timeout=aiohttp.ClientTimeout(total=9)
             ) as resp:
-                data = await resp.json(content_type=None)
+                data: DeviceResponse = await resp.json(content_type=None)
                 self.consecutive_failures = 0
                 if data.get("error_code") not in (0, None):
                     _LOGGER.warning(
@@ -109,7 +120,7 @@ class TimesGate:
             return AUTH_UNREACHABLE
         return AUTH_INVALID
 
-    async def get_conf(self) -> dict:
+    async def get_conf(self) -> DeviceResponse:
         """Return the device config (brightness, light switch, etc.)."""
         return await self._send({"Command": "Channel/GetAllConf"})
 
@@ -142,7 +153,7 @@ class TimesGate:
         effect: int = 5,
         color_cycle: bool = False,
         secondary_effect: int = 0,
-    ) -> dict:
+    ) -> DeviceResponse:
         """Control one RGB lighting zone (Channel/SetRGBInfo).
 
         light_index: 1=Edgelight (surround strips), 2=Backlight (behind screens).
@@ -176,9 +187,9 @@ class TimesGate:
     def build_item_list(
         self,
         screen: int,
-        items: list[dict],
+        items: list[dict[str, Any]],
         background_gif: str | None = None,
-    ) -> dict:
+    ) -> CommandPayload:
         """Build a Draw/SendHttpItemList payload without sending it.
 
         ``background_gif`` triggers a ``NewFlag: 1`` setup call (full repaint,
@@ -188,7 +199,7 @@ class TimesGate:
         """
         if screen not in range(SCREEN_COUNT):
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
-        payload: dict = {
+        payload: CommandPayload = {
             "Command": "Draw/SendHttpItemList",
             "LcdIndex": screen,
             "ItemList": items,
@@ -200,7 +211,7 @@ class TimesGate:
             payload["NewFlag"] = 0
         return payload
 
-    def build_clear_http_text(self, screen: int, text_id: int = -1) -> dict:
+    def build_clear_http_text(self, screen: int, text_id: int = -1) -> CommandPayload:
         """Build a Draw/ClearHttpText payload without sending it.
 
         A ``text_id`` below zero clears every text overlay on that screen. Send
@@ -213,20 +224,22 @@ class TimesGate:
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
         return {"Command": "Draw/ClearHttpText", "LcdId": screen, "TextId": int(text_id)}
 
-    async def clear_http_text(self, screen: int, text_id: int = -1) -> dict:
+    async def clear_http_text(
+        self, screen: int, text_id: int = -1
+    ) -> DeviceResponse:
         """Draw/ClearHttpText — drop text overlays on one screen."""
         return await self._send(self.build_clear_http_text(screen, text_id))
 
     async def send_item_list(
         self,
         screen: int,
-        items: list[dict],
+        items: list[dict[str, Any]],
         background_gif: str | None = None,
-    ) -> dict:
+    ) -> DeviceResponse:
         """Draw/SendHttpItemList — rich on-device text items for one screen."""
         return await self._send(self.build_item_list(screen, items, background_gif))
 
-    async def send_command_list(self, commands: list[dict]) -> dict:
+    async def send_command_list(self, commands: list[CommandPayload]) -> DeviceResponse:
         """Draw/CommandList — batch several commands into one POST.
 
         ``commands`` are sub-command payloads as built by this class's
@@ -237,7 +250,7 @@ class TimesGate:
         """
         return await self._send({"Command": "Draw/CommandList", "CommandList": commands})
 
-    async def set_key_backlight(self, on: bool) -> dict:
+    async def set_key_backlight(self, on: bool) -> DeviceResponse:
         """Toggle the physical button backlight (KeyOnOff, via Channel/SetRGBInfo)."""
         return await self._send(
             {"Command": "Channel/SetRGBInfo", "KeyOnOff": 1 if on else 0}
@@ -255,11 +268,11 @@ class TimesGate:
 
     def build_clock_face(
         self, screen: int, clock_id: int, independence_id: int | None = None
-    ) -> dict:
+    ) -> CommandPayload:
         """Build a Channel/SetClockSelectId payload without sending it."""
         if screen not in range(SCREEN_COUNT):
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
-        payload: dict = {
+        payload: CommandPayload = {
             "Command": "Channel/SetClockSelectId",
             "ClockId": int(clock_id),
             "LcdIndex": screen,
@@ -270,25 +283,25 @@ class TimesGate:
 
     async def set_clock_face(
         self, screen: int, clock_id: int, independence_id: int | None = None
-    ) -> dict:
+    ) -> DeviceResponse:
         """Show a native face on one screen (0-4), in Independent Display mode."""
         return await self._send(self.build_clock_face(screen, clock_id, independence_id))
 
-    def build_play_gif(self, screen: int, urls: list[str]) -> dict:
+    def build_play_gif(self, screen: int, urls: list[str]) -> CommandPayload:
         """Build a Device/PlayGif payload without sending it."""
         lcd_array = [0] * SCREEN_COUNT
         lcd_array[screen] = 1
         return {"Command": "Device/PlayGif", "LcdArray": lcd_array, "FileName": list(urls)}
 
-    async def play_gif(self, screen: int, urls: list[str]) -> dict:
+    async def play_gif(self, screen: int, urls: list[str]) -> DeviceResponse:
         """Play one or more net GIFs on a screen (sizes 16/32/64/128)."""
         return await self._send(self.build_play_gif(screen, urls))
 
     def build_visualizer(
         self, screen: int, eq_position: int, independence_id: int | None = None
-    ) -> dict:
+    ) -> CommandPayload:
         """Build a Channel/SetEqPosition payload without sending it."""
-        payload: dict = {
+        payload: CommandPayload = {
             "Command": "Channel/SetEqPosition",
             "EqPosition": int(eq_position),
             "LcdIndex": screen,
@@ -299,17 +312,17 @@ class TimesGate:
 
     async def set_visualizer(
         self, screen: int, eq_position: int, independence_id: int | None = None
-    ) -> dict:
+    ) -> DeviceResponse:
         """Show an audio visualizer on a screen."""
         return await self._send(self.build_visualizer(screen, eq_position, independence_id))
 
-    async def set_whole_face(self, clock_id: int) -> dict:
+    async def set_whole_face(self, clock_id: int) -> DeviceResponse:
         """Overall Display: one face spanning all 5 screens."""
         return await self._send(
             {"Command": "Channel/Set5LcdWholeClockId", "ClockId": int(clock_id)}
         )
 
-    async def set_independent_preset(self, independence_id: int) -> dict:
+    async def set_independent_preset(self, independence_id: int) -> DeviceResponse:
         """Independent Display: activate a native preset (ControlN)."""
         return await self._send(
             {
@@ -319,7 +332,7 @@ class TimesGate:
             }
         )
 
-    def build_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
+    def build_jpeg(self, jpeg_bytes: bytes, screen: int) -> CommandPayload:
         """Build a Draw/SendHttpGif payload without sending it.
 
         ``jpeg_bytes`` is the raw bytes of a JPEG file (e.g. from
@@ -345,13 +358,13 @@ class TimesGate:
             "PicData": base64.b64encode(jpeg_bytes).decode("ascii"),
         }
 
-    async def send_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict:
+    async def send_jpeg(self, jpeg_bytes: bytes, screen: int) -> DeviceResponse:
         """Send a 128×128 JPEG image to one screen (0-4)."""
         return await self._send(self.build_jpeg(jpeg_bytes, screen))
 
     async def send_animation(
         self, frames: list[bytes], screen: int, speed_ms: int = 200
-    ) -> dict:
+    ) -> DeviceResponse:
         """Send a multi-frame animation to one screen (0-4).
 
         Per docs/API.md §5 / eriksalo's notes: all frames share one ``PicID``,
@@ -368,7 +381,7 @@ class TimesGate:
         lcd_array[screen] = 1
         self._pic_id += 1
         pic_id = self._pic_id
-        resp: dict = {}
+        resp: DeviceResponse = {}
         for offset, frame in enumerate(frames):
             resp = await self._send(
                 {

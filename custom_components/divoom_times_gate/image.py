@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import DivoomTimesGateConfigEntry
 from .const import SCREEN_COUNT
+from .coordinator import TimesGateCoordinator
 from .entity import TimesGateEntity
 
 PARALLEL_UPDATES = 0
@@ -36,7 +37,7 @@ class TimesGateScreenPreview(TimesGateEntity, ImageEntity):
     _attr_content_type = "image/jpeg"
     _attr_entity_registry_enabled_default = True
 
-    def __init__(self, hass: HomeAssistant, coordinator, screen: int) -> None:
+    def __init__(self, hass: HomeAssistant, coordinator: TimesGateCoordinator, screen: int) -> None:
         TimesGateEntity.__init__(self, coordinator)
         ImageEntity.__init__(self, hass)
         self._screen = screen
