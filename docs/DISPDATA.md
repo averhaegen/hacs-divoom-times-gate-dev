@@ -292,15 +292,15 @@ hiccup, a momentary network drop on the device's side, …), because nothing
 about the *page config* changed, only the device's live state — and HA only
 re-sends when the config's signature changes.
 
-- **Manual recovery:** press the **"Refresh screens"** button (or call the
-  `divoom_times_gate.refresh` service). This clears every screen's
+- **Manual recovery:** press the **"Refresh screens"** button. This clears every
+  screen's
   change-tracking signature and forces a full repaint next tick, including a
   fresh `NewFlag: 1` setup call for any `dispdata_text` page — same fix as for
   a stuck JPEG page.
 - **Automatic recovery:** this integration intentionally does **not**
   periodically re-send DispData setups on its own (that would undercut the
   "zero push" design). If you want a safety net, build a small HA automation
-  instead — e.g. call the refresh button/service every N hours, or trigger it
+  instead — e.g. press the refresh button every N hours, or trigger it
   off a template condition (like a `binary_sensor` you maintain that flags
   "this screen looks stale"). Keeping this outside the integration means you
   control the trade-off between resilience and push frequency yourself,

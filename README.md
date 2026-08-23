@@ -21,6 +21,128 @@ give you pixel-level drawing.
 > ℹ️ This is an unofficial, community-maintained integration. It is not
 > affiliated with, endorsed by, or supported by Divoom.
 
+## Supported devices
+
+This integration supports the **Divoom Times Gate** only. No other Divoom device
+speaks the same 5-screen local API.
+
+| Hardware revision | Local endpoint | Status |
+| --- | --- | --- |
+| 400 | `POST http://<ip>/post` | Tested. Every reverse-engineered fact in these docs comes from one revision 400 unit. |
+| 402 | `POST http://<ip>:9000/divoom_api` | Supported in code, following Divoom's official documentation. Nobody has run this integration against a revision 402 device, so treat it as unverified. |
+
+The revision comes from Divoom's LAN discovery response and defaults to `400`
+when discovery does not report one. Port 9000 is confirmed closed on revision
+400, so the two endpoints are not interchangeable.
+
+The integration talks to the device over your local network. It calls Divoom's
+cloud twice, and only for convenience: once at setup to find devices that share
+your public IP address, and again when building the face and preset option lists.
+Neither call signs in to your Divoom account. See
+[docs/LIMITATIONS.md, no Divoom cloud account features](docs/LIMITATIONS.md#no-divoom-cloud-account-features).
+
+## Supported functions
+
+### Entities
+
+The integration creates one device with 19 entities.
+
+| Entity | Platform | What it does |
+| --- | --- | --- |
+| **Display** | light | Turns the whole display on or off and sets its brightness. |
+| **Edgelight** | light | The curved edge strips. Colour, brightness, and 12 device effects. |
+| **Backlight** | light | The lighting behind the 5 screens. Colour, brightness, and 12 device effects. |
+| **Display source** | select | Chooses what drives the device: `HA Dashboard`, `Off`, an `Overall Display: <name>` face, or an `Independent Display: <name>` preset. |
+| **Screen 1** to **Screen 5** | select | Per-screen mode while the display source is `HA Dashboard`: `Custom`, `Off`, or `Face: <name>`. |
+| **Screen 1 preview** to **Screen 5 preview** | image | The last frame Home Assistant rendered for that screen. Not a screenshot. |
+| **Refresh screens** | button | Forces a full repaint of every screen on the next poll. |
+| **Buzzer** | button | Sounds the device buzzer. |
+| **Edgelight color cycle** | switch | Cycles the edge strip through colours instead of holding the chosen one. |
+| **Backlight color cycle** | switch | Cycles the backlight through colours instead of holding the chosen one. |
+| **Button backlight** | switch | Lights the physical buttons. |
+
+The three switches are configuration entities and report an assumed state,
+because the device does not report these settings back.
+
+### Screen content
+
+Configure each screen through the integration's **Configure** dialog. A screen
+holds one page, or a list of pages that rotate. See
+[Configuring screens](#configuring-screens) for the page types: `card`,
+`components`, `image`, `dispdata_text`, `clock`, `gif`, `visualizer`, and `off`.
+
+### Actions
+
+| Action | What it does |
+| --- | --- |
+| `divoom_times_gate.set_clock_face` | Shows a native device face on one screen. |
+| `divoom_times_gate.show_message` | Flashes text on one screen, then reverts. |
+| `divoom_times_gate.show_image` | Shows a photo or animated GIF on one screen. |
+
+All three take an optional `device_id` so you can target one Times Gate when you
+have several. Full field lists are in [Services](#services).
+
+### Diagnostics
+
+Download diagnostics from the device page's three-dot menu. The file contains the
+config entry data, the screen configuration, and the result of the last push per
+screen. The LocalToken, the DispData secret, and the MAC address are redacted.
+
+## Data updates
+
+The integration polls. Its `DataUpdateCoordinator` runs on the **refresh
+interval**, which defaults to **60 seconds** and accepts **5 to 3600 seconds** in
+**Configure > Settings & faces**.
+
+What happens on each tick depends on the **Display source**:
+
+- If the display source is not `HA Dashboard`, the coordinator sends nothing. The
+  device keeps showing its own face and Home Assistant stays out of the way.
+- If it is `HA Dashboard`, the coordinator renders every screen set to `Custom`,
+  hashes the result, and skips any screen whose hash has not changed. Screens set
+  to `Off` or to a face are written once when you change them, not on every tick.
+- Everything that did change goes to the device in a single `Draw/CommandList`
+  request, so one tick is one HTTP call however many screens changed.
+
+A `dispdata_text` page works differently, and does not use the refresh interval
+at all. Home Assistant sends the background and the layout once, when the page
+first becomes active. After that **the device polls Home Assistant** at
+`http://<home-assistant-ip>:8123/api/divoom_times_gate/dispdata/<secret>/<entity_id>`
+every `update_time` seconds (10 seconds by default) and redraws the value itself.
+Home Assistant sends nothing again unless the page configuration changes. Use it
+for a value you want fresh without paying for a full screen repaint. Setup and
+network requirements are in [docs/DISPDATA.md](docs/DISPDATA.md).
+
+If a poll fails, the coordinator retries on the next tick. After 3 failures in a
+row it marks the entities unavailable, and it re-runs discovery to find the device
+at a new IP address. See
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#all-entities-show-as-unavailable).
+
+## Use cases
+
+What people set this up for. Each one links to a worked example.
+
+- **Watch solar and battery at a glance.** Give one screen a `card` page with
+  your production, load, and state-of-charge sensors, and read it from across the
+  room. See [the solar example](docs/EXAMPLES.md#watch-solar-and-battery-at-a-glance).
+- **Get alerted without your phone.** Flash a message or a camera snapshot on one
+  screen when the doorbell rings or the washing machine finishes, then let the
+  screen go back to normal on its own. See
+  [the doorbell example](docs/EXAMPLES.md#flash-a-doorbell-alert-on-the-middle-screen).
+- **Keep the clock a clock.** Leave four screens on the device's own faces and
+  hand one to Home Assistant. See
+  [the mixed-mode example](docs/EXAMPLES.md#keep-native-faces-most-of-the-time-and-one-home-assistant-screen).
+- **Show a live value cheaply.** A `dispdata_text` page is set up once and then
+  refreshed by the device itself, so a number stays current without repainting
+  the screen. See
+  [the dispdata example](docs/EXAMPLES.md#show-a-live-sensor-value-without-repainting-the-screen).
+- **Turn the clock into a status light.** Drive the edge strip from your alarm
+  state or another sensor. See
+  [the RGB example](docs/EXAMPLES.md#use-the-rgb-lights-as-a-house-status-indicator).
+- **Change what the device shows on a schedule.** Switch the display source at
+  night and back in the morning. See
+  [the night mode example](docs/EXAMPLES.md#switch-the-whole-device-back-to-its-own-faces-at-night).
+
 ## How it works
 
 The Times Gate exposes a local HTTP API (`POST http://<ip>/post`). Key facts
@@ -285,28 +407,65 @@ Adjust the `variables` to your own sensors:
 
 ## Services
 
-- **`divoom_times_gate.set_clock_face`** — `screen` (0–4), `clock_id`. Show any
+- **`divoom_times_gate.set_clock_face`**: `screen` (0 to 4), `clock_id`. Shows any
   native face on a screen.
-- **`divoom_times_gate.show_message`** — `screen`, `text`, optional `duration`
-  and `color`. Flash a message, then revert to normal content.
-- **`divoom_times_gate.show_image`** — `screen`, `image_path` or `image_url`,
-  optional `fit` (cover/contain) and `duration` (0 = keep showing). Quickly
-  throw a photo or animated GIF onto a screen.
+- **`divoom_times_gate.show_message`**: `screen`, `text`, optional `duration`
+  (1 to 600 seconds) and `color` (`#RRGGBB`). Flashes a message, then reverts to
+  normal content.
+- **`divoom_times_gate.show_image`**: `screen`, `image_path` or `image_url`,
+  optional `fit` (cover or contain) and `duration` (0 to 86400 seconds, where 0
+  keeps showing). Throws a photo or animated GIF onto a screen.
+
+Each service also takes an optional `device_id`. For automations that use these,
+see [docs/EXAMPLES.md](docs/EXAMPLES.md).
 
 ## RGB lighting
 
-Two independent RGB light entities, matching the Divoom app's zones:
-- **Surround lights** — the curved edge strips
-- **Back lights** — the lighting behind the 5 screens
+Two independent RGB light entities, one per lighting zone:
 
-Each supports **colour + brightness**, plus an **effect** list:
-- **Solid** — static chosen colour (default)
-- **Rainbow** — auto colour-cycle (ignores the chosen colour)
-- **Colour 4 / 6 / 7 / 9** — animations that honour the chosen colour
-- **Party 0 / 1 / 2 / 5 / 8 / 10 / 11** — fixed multicolour animations (ignore the
-  chosen colour)
+- **Edgelight**, the curved edge strips.
+- **Backlight**, the lighting behind the 5 screens.
 
-The two zones are independent (e.g. blue surround + green back at the same time).
+Each takes a colour and a brightness, and each has its own list of 12 device
+effects. The lists differ per zone, because the device numbers them differently:
+
+| Effect id | Edgelight | Backlight |
+| --- | --- | --- |
+| 0 | Sparkle | Beetle |
+| 1 | Pendulum | Atom |
+| 2 | Rainbow | Pendulum |
+| 3 | Beetle | Sparkle |
+| 4 | Bulb (default) | Rainbow |
+| 5 | Flame | Bulb (default) |
+| 6 | Waves | Infinity |
+| 7 | Rain | Chat |
+| 8 | Heart | Antenna |
+| 9 | Infinity | Waves |
+| 10 | Rocket | Rain |
+| 11 | Color wheel | Circles |
+
+The **Edgelight color cycle** and **Backlight color cycle** switches make a zone
+cycle through colours instead of holding the one you picked. The **Button
+backlight** switch lights the physical buttons.
+
+The two zones are independent, so you can run a blue edge strip and a green
+backlight at the same time. For the device commands behind this, see
+[docs/RGB_LIGHTS.md](docs/RGB_LIGHTS.md).
+
+## Known limitations
+
+Read [docs/LIMITATIONS.md](docs/LIMITATIONS.md) before you file a bug. It covers
+what the device cannot do and why, including no Divoom account features, no
+sensor entities for device state, no way to read back what a screen shows, labels
+that do not scroll, and the rotation combination that leaves a screen on
+"Loading".
+
+## Troubleshooting
+
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists symptoms with their
+causes and fixes: discovery finding nothing, a rejected LocalToken, entities
+going unavailable, a device that changed IP address, a screen stuck on "Loading",
+and a `dispdata_text` value that never arrives.
 
 ## Removing the integration
 

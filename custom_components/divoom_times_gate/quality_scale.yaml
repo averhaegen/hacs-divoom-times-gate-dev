@@ -51,13 +51,13 @@ rules:
   dynamic-devices:
     status: exempt
     comment: Single device per config entry.
-  docs-supported-devices: todo
-  docs-supported-functions: todo
-  docs-data-update: todo
-  docs-known-limitations: todo
-  docs-troubleshooting: todo
-  docs-examples: todo
-  docs-use-cases: todo
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-data-update: done
+  docs-known-limitations: done
+  docs-troubleshooting: done
+  docs-examples: done
+  docs-use-cases: done
 
   # --- Platinum ---
   async-dependency: done
