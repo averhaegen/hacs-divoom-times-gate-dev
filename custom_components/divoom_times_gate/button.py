@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import DivoomTimesGateConfigEntry
+from .coordinator import TimesGateCoordinator
 from .entity import TimesGateEntity
 
 PARALLEL_UPDATES = 1
@@ -31,7 +32,7 @@ class TimesGateRefreshButton(TimesGateEntity, ButtonEntity):
 
     _attr_name = "Refresh screens"
 
-    def __init__(self, coordinator) -> None:
+    def __init__(self, coordinator: TimesGateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_refresh"
 
@@ -44,7 +45,7 @@ class TimesGateBuzzerButton(TimesGateEntity, ButtonEntity):
 
     _attr_name = "Buzzer"
 
-    def __init__(self, coordinator) -> None:
+    def __init__(self, coordinator: TimesGateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_buzzer"
 

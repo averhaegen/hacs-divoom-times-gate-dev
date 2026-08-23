@@ -32,6 +32,23 @@ jobs:
         with:
           args: check .
 
+  mypy:
+    name: Mypy strict typing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install typing dependencies
+        # homeassistant ships py.typed, so mypy resolves the framework types
+        # from the real package rather than falling back to Any. Pillow ships
+        # its own stubs, so types-Pillow is not needed.
+        run: pip install mypy homeassistant
+      - name: Run mypy
+        run: mypy custom_components/divoom_times_gate
+
   tests:
     name: Pytest smoke tests
     runs-on: ubuntu-latest

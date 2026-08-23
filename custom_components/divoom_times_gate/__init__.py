@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import secrets as secrets_module
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -47,7 +48,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def _try_heal_ip(hass, entry, session) -> TimesGate | None:
+async def _try_heal_ip(
+    hass: HomeAssistant,
+    entry: DivoomTimesGateConfigEntry,
+    session: aiohttp.ClientSession,
+) -> TimesGate | None:
     """If the device moved to a new IP, update the entry and return a client.
 
     Matches the cloud LAN discovery on MAC (or DeviceId as fallback). Returns

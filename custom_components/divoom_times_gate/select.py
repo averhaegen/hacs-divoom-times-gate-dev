@@ -27,7 +27,7 @@ from .entity import TimesGateEntity
 PARALLEL_UPDATES = 1
 
 
-def _faces(entry: DivoomTimesGateConfigEntry) -> dict[str, list[dict]]:
+def _faces(entry: DivoomTimesGateConfigEntry) -> dict[str, list[dict[str, Any]]]:
     return entry.options.get(CONF_FACES) or DEFAULT_FACES
 
 
@@ -47,7 +47,7 @@ class DisplaySourceSelect(TimesGateEntity, SelectEntity, RestoreEntity):
 
     _attr_name = "Display source"
 
-    def __init__(self, coordinator: TimesGateCoordinator, entry) -> None:
+    def __init__(self, coordinator: TimesGateCoordinator, entry: DivoomTimesGateConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_display_source"
         faces = _faces(entry)
@@ -87,7 +87,12 @@ class DisplaySourceSelect(TimesGateEntity, SelectEntity, RestoreEntity):
 class ScreenSelect(TimesGateEntity, SelectEntity, RestoreEntity):
     """Per-screen: Custom / Off / Face: <name> (active in HA Dashboard mode)."""
 
-    def __init__(self, coordinator: TimesGateCoordinator, entry, screen: int) -> None:
+    def __init__(
+        self,
+        coordinator: TimesGateCoordinator,
+        entry: DivoomTimesGateConfigEntry,
+        screen: int,
+    ) -> None:
         super().__init__(coordinator)
         self._screen = screen
         self._attr_name = f"Screen {screen + 1}"

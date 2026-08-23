@@ -1,0 +1,40 @@
+[tool.mypy]
+# Home Assistant Quality Scale Platinum requires strict typing. These settings
+# mirror what Home Assistant core applies to its own integrations.
+platform = "linux"
+# Match the Python the CI test job runs. Anything lower and mypy cannot parse
+# homeassistant's own sources, which use 3.14 except-expression syntax.
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_incomplete_stub = true
+no_implicit_optional = true
+local_partial_types = true
+show_error_codes = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-self",
+    "truthy-iterable",
+]
+
+# vendor_pixoo/ is bitmap font and colour code vendored from
+# gickowtf/pixoo-homeassistant (MIT). It is deliberately kept byte-similar to
+# upstream so glyphs render pixel-identically, so it is never hand-edited to
+# satisfy a type checker. Re-vendor the file wholesale instead.
+exclude = "^custom_components/divoom_times_gate/vendor_pixoo/"
+
+[[tool.mypy.overrides]]
+# Home Assistant re-exports through package __init__ without __all__, so
+# strict's no_implicit_reexport misreads e.g. `from homeassistant.components.light
+# import ColorMode` as a private import. HA core applies no_implicit_reexport
+# only to its own tree, not to integrations. Match that.
+module = "homeassistant.*"
+no_implicit_reexport = false
+
+[[tool.mypy.overrides]]
+module = "custom_components.divoom_times_gate.vendor_pixoo.*"
+ignore_errors = true
+follow_imports = "skip"

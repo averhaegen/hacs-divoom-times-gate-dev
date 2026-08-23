@@ -9,7 +9,7 @@ from typing import Any
 
 # Favorite faces shown in the Select dropdowns. A small starting set — users
 # edit these in the options, and grab clock_ids from the Divoom app.
-DEFAULT_FACES: dict[str, list[dict]] = {
+DEFAULT_FACES: dict[str, list[dict[str, Any]]] = {
     "overall": [  # Overall Display (one face spanning all 5 screens)
         {"name": "Neon", "clock_id": 1040},
         {"name": "Clock face", "clock_id": 581},

@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import DivoomTimesGateConfigEntry
+from .coordinator import TimesGateCoordinator
 from .entity import TimesGateEntity
 
 PARALLEL_UPDATES = 1
@@ -89,7 +90,7 @@ class TimesGateLight(TimesGateEntity, LightEntity):
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
-    def __init__(self, coordinator) -> None:
+    def __init__(self, coordinator: TimesGateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_display"
         self._attr_is_on = True
@@ -140,7 +141,7 @@ class TimesGateRGBLight(TimesGateEntity, LightEntity):
 
     def __init__(
         self,
-        coordinator,
+        coordinator: TimesGateCoordinator,
         light_index: int,
         name: str,
         effects: dict[str, int],
@@ -195,8 +196,8 @@ class TimesGateRGBLight(TimesGateEntity, LightEntity):
 
     async def _async_apply(self) -> None:
         """Push the current effect/colour/cycle state to the device."""
-        select_effect = self._effects.get(self._attr_effect, self._effects[next(iter(self._effects))])
-        color_hex = "#{:02X}{:02X}{:02X}".format(*self._attr_rgb_color)
+        select_effect = self._effects.get(self._attr_effect or "", self._effects[next(iter(self._effects))])
+        color_hex = "#{:02X}{:02X}{:02X}".format(*(self._attr_rgb_color or (255, 255, 255)))
         await self._device.set_rgb(
             self._light_index,
             True,

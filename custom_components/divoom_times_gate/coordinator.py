@@ -17,7 +17,7 @@ from datetime import timedelta
 import hashlib
 from io import BytesIO
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 
 from homeassistant.config_entries import ConfigEntry
@@ -41,8 +41,8 @@ from .const import (
     SCREEN_COUNT,
 )
 from .defaults import DEFAULT_SCREENS
-from .device import TimesGate
-from .discovery import async_discover_devices
+from .device import CommandPayload, TimesGate
+from .discovery import IndependentPreset, async_discover_devices
 from .dispdata import publish_card_background, register_allowed_entity
 from .screens import (
     is_enabled,
@@ -66,7 +66,7 @@ def _gif_to_jpeg(gif: bytes) -> bytes:
         return buf.getvalue()
 
 
-class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
+class TimesGateCoordinator(DataUpdateCoordinator[dict[int | str, str]]):
     """Renders/rotates custom screens and arbitrates with native faces."""
 
     config_entry: DivoomTimesGateConfigEntry
@@ -88,7 +88,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self.device = device
         self._first_run = True
         self._tick = interval
-        self.presets: list = []  # IndependentPreset list, filled at setup
+        self.presets: list[IndependentPreset] = []  # IndependentPreset list, filled at setup
         # RGB light entities, keyed by light_index (1=Edgelight, 2=Backlight),
         # filled by light.py's async_setup_entry so switch.py can reach them.
         self.rgb_lights: dict[int, Any] = {}
@@ -375,7 +375,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     # --- periodic render/push ---------------------------------------------
 
-    async def _async_update_data(self) -> dict[int, str]:
+    async def _async_update_data(self) -> dict[int | str, str]:
         self._maybe_heal_ip()
         if self._first_run:
             await self.device.reset_pic_counter()
@@ -408,15 +408,17 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         if self.display[0] != "dashboard":
             return {"display": self.display[0]}
 
-        results: dict[int, str] = {}
-        pending: dict[int, tuple[dict, str]] = {}
+        results: dict[int | str, str] = {}
+        pending: dict[int, tuple[CommandPayload, str]] = {}
         for screen in range(SCREEN_COUNT):
             kind = self.screen_modes[screen][0]
             if kind != "custom":
                 continue  # face / off were set on change; nothing to do each tick.
             status, command, signature = await self._build_custom(screen)
             if command is not None:
-                pending[screen] = (command, signature)
+                # _pending() only withholds a command together with its
+                # signature, so a command implies a signature.
+                pending[screen] = (command, cast("str", signature))
             else:
                 results[screen] = status
 
@@ -433,7 +435,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
                 results[screen] = status
         return results
 
-    async def _build_custom(self, screen: int) -> tuple[str, dict | None, str | None]:
+    async def _build_custom(self, screen: int) -> tuple[str, CommandPayload | None, str | None]:
         """Build the pending command for one screen's current page, if any.
 
         Returns ``(status, command, signature)``. ``command`` is ``None`` when
@@ -509,7 +511,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             _LOGGER.exception("Screen %s render failed: %s", screen, err)
             return "error", None, None
 
-    def _pending(self, screen: int, signature: str, command: dict) -> tuple[str, dict | None, str | None]:
+    def _pending(self, screen: int, signature: str, command: CommandPayload) -> tuple[str, CommandPayload | None, str | None]:
         """Skip building a duplicate command if the signature hasn't changed."""
         if self._last_hashes.get(screen) == signature:
             return "unchanged", None, None
@@ -517,7 +519,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def _build_image(
         self, screen: int, page: dict[str, Any]
-    ) -> tuple[str, dict | None, str | None]:
+    ) -> tuple[str, CommandPayload | None, str | None]:
         """Build an ``image`` page: a photo or animated GIF on one screen.
 
         Single frames join the normal batched JPEG path. Animations need one
@@ -551,7 +553,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def _build_card(
         self, screen: int, page: dict[str, Any]
-    ) -> tuple[str, dict | None, str | None]:
+    ) -> tuple[str, CommandPayload | None, str | None]:
         """Build a gallery card (SPEC_CARD_GALLERY.md): HA-rendered background
         GIF served over HTTP + type-23 self-polling value overlays.
 
@@ -611,7 +613,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def _build_dispdata_text(
         self, screen: int, page: dict[str, Any]
-    ) -> tuple[str, dict | None, str | None]:
+    ) -> tuple[str, CommandPayload | None, str | None]:
         """Build up to 4 type-23 net-text items once; the device then self-polls
         each independently.
 
@@ -703,7 +705,7 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
     async def _build_dispdata_items(
         self, screen: int, page: dict[str, Any]
-    ) -> tuple[str, dict | None, str | None]:
+    ) -> tuple[str, CommandPayload | None, str | None]:
         """Build a raw list of dispdata_text items with full manual control.
 
         Unlike ``sensors:`` (auto-stacked "<name>: <value>" rows), ``items:``

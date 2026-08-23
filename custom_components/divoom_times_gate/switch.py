@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import DivoomTimesGateConfigEntry
+from .coordinator import TimesGateCoordinator
 from .entity import TimesGateEntity
 
 PARALLEL_UPDATES = 1
@@ -41,14 +42,14 @@ class TimesGateColorCycleSwitch(TimesGateEntity, SwitchEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_assumed_state = True
 
-    def __init__(self, coordinator, light_index: int, name: str) -> None:
+    def __init__(self, coordinator: TimesGateCoordinator, light_index: int, name: str) -> None:
         super().__init__(coordinator)
         self._light_index = light_index
         self._attr_name = name
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_color_cycle_{light_index}"
 
     @property
-    def _light(self):
+    def _light(self) -> Any:
         return self.coordinator.rgb_lights.get(self._light_index)
 
     @property
@@ -74,7 +75,7 @@ class TimesGateKeyBacklightSwitch(TimesGateEntity, SwitchEntity):
     _attr_name = "Button backlight"
     _attr_assumed_state = True
 
-    def __init__(self, coordinator) -> None:
+    def __init__(self, coordinator: TimesGateCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_key_backlight"
         self._attr_is_on = True

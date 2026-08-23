@@ -146,7 +146,7 @@ options-flow YAML editor, diagnostics).
   `dispdata_text` doesn't (colour is fixed at setup time).
 
 - [x] **CI** — GitHub Actions: hassfest, HACS validation, ruff, pytest.
-- [ ] **CI typing** — add `mypy --strict` to the workflow (see Platinum below).
+- [x] **CI typing** — `mypy --strict` runs in the workflow.
 - [ ] **Bronze** — brands (icon/logo PR to home-assistant/brands), removal docs,
   config-flow test coverage.
 - [ ] **Final repo name + brands submission** — decide the definitive repo

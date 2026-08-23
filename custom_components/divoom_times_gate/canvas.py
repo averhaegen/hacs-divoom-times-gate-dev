@@ -8,7 +8,10 @@ nearest-neighbour, keeping pixel art crisp.
 """
 from __future__ import annotations
 
-from PIL import Image, ImageFont
+from collections.abc import Sequence
+from typing import cast
+
+from PIL import Image, ImageFont, _imaging
 
 from .vendor_pixoo._font import (
     CLOCK,
@@ -21,7 +24,20 @@ from .vendor_pixoo._font import (
     retrieve_glyph_width,
 )
 
-FONTS = {
+# A vendored bitmap font maps a character to a flat list of on/off bits with the
+# glyph width appended as the final element.
+type GlyphFont = dict[str, list[int]]
+
+# Coordinates and colours arrive from JSON page configs, so they may be lists as
+# well as tuples. Accept any integer sequence rather than forcing a runtime shape.
+type Point = Sequence[int]
+type Rgb = Sequence[int]
+
+# A cached font is whichever concrete class Pillow hands back: load_default()
+# returns a bitmap ImageFont on old Pillow and a FreeTypeFont on current ones.
+type LoadedFont = ImageFont.FreeTypeFont | ImageFont.ImageFont
+
+FONTS: dict[str, GlyphFont] = {
     "pico_8": FONT_PICO_8,
     "gicko": FONT_GICKO,
     "five_pix": FIVE_PIX,
@@ -31,14 +47,15 @@ FONTS = {
 }
 
 
-def font_by_name(name: str | None):
-    return FONTS.get((name or "").lower(), FONT_PICO_8)
+def font_by_name(name: str | None) -> GlyphFont:
+    font: GlyphFont = FONTS.get((name or "").lower(), FONT_PICO_8)
+    return font
 
 
-_SCALABLE_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+_SCALABLE_CACHE: dict[int, LoadedFont] = {}
 
 
-def _scalable_font(size: int) -> ImageFont.FreeTypeFont:
+def _scalable_font(size: int) -> LoadedFont:
     """A scalable TrueType font at the given pixel size (for native-128 screens)."""
     if size not in _SCALABLE_CACHE:
         try:
@@ -54,14 +71,16 @@ class PixelCanvas:
     def __init__(self, size: int = 64) -> None:
         self.size = size
         self._img = Image.new("RGB", (size, size), (0, 0, 0))
-        self._px = self._img.load()
+        # load() is typed Optional for images that fail to decode; a freshly
+        # allocated buffer always has pixel access.
+        self._px = cast("_imaging.PixelAccess", self._img.load())
 
-    def draw_pixel(self, xy: tuple[int, int], rgb) -> None:
+    def draw_pixel(self, xy: Point, rgb: Rgb) -> None:
         x, y = int(xy[0]), int(xy[1])
         if 0 <= x < self.size and 0 <= y < self.size:
             self._px[x, y] = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
-    def draw_character(self, character: str, xy, rgb, font) -> None:
+    def draw_character(self, character: str, xy: Point, rgb: Rgb, font: GlyphFont) -> None:
         matrix = retrieve_glyph(character, font)
         if matrix is None:
             return
@@ -72,13 +91,15 @@ class PixelCanvas:
                 local_y = index // x_size
                 self.draw_pixel((xy[0] + local_x, xy[1] + local_y), rgb)
 
-    def get_text_width(self, text: str, font) -> int:
+    def get_text_width(self, text: str, font: GlyphFont) -> int:
         length = 0
         for character in text:
             length += retrieve_glyph_width(character, font) + 1
         return length - 1
 
-    def draw_text(self, text: str, xy, rgb, font, align: str = "left") -> None:
+    def draw_text(
+        self, text: str, xy: Point, rgb: Rgb, font: GlyphFont, align: str = "left"
+    ) -> None:
         y_offset = 0
         for line in text.split("\n"):
             if align == "center":
@@ -96,12 +117,12 @@ class PixelCanvas:
             height = int((len(dummy) - 1) / dummy[-1])
             y_offset += height + 1
 
-    def draw_filled_rectangle(self, top_left, bottom_right, rgb) -> None:
+    def draw_filled_rectangle(self, top_left: Point, bottom_right: Point, rgb: Rgb) -> None:
         for y in range(int(top_left[1]), int(bottom_right[1]) + 1):
             for x in range(int(top_left[0]), int(bottom_right[0]) + 1):
                 self.draw_pixel((x, y), rgb)
 
-    def draw_line(self, start, stop, rgb) -> None:
+    def draw_line(self, start: Point, stop: Point, rgb: Rgb) -> None:
         x0, y0 = int(start[0]), int(start[1])
         x1, y1 = int(stop[0]), int(stop[1])
         dx, dy = abs(x1 - x0), abs(y1 - y0)
@@ -120,15 +141,16 @@ class PixelCanvas:
                 err += dx
                 y0 += sy
 
-    def draw_image(self, img: Image.Image, xy) -> None:
+    def draw_image(self, img: Image.Image, xy: Point) -> None:
         rgba = img.convert("RGBA")
         for y in range(rgba.size[1]):
             for x in range(rgba.size[0]):
-                pixel = rgba.getpixel((x, y))
+                # An RGBA image always yields a 4-tuple per pixel.
+                pixel = cast("tuple[int, int, int, int]", rgba.getpixel((x, y)))
                 if pixel[3] != 0:
                     self.draw_pixel((xy[0] + x, xy[1] + y), pixel[:3])
 
     def to_image(self, target_size: int) -> Image.Image:
         if target_size == self.size:
             return self._img
-        return self._img.resize((target_size, target_size), Image.NEAREST)
+        return self._img.resize((target_size, target_size), Image.Resampling.NEAREST)
