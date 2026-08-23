@@ -22,10 +22,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from PIL import Image, ImageDraw, ImageFont
 
-from .canvas import LoadedFont
+from .canvas import LoadedFont, font_by_name
 from .const import NATIVE_KIND_TYPES, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .mdi import draw_icon, icon_for_state
+from .vendor_pixoo._font import retrieve_glyph, retrieve_glyph_width
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +61,65 @@ def _label_font(size: int) -> LoadedFont:
         return ImageFont.load_default(size)
     except (AttributeError, OSError):
         return ImageFont.load_default()
+
+
+# The bitmap fonts hold ASCII only, so spell the few symbols a unit string
+# carries in characters they do have rather than dropping them.
+GLYPH_SUBSTITUTES = str.maketrans({"\u00b3": "3", "\u00b2": "2", "\u20ac": "E", "\u00b0": "*"})
+
+
+def glyph_text_size(text: str, font_name: str = "pico_8", scale: int = 1) -> tuple[int, int]:
+    """The pixel width and height ``draw_glyph_text`` would occupy."""
+    font = font_by_name(font_name)
+    text = text.translate(GLYPH_SUBSTITUTES)
+    width = 0
+    for character in text:
+        width += retrieve_glyph_width(character, font) + 1
+    reference = retrieve_glyph("0", font) or [0, 1]
+    height = (len(reference) - 1) // reference[-1]
+    return max(0, width - 1) * scale, height * scale
+
+
+def draw_glyph_text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    color: Any,
+    font_name: str = "pico_8",
+    scale: int = 1,
+    align: str = "left",
+) -> None:
+    """Draw text with a vendored bitmap font, one rectangle per lit pixel.
+
+    Pillow's default font is anti-aliased, which smears on an LED panel where
+    every pixel is a discrete lamp. The Pixoo fonts are hard-edged and were
+    drawn for exactly this display size, so baked-in labels stay legible.
+
+    ``xy`` is the top-left corner unless ``align`` moves it: ``center`` treats
+    x as the midpoint and ``right`` treats it as the right edge.
+    """
+    font = font_by_name(font_name)
+    text = text.translate(GLYPH_SUBSTITUTES)
+    width, _ = glyph_text_size(text, font_name, scale)
+    x, y = xy
+    if align == "center":
+        x -= width // 2
+    elif align == "right":
+        x -= width
+    for character in text:
+        matrix = retrieve_glyph(character, font)
+        if matrix is None:
+            matrix = retrieve_glyph("?", font)
+        if matrix is None:
+            continue
+        glyph_width = matrix[-1]
+        for index, bit in enumerate(matrix[:-1]):
+            if not bit:
+                continue
+            px = x + (index % glyph_width) * scale
+            py = y + (index // glyph_width) * scale
+            draw.rectangle([px, py, px + scale - 1, py + scale - 1], fill=color)
+        x += (glyph_width + 1) * scale
 
 
 def _layout_cells(count: int) -> list[tuple[int, int, int, int]]:

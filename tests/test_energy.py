@@ -231,31 +231,65 @@ def test_build_energy_preset_reads_a_statistic_only_gas_from_the_recorder() -> N
     assert slot["unit"] == "m\u00b3"
 
 
-async def test_graph_footer_totals_cover_statistic_only_slots(hass) -> None:
+def test_build_energy_preset_reads_a_meter_backed_water_as_a_daily_total() -> None:
+    found = energy.parse_sources(
+        {"energy_sources": [{"type": "water", "stat_energy_from": "sensor.energyhome_water"}]}
+    )
+
+    slot = presets.build_energy_preset(found)[4]["footer_slots"][0]
+
+    # A water meter counts up forever, so its state is the meter reading rather
+    # than today's usage. Read the statistic and keep the entity as a fallback.
+    assert slot["stat"] == "sensor.energyhome_water"
+    assert slot["entity_id"] == "sensor.energyhome_water"
+    assert slot["unit"] == "L"
+
+
+async def test_graph_footer_prefers_the_daily_total_over_the_meter_reading(hass) -> None:
     page = {
         "card": "graph",
         "data_template": "[1, 2, 3]",
         "footer_height": 32,
         "footer_slots": [
             {"stat": "nhc2:abc_gasvolume", "name": "Gas", "unit": "m\u00b3"},
-            {"entity_id": "sensor.water", "name": "Water"},
+            {"stat": "sensor.water", "entity_id": "sensor.water", "name": "Water", "unit": "L"},
         ],
     }
 
     with patch(
         "custom_components.divoom_times_gate.energy.async_daily_totals",
-        return_value={"nhc2:abc_gasvolume": 3.25},
+        return_value={"nhc2:abc_gasvolume": 3.25, "sensor.water": 10.0},
     ) as totals:
         prepared = await graphs.async_prepare_graph(hass, page)
 
-    assert totals.call_args[0][1] == ["nhc2:abc_gasvolume"]
-    assert prepared["_footer_totals"] == {"nhc2:abc_gasvolume": 3.25}
+    assert totals.call_args[0][1] == ["nhc2:abc_gasvolume", "sensor.water"]
+    assert prepared["_footer_totals"] == {"nhc2:abc_gasvolume": 3.25, "sensor.water": 10.0}
 
     gif, items = graphs.render_graph(hass, prepared, "http://h/dispdata/secret")
 
     assert gif.startswith(b"GIF")
-    # Only the water slot is polled; gas is drawn into the artwork.
-    assert [item["TextId"] for item in items if item["TextId"] >= 10] == [11]
+    # Both totals are drawn into the artwork, so neither is polled live.
+    assert [item["TextId"] for item in items if item["TextId"] >= 10] == []
+
+
+async def test_graph_footer_polls_a_slot_the_recorder_has_no_statistic_for(hass) -> None:
+    page = {
+        "card": "graph",
+        "data_template": "[1, 2, 3]",
+        "footer_height": 32,
+        "footer_slots": [
+            {"stat": "sensor.water", "entity_id": "sensor.water", "name": "Water", "unit": "L"},
+        ],
+    }
+
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_daily_totals", return_value={}
+    ):
+        prepared = await graphs.async_prepare_graph(hass, page)
+
+    _, items = graphs.render_graph(hass, prepared, "http://h/dispdata/secret")
+
+    assert [item["TextId"] for item in items if item["TextId"] >= 10] == [10]
 
 
 async def test_graph_footer_totals_survive_a_recorder_failure(hass) -> None:

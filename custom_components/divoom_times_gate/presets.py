@@ -91,15 +91,17 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def _footer_slot(stat: str, name: str, color: str, unit: str) -> dict[str, Any]:
-    """Describe one footer value, polled live where possible.
+    """Describe one footer value as today's consumption.
 
-    A statistic id without a dot has no entity behind it, which is how gas
-    usually arrives. The device cannot poll that, so the slot falls back to
-    today's total read from long-term statistics and drawn into the artwork.
+    Gas and water meters report a running total, so polling the entity live
+    would show the meter reading rather than what the house used today. Read
+    today's change out of long-term statistics instead, and keep the entity id
+    as a fallback for a sensor the recorder has no statistics for.
     """
+    slot: dict[str, Any] = {"stat": stat, "name": name, "color": color, "unit": unit}
     if "." in stat:
-        return {"entity_id": stat, "name": name, "color": color}
-    return {"stat": stat, "name": name, "color": color, "unit": unit}
+        slot["entity_id"] = stat
+    return slot
 
 
 def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:

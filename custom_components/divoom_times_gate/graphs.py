@@ -32,7 +32,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 
-from .cards import _blend, _encode_gif, _label_font, _rgb
+from .cards import _blend, _encode_gif, _rgb, draw_glyph_text
 from .const import SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_auto
@@ -183,15 +183,16 @@ async def async_prepare_graph(hass: HomeAssistant, page: dict[str, Any]) -> dict
 async def _footer_totals(hass: HomeAssistant, page: dict[str, Any]) -> dict[str, float]:
     """Read today's total for every footer slot that names a statistic.
 
-    Gas often has no entity at all: Home Assistant integrations may publish it
-    straight into long-term statistics, which the energy dashboard reads but no
-    entity mirrors. Such a slot cannot be polled by the device, so the value is
-    baked into the artwork and refreshes whenever the statistic moves.
+    Gas and water meters count up forever, so their current state is a meter
+    reading rather than what the house used today. Long-term statistics record
+    the change per hour, which sums to today's usage. Read that here and bake
+    it into the artwork; a slot the recorder has no statistics for falls back
+    to a live poll of its entity.
     """
     stats = [
         str(slot["stat"])
         for slot in (page.get("footer_slots") or [])
-        if isinstance(slot, dict) and slot.get("stat") and not slot.get("entity_id")
+        if isinstance(slot, dict) and slot.get("stat")
     ]
     if not stats:
         return {}
@@ -262,8 +263,8 @@ def render_graph(
     show_value = bool(page.get("value", True))
     top = 2
     if title:
-        draw.text((2, top), title[:20], font=_label_font(10), fill=_blend(background, color, 0.75))
-        top += 12
+        draw_glyph_text(draw, (2, top), title[:20], _blend(background, color, 0.75), "pico_8", 2)
+        top += 13
     if show_value:
         top += 18  # room for the overlay value item drawn by the device
 
@@ -276,11 +277,8 @@ def render_graph(
     height = max(1, bottom - top)
 
     if not values:
-        draw.text(
-            (left + 4, top + height // 2 - 5),
-            "no data",
-            font=_label_font(10),
-            fill=(120, 120, 120),
+        draw_glyph_text(
+            draw, (left + 4, top + height // 2 - 5), "no data", (120, 120, 120), "pico_8", 2
         )
         return _encode_gif(img), items
 
@@ -324,15 +322,11 @@ def render_graph(
 
     unit = page.get("unit")
     if show_axis:
-        axis_font = _label_font(9)
         axis_ink = _blend(background, "#FFFFFF", 0.55)
-        draw.text((right + 2, top), format_auto(high, unit)[:6], font=axis_font, fill=axis_ink)
-        draw.text(
-            (right + 2, bottom - 9), format_auto(low, unit)[:6], font=axis_font, fill=axis_ink
-        )
+        draw_glyph_text(draw, (right + 2, top), format_auto(high, unit)[:6], axis_ink)
+        draw_glyph_text(draw, (right + 2, bottom - 6), format_auto(low, unit)[:6], axis_ink)
 
     if page.get("x_labels"):
-        label_font = _label_font(8)
         label_ink = _blend(background, "#FFFFFF", 0.45)
         times = [dt_util.parse_datetime(t) for t in page.get("_times") or []]
         if times and all(times):
@@ -341,7 +335,7 @@ def render_graph(
                 when = dt_util.as_local(times[index])  # type: ignore[arg-type]
                 text = when.strftime("%H")
                 x = left + int(fraction * (width - 10))
-                draw.text((x, bottom + 1), text, font=label_font, fill=label_ink)
+                draw_glyph_text(draw, (x, bottom + 1), text, label_ink)
 
     if show_value:
         entity_id = str(page.get("value_entity") or page.get("entity_id") or "")
@@ -399,30 +393,38 @@ def _draw_footer_slots(
         return
     band_top = SCREEN_SIZE - footer
     draw.line([(0, band_top), (SCREEN_SIZE, band_top)], fill=_blend(background, "#FFFFFF", 0.2))
+    totals = page.get("_footer_totals") or {}
     cell = SCREEN_SIZE // len(slots)
     for index, slot in enumerate(slots):
         slot_color = str(slot.get("color", "#FFFFFF"))
         x = index * cell
         if label := slot.get("name"):
-            draw.text(
-                (x + 4, band_top + 3),
+            draw_glyph_text(
+                draw,
+                (x + 3, band_top + 3),
                 str(label)[:10],
-                font=_label_font(8),
-                fill=_blend(background, slot_color, 0.75),
+                _blend(background, slot_color, 0.75),
+                "pico_8",
+                1,
             )
-        entity_id = str(slot.get("entity_id") or "")
-        if not entity_id and not slot.get("value_template") and slot.get("stat"):
-            total = (page.get("_footer_totals") or {}).get(str(slot["stat"]))
-            text = "-" if total is None else f"{total:.1f}"
-            if unit := slot.get("unit"):
+        total = totals.get(str(slot["stat"])) if slot.get("stat") else None
+        if total is not None:
+            unit = str(slot.get("unit") or "")
+            # A litre reads as a whole number; cubic metres and kilowatt hours
+            # move slowly enough that a decimal still says something.
+            text = f"{total:.0f}" if unit == "L" else f"{total:.1f}"
+            if unit:
                 text = f"{text} {unit}"
-            draw.text(
-                (x + 3, band_top + 14),
+            draw_glyph_text(
+                draw,
+                (x + 3, band_top + 12),
                 text,
-                font=_label_font(12),
-                fill=_blend(background, slot_color, 1.0),
+                _blend(background, slot_color, 1.0),
+                "pico_8",
+                2,
             )
             continue
+        entity_id = str(slot.get("entity_id") or "")
         if template := slot.get("value_template"):
             key = hashlib.md5(str(template).encode()).hexdigest()[:12]
             secret = poll_base.rsplit("/", 1)[-1]

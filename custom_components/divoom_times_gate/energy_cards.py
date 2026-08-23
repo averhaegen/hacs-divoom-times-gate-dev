@@ -21,10 +21,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from PIL import Image, ImageDraw
 
-from .cards import _blend, _encode_gif, _hex, _label_font, _rgb
+from .cards import _blend, _encode_gif, _hex, _rgb, draw_glyph_text
 from .const import ENERGY_COLORS, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
-from .units import as_float, format_energy, format_percent, format_power, format_price
+from .units import as_float, format_energy, format_price
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,13 +124,20 @@ def _poll_item(
     )
 
 
-def _text(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, color: Any, size: int = 8, anchor: str | None = None) -> None:
-    """Draw a label, falling back to top-left placement on a bitmap font."""
-    font = _label_font(size)
-    try:
-        draw.text(xy, text, fill=color, font=font, anchor=anchor)
-    except ValueError:  # bitmap fallback font does not support anchors
-        draw.text(xy, text, fill=color, font=font)
+def _text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    color: Any,
+    scale: int = 2,
+    align: str = "left",
+) -> None:
+    """Draw a baked-in label with a hard-edged bitmap font.
+
+    Everything drawn into the artwork uses this rather than Pillow's default
+    font, which anti-aliases and turns to mush on the panel.
+    """
+    draw_glyph_text(draw, xy, text, color, "pico_8", scale, align)
 
 
 def _draw_price(
@@ -152,7 +159,7 @@ def _draw_price(
     position = 0.5 if span <= 0 or now is None else max(0.0, min(1.0, (now - low) / span))
     value_color = _hex(_blend(cheap, dear, position))
 
-    _text(draw, (64, 8), str(page.get("name", "Price")), _blend(background, "#FFFFFF", 0.55), 8, "mt")
+    _text(draw, (64, 6), str(page.get("name", "Price")), _blend(background, "#FFFFFF", 0.55), 2, "center")
     _poll_item(
         hass,
         items,
@@ -167,7 +174,7 @@ def _draw_price(
         color=value_color,
         align=2,
     )
-    _text(draw, (64, 58), str(page.get("unit", "EUR/kWh")), _blend(background, "#FFFFFF", 0.45), 7, "mt")
+    _text(draw, (64, 58), str(page.get("unit", "EUR/kWh")), _blend(background, "#FFFFFF", 0.45), 2, "center")
 
     bar_x, bar_y, bar_w, bar_h = 12, 84, SCREEN_SIZE - 24, 10
     for step in range(bar_w):
@@ -177,8 +184,8 @@ def _draw_price(
     draw.rectangle(
         [marker - 1, bar_y - 4, marker + 1, bar_y + bar_h + 4], fill="#FFFFFF"
     )
-    _text(draw, (bar_x, bar_y + bar_h + 8), format_price(low), _rgb(cheap), 8)
-    _text(draw, (bar_x + bar_w, bar_y + bar_h + 8), format_price(high), _rgb(dear), 8, "ra")
+    _text(draw, (bar_x, bar_y + bar_h + 6), format_price(low), _rgb(cheap), 2)
+    _text(draw, (bar_x + bar_w, bar_y + bar_h + 6), format_price(high), _rgb(dear), 2, "right")
 
 
 def _draw_power(
@@ -194,7 +201,7 @@ def _draw_power(
     export_color = str(page.get("export_color", ENERGY_COLORS["grid_export"]))
     totals: dict[str, float] = page.get("_totals") or {}
 
-    _text(draw, (64, 4), str(page.get("name", "House")), _blend(background, "#FFFFFF", 0.55), 8, "mt")
+    _text(draw, (64, 4), str(page.get("name", "House")), _blend(background, "#FFFFFF", 0.55), 2, "center")
     _poll_item(
         hass,
         items,
@@ -216,7 +223,7 @@ def _draw_power(
     )
     for index, (label, color, entity, stat, y) in enumerate(rows):
         draw.rectangle([0, y - 6, 3, y + 22], fill=_rgb(color))
-        _text(draw, (8, y - 6), label.upper(), _rgb(color), 8)
+        _text(draw, (8, y - 6), label.upper(), _rgb(color), 2)
         _poll_item(
             hass,
             items,
@@ -233,7 +240,7 @@ def _draw_power(
         )
         total = totals.get(str(stat)) if stat else None
         if total is not None:
-            _text(draw, (124, y + 10), f"{format_energy(total)} today", _blend(background, color, 0.75), 7, "ra")
+            _text(draw, (124, y + 10), f"{format_energy(total)} today", _blend(background, color, 0.75), 2, "right")
 
 
 def _draw_battery(
@@ -254,7 +261,7 @@ def _draw_battery(
     color = ENERGY_COLORS["battery_in"] if charging else ENERGY_COLORS["battery_out"]
     color = str(page.get("charge_color", color) if charging else page.get("discharge_color", color))
 
-    _text(draw, (64, 4), str(page.get("name", "Battery")), _blend(background, "#FFFFFF", 0.55), 8, "mt")
+    _text(draw, (64, 4), str(page.get("name", "Battery")), _blend(background, "#FFFFFF", 0.55), 2, "center")
 
     bar_x, bar_y, bar_w, bar_h = 14, 22, SCREEN_SIZE - 28, 18
     draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], outline=_blend(background, color, 0.5))
@@ -276,7 +283,7 @@ def _draw_battery(
         color=color,
         align=2,
     )
-    _text(draw, (64, 86), "charging" if charging else "discharging", _blend(background, color, 0.7), 8, "mt")
+    _text(draw, (64, 88), "charging" if charging else "discharging", _blend(background, color, 0.7), 2, "center")
     _poll_item(
         hass,
         items,
@@ -291,7 +298,6 @@ def _draw_battery(
         color=color,
         align=2,
     )
-    _text(draw, (64, 122), format_percent(soc), _blend(background, color, 0.35), 7, "mb")
 
 
 def _draw_solar(
@@ -319,7 +325,7 @@ def _draw_solar(
             x1 = max(x0, int((index + 1) * step) - 1)
             draw.rectangle([x0, SCREEN_SIZE - height, x1, SCREEN_SIZE], fill=faint)
 
-    _text(draw, (64, 6), str(page.get("name", "Solar")), _blend(background, "#FFFFFF", 0.55), 8, "mt")
+    _text(draw, (64, 6), str(page.get("name", "Solar")), _blend(background, "#FFFFFF", 0.55), 2, "center")
     _poll_item(
         hass,
         items,
@@ -336,10 +342,7 @@ def _draw_solar(
     )
     produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
     if produced is not None:
-        _text(draw, (64, 72), f"{format_energy(produced)} today", _rgb(color), 8, "mt")
-    now = as_float(page.get("_current"))
-    if now is not None:
-        _text(draw, (64, 90), format_power(now), _blend(background, color, 0.6), 7, "mt")
+        _text(draw, (64, 74), f"{format_energy(produced)} today", _rgb(color), 2, "center")
 
 
 _DRAWERS = {
