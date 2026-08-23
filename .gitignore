@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# copilot-swarm folder memory (local, never committed)
+.agents/
