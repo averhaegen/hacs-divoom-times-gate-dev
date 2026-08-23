@@ -3,11 +3,22 @@
 A Home Assistant (HACS) custom integration for the Divoom Times Gate (5 ×
 128×128 screen desk clock). Pure Python, `custom_components/divoom_times_gate/`.
 
-## No build/test/lint tooling
+## Build, test and lint
 
-There is no `pyproject.toml`, test suite, or CI workflow in this repo (see
-`quality_scale.yaml`: `test-coverage: todo`, `config-flow-test-coverage: todo`).
-Validate changes by:
+There is a test suite (`tests/`, pytest + `pytest-homeassistant-custom-component`),
+strict mypy config in `pyproject.toml`, and a CI workflow running hassfest, HACS
+validation, ruff, mypy and pytest on Python 3.14. No virtualenv is checked in;
+run the tools through `uvx`:
+
+- `uvx ruff check .`
+- `uvx --with homeassistant --with pytest-homeassistant-custom-component pytest -q`
+- `uvx --with homeassistant --with pillow mypy custom_components/divoom_times_gate`
+
+Do not lower `python_version` below 3.14 in `pyproject.toml`: mypy aborts while
+parsing `homeassistant/config_entries.py` on 3.13. `vendor_pixoo/` is excluded
+from mypy.
+
+Also validate by:
 - Reading against Home Assistant's own dev conventions (this follows core
   integration patterns: `ConfigEntry`, `DataUpdateCoordinator`, platforms).
 - Cross-checking device behavior against `docs/API.md` (the reverse-engineered
