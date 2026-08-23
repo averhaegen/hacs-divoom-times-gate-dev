@@ -100,17 +100,17 @@ The device at this IP is a different Times Gate (MAC mismatch). Add it as a new 
 
 ## You changed the LocalToken in the app
 
-Version 0.2.2 has no reauthentication flow. Delete the config entry and add the
-integration again with the new token. Your screen configuration is stored in the
-config entry, so write it down first or copy it out of
-`.storage/core.config_entries` before deleting.
-
-A reauthentication flow is tracked in
-[issue #6, reauthentication flow for a changed LocalToken](https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues/6).
-If your version prompts you to re-enter the token, that flow has landed. Follow
-the prompt instead.
+Since 0.3.0 the integration notices that the device rejects the token and asks
+you to enter the new one. Open Settings, Devices and services, and follow the
+"Reauthentication needed" prompt on the Divoom Times Gate entry. Your screen
+configuration stays intact.
 
 ## A screen is stuck on "Loading"
+
+Since 0.3.0 the most common cause is fixed: rotating a screen off a
+`dispdata_text` page now clears the device-side overlay first. If you still see
+this on 0.3.0 or later, report it on
+[issue #9, screen stuck on Loading](https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues/9).
 
 **Symptom.** One screen shows the device's own `Loading` text and never paints.
 

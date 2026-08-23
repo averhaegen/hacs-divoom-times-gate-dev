@@ -123,14 +123,12 @@ secret as a read-capability password and do not post the URL publicly.
 There is no button to rotate the secret yet. To change it, remove and re-add the
 integration. See [docs/DISPDATA.md section 5, rotating and revoking the secret](DISPDATA.md#5-rotating--revoking-the-secret).
 
-## A changed LocalToken needs the integration re-added
+## A changed LocalToken triggers a reauthentication prompt
 
-As of version 0.2.2 there is no reauthentication flow. If you change the
-LocalToken in the Divoom app, delete the config entry and add the integration
-again with the new token. A reauthentication flow is tracked in
-[issue #6, reauthentication flow for a changed LocalToken](https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues/6).
-If your version prompts you to re-enter the token instead, that flow has landed
-and you can follow the prompt.
+Since 0.3.0 the integration detects a rejected LocalToken and asks you to enter
+the new one, instead of going unavailable. Home Assistant shows a
+"Reauthentication needed" repair for the entry. Your screen configuration
+survives the reauthentication.
 
 ## Shipped but not yet tested on hardware
 

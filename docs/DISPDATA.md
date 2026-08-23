@@ -271,16 +271,22 @@ concern (e.g. after accidentally sharing a URL).
 
 ## 6. Mixing `dispdata_text` with `gif` / `visualizer` in the same rotation
 
-Confirmed on a real device: rotating a screen between `dispdata_text` and
-native `gif` or `visualizer` pages was observed to leave the panel stuck on a
-"Loading" screen. Both `gif` (`Device/PlayGif`) and `visualizer`
-(`Channel/SetEqPosition`) switch the panel into a different native rendering
-mode than the `Draw/SendHttpItemList` overlay `dispdata_text` depends on;
-switching back doesn't reliably restore the item-list state. **Until this is
-root-caused, avoid combining `dispdata_text` with `gif`/`visualizer` pages in
-the same screen's rotation** — a screen dedicated solely to `dispdata_text`
-(optionally rotating with `components`/`clock`/`off` pages) has been confirmed
-stable. See BACKLOG.md for the open investigation.
+A screen that rotated from `dispdata_text` into a native `gif` or `visualizer`
+page used to get stuck on a "Loading" screen. `Draw/SendHttpItemList` leaves the
+screen in a device-side self-polling overlay mode, and neither `Device/PlayGif`
+nor `Channel/SetEqPosition` tears that overlay down, so the panel kept waiting
+for an item list that no longer arrived.
+
+Since 0.3.0 the coordinator sends `Draw/ClearHttpText` with `TextId: -1` at the
+front of the same batch whenever a screen leaves a `dispdata_text` page, which
+kills the overlay before the native command lands. Mixing `dispdata_text` with
+`gif` or `visualizer` pages in one rotation is therefore supported again.
+
+The teardown is only committed once the device answers `error_code: 0`. If the
+batch is rejected, the next tick re-sends it.
+
+Note the device's own key naming: `Draw/ClearHttpText` takes `LcdId`, while
+`Draw/SendHttpItemList` takes `LcdIndex`. See docs/API.md §4.8.
 
 ## 7. Recovering a stuck panel — HA has no read-back
 
@@ -296,7 +302,10 @@ re-sends when the config's signature changes.
   screen's
   change-tracking signature and forces a full repaint next tick, including a
   fresh `NewFlag: 1` setup call for any `dispdata_text` page — same fix as for
-  a stuck JPEG page.
+  a stuck JPEG page. If a panel stays stuck after that, power-cycle the device:
+  `Draw/ResetHttpGifId` would clear it too, but it also resets the device's
+  picture-id counter that this integration mirrors, so the integration never
+  sends it.
 - **Automatic recovery:** this integration intentionally does **not**
   periodically re-send DispData setups on its own (that would undercut the
   "zero push" design). If you want a safety net, build a small HA automation

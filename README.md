@@ -339,6 +339,13 @@ use-case-sorted shortlist (which fonts do letters, digits, `%`, `.`, `:`) and
   16/32/64/128). `gif_url: "https://…/x.gif"` (or `gif_urls: [url, url]`).
 - `page_type: visualizer` — an audio visualizer. `id: 0` (visualizer index).
 - `page_type: off` — black screen.
+- `page_type: pv` — a solar overview: production, consumption, grid flow and
+  battery state on one screen. See [docs/PIXOO_PAGES.md](docs/PIXOO_PAGES.md).
+- `page_type: progress_bar` — one or more horizontal bars driven by a sensor
+  value between `min` and `max`. See
+  [docs/PIXOO_PAGES.md](docs/PIXOO_PAGES.md).
+- `page_type: fuel` — a fuel-price board with up to four price rows. See
+  [docs/PIXOO_PAGES.md](docs/PIXOO_PAGES.md).
 - `enabled: "{{ ... }}"` — if it renders false, that screen is left unchanged.
 
 > Device channels (Faces/Cloud/Visualizer/Custom) for the *whole* device are

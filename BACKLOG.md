@@ -52,8 +52,11 @@ options-flow YAML editor, diagnostics).
   - **Tested on device:** `SendHttpItemList` IS accepted (`error_code 0`) — unlike
     `SendHttpText` which returns "illegal json". BUT a background+itemlist push to
     one screen while the device was in Overall/whole-face mode left the screen
-    **stuck on "Loading"**. Recovery: `Draw/ClearHttpText {LcdId, TextId:-1}` +
-    `Draw/ResetHttpGifId` + restore a mode.
+    **stuck on "Loading"**. Root cause found and fixed in 0.3.0 (issue #9): the
+    item list leaves a device-side self-polling overlay that `Device/PlayGif`
+    and `Channel/SetEqPosition` never tear down. The coordinator now sends
+    `Draw/ClearHttpText {LcdId, TextId: -1}` ahead of the new command whenever a
+    screen leaves a `dispdata_text` page. See docs/DISPDATA.md §6.
   - **Open questions before building:** does it need the screen in independent/
     custom mode first (mode prerequisite)? Is the "Loading" the type-23 net-text
     hanging on the URL, or a stuck panel? Test type 22 alone in a clean per-screen
