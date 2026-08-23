@@ -169,6 +169,23 @@ class TimesGate:
             payload["NewFlag"] = 0
         return payload
 
+    def build_clear_http_text(self, screen: int, text_id: int = -1) -> dict:
+        """Build a Draw/ClearHttpText payload without sending it.
+
+        A ``text_id`` below zero clears every text overlay on that screen. Send
+        this before switching a screen out of ``Draw/SendHttpItemList`` mode
+        into a native mode (``Device/PlayGif``, ``Channel/SetEqPosition``):
+        without it the item list keeps polling and the panel can stay on
+        "Loading". See docs/API.md §4.8 and docs/DISPDATA.md §6.
+        """
+        if screen not in range(SCREEN_COUNT):
+            raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
+        return {"Command": "Draw/ClearHttpText", "LcdId": screen, "TextId": int(text_id)}
+
+    async def clear_http_text(self, screen: int, text_id: int = -1) -> dict:
+        """Draw/ClearHttpText — drop text overlays on one screen."""
+        return await self._send(self.build_clear_http_text(screen, text_id))
+
     async def send_item_list(
         self,
         screen: int,

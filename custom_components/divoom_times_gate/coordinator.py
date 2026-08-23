@@ -108,6 +108,16 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self._rot_index = [0] * SCREEN_COUNT
         self._rot_elapsed = [0] * SCREEN_COUNT
 
+        # Page type last built per screen. Used to tear down the
+        # Draw/SendHttpItemList overlay when a screen rotates out of a
+        # dispdata_text page — see _build_custom and docs/DISPDATA.md §6.
+        self._last_ptype: dict[int, str] = {}
+        # Commands that must ride at the front of this tick's batch.
+        self._prepend_commands: list[dict] = []
+        # Page type built this tick, committed to _last_ptype once the batch
+        # lands so a failed send re-emits the teardown next tick.
+        self._pending_ptype: dict[int, str] = {}
+
         # Last frame rendered for each screen, for the preview Image entities.
         # None means the screen currently shows native device content (a face,
         # gif or dispdata layout) that HA didn't render and can't preview.
@@ -229,6 +239,10 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
         self.invalidate(screen)
         if self.display[0] != "dashboard":
             return
+        # Same teardown as the rotation path: a face or a black push does not
+        # stop a live Draw/SendHttpItemList overlay on its own.
+        if kind != "custom" and self._last_ptype.pop(screen, None) == "dispdata_text":
+            await self.device.clear_http_text(screen)
         if kind == "face":
             await self.device.set_clock_face(screen, int(value), self._active_independence())
         elif kind == "off":
@@ -410,6 +424,8 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
         results: dict[int, str] = {}
         pending: dict[int, tuple[dict, str]] = {}
+        self._prepend_commands = []
+        self._pending_ptype = {}
         for screen in range(SCREEN_COUNT):
             kind = self.screen_modes[screen][0]
             if kind != "custom":
@@ -420,17 +436,24 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
             else:
                 results[screen] = status
 
-        if pending:
+        if pending or self._prepend_commands:
             # Batch every screen that actually changed this tick into one
             # Draw/CommandList POST instead of one per screen — see
-            # [[feedback-multi-screen-calls]] and docs/API.md §5.1.
-            resp = await self.device.send_command_list([cmd for cmd, _ in pending.values()])
+            # [[feedback-multi-screen-calls]] and docs/API.md §5.1. Teardown
+            # commands go first so an overlay is cleared before the native
+            # command that replaces it.
+            resp = await self.device.send_command_list(
+                self._prepend_commands + [cmd for cmd, _ in pending.values()]
+            )
             status = resp.get("error_code", "?")
             if status == 0:
                 for screen, (_, signature) in pending.items():
                     self._last_hashes[screen] = signature
+                self._last_ptype.update(self._pending_ptype)
             for screen in pending:
                 results[screen] = status
+        else:
+            self._last_ptype.update(self._pending_ptype)
         return results
 
     async def _build_custom(self, screen: int) -> tuple[str, dict | None, str | None]:
@@ -465,6 +488,16 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int, str]]):
 
         page = pages[idx]
         ptype = (page.get("page_type") or page.get("type") or "components").lower()
+
+        # Leaving a dispdata_text page: the device keeps polling its
+        # Draw/SendHttpItemList overlay unless it is cleared first, which is
+        # what left the panel stuck on "Loading" when a screen rotated into a
+        # gif or visualizer page. Clear the overlay ahead of the new command in
+        # the same batch. See docs/DISPDATA.md §6 and docs/API.md §4.8.
+        if self._last_ptype.get(screen) == "dispdata_text" and ptype != "dispdata_text":
+            self._prepend_commands.append(self.device.build_clear_http_text(screen))
+        self._pending_ptype[screen] = ptype
+
         try:
             if ptype == "clock":
                 cid = int(page.get("clock_id", page.get("id", 0)))
