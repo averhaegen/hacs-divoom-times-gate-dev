@@ -1,6 +1,7 @@
 {
   "domain": "divoom_times_gate",
   "name": "Divoom Times Gate",
+  "after_dependencies": ["energy", "recorder"],
   "codeowners": ["@averhaegen"],
   "config_flow": true,
   "dependencies": ["http"],
