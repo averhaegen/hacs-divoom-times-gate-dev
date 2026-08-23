@@ -38,8 +38,8 @@ header: time_short       # list layout: native element top-right (hh:mm).
                          # Any dispdata native kind (time, weekday_3,
                          # temperature, ...) or "none" to disable.
 update_time: 10          # poll interval (s), page default
-font: 160                # device font id for values (default 160,
-                         # see docs/FONTS.md)
+font: 4                  # device font id for values (see docs/FONTS.md).
+                         # Energy panels and graphs default to 160 instead.
 # Note: this is a numeric device font id (native Pixoo fonts, see
 # docs/FONTS.md) — a different naming system from `components` pages,
 # where `font:` is one of six bitmap font *names* (pico_8, gicko, ...).

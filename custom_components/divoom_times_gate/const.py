@@ -44,10 +44,14 @@ DEFAULT_BRIGHTNESS = 100
 DEFAULT_DURATION = 15  # seconds a page shows before a screen rotates to the next
 
 # Device font ids passed to Draw/SendHttpItemList. See docs/API.md §4.9 for the
-# ids this firmware renders. 160 reads better than the old default 4 at the size
-# a card value occupies; 2 is narrow enough for a label above it.
-DEFAULT_DEVICE_FONT = 160
+# ids this firmware renders. Cards keep font 4, which every page written before
+# these constants existed relied on. The energy panels and the graph carry
+# larger numbers in a smaller slot, so they use 160 for values and 2 for the
+# label above them, which stay legible where 4 blurs.
+DEFAULT_DEVICE_FONT = 4
 DEFAULT_LABEL_FONT = 2
+ENERGY_FONT = 160
+ENERGY_LABEL_FONT = 2
 
 SCREEN_COUNT = 5
 SCREEN_SIZE = 128
