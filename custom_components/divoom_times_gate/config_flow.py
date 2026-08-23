@@ -27,6 +27,7 @@ import voluptuous as vol
 from .const import (
     AUTH_INVALID,
     AUTH_OK,
+    CONF_ACTIVE_PRESET,
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_FACES,
@@ -34,16 +35,20 @@ from .const import (
     CONF_IP_ADDRESS,
     CONF_LOCAL_TOKEN,
     CONF_MAC,
+    CONF_PRESETS,
     CONF_REFRESH_INTERVAL,
     CONF_SCREENS,
     DEFAULT_HARDWARE,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    ENERGY_PRESET,
     SCREEN_COUNT,
 )
 from .defaults import DEFAULT_FACES, DEFAULT_SCREENS
 from .device import TimesGate
 from .discovery import DiscoveredDevice, async_discover_devices
+from .energy import async_discover
+from .presets import build_energy_preset
 
 
 class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -271,6 +276,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                 "screen_2",
                 "screen_3",
                 "screen_4",
+                "energy",
                 "settings",
                 "save",
             ],
@@ -321,6 +327,49 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         return await self._screen_step(4, user_input)
+
+    async def async_step_energy(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Fill all five screens from the Home Assistant energy dashboard.
+
+        The generated pages are written into the working copy as ordinary
+        screens, so you can edit any of them afterwards and the generator will
+        not touch them again unless you come back here.
+        """
+        self._ensure()
+        assert self._data is not None
+        found = await async_discover(self.hass)
+        if user_input is not None:
+            screens = build_energy_preset(found)
+            self._data[CONF_SCREENS] = screens
+            presets = dict(self._data.get(CONF_PRESETS) or {})
+            presets[ENERGY_PRESET] = screens
+            self._data[CONF_PRESETS] = presets
+            self._data[CONF_ACTIVE_PRESET] = ENERGY_PRESET
+            return await self.async_step_init()
+
+        parts = []
+        if found.price_now:
+            parts.append("price")
+        if found.has_solar:
+            parts.append("solar")
+        if found.has_battery:
+            parts.append("battery")
+        if found.has_electricity:
+            parts.append("grid")
+        if found.gas_stat:
+            parts.append("gas")
+        if found.water_stats:
+            parts.append("water")
+        return self.async_show_form(
+            step_id="energy",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "found": ", ".join(parts) or "nothing (check your energy dashboard)"
+            },
+            last_step=False,
+        )
 
     async def async_step_settings(
         self, user_input: dict[str, Any] | None = None

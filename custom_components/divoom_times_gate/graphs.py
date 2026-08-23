@@ -350,4 +350,66 @@ def render_graph(
                 }
             )
 
+    _draw_footer_slots(hass, page, draw, items, poll_base, background, footer)
+
     return _encode_gif(img), items
+
+
+def _draw_footer_slots(
+    hass: HomeAssistant,
+    page: dict[str, Any],
+    draw: ImageDraw.ImageDraw,
+    items: list[dict[str, Any]],
+    poll_base: str,
+    background: str,
+    footer: int,
+) -> None:
+    """Fill the reserved footer band with up to two labelled values.
+
+    Screen five of the energy preset uses this for gas and water, which have no
+    place on the electricity screens but still deserve a corner.
+    """
+    slots = [slot for slot in (page.get("footer_slots") or []) if isinstance(slot, dict)][:2]
+    if not slots or footer <= 0:
+        return
+    band_top = SCREEN_SIZE - footer
+    draw.line([(0, band_top), (SCREEN_SIZE, band_top)], fill=_blend(background, "#FFFFFF", 0.2))
+    cell = SCREEN_SIZE // len(slots)
+    for index, slot in enumerate(slots):
+        slot_color = str(slot.get("color", "#FFFFFF"))
+        x = index * cell
+        if label := slot.get("name"):
+            draw.text(
+                (x + 4, band_top + 3),
+                str(label)[:10],
+                font=_label_font(8),
+                fill=_blend(background, slot_color, 0.75),
+            )
+        entity_id = str(slot.get("entity_id") or "")
+        if template := slot.get("value_template"):
+            key = hashlib.md5(str(template).encode()).hexdigest()[:12]
+            secret = poll_base.rsplit("/", 1)[-1]
+            register_value_template(hass, secret, key, str(template))
+            url = f"{poll_base.replace('/dispdata/', '/dispdata_tpl/')}/{key}"
+        elif entity_id:
+            register_allowed_entity(hass, entity_id)
+            url = f"{poll_base}/{quote(entity_id)}"
+        else:
+            continue
+        items.append(
+            {
+                "TextId": 10 + index,
+                "type": 23,
+                "x": x + 2,
+                "y": band_top + 14,
+                "dir": 0,
+                "font": int(slot.get("font", 2)),
+                "TextWidth": cell - 4,
+                "Textheight": 14,
+                "speed": 50,
+                "align": 1,
+                "color": slot_color,
+                "update_time": int(slot.get("update_time", page.get("update_time", 10))),
+                "TextString": url,
+            }
+        )

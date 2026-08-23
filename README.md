@@ -489,12 +489,56 @@ afterward, go to **HACS → Integrations**, open **Divoom Times Gate**, open the
 Removing the integration does **not** reset or change anything on the physical
 Times Gate itself — Home Assistant simply stops managing it locally.
 
+## Energy screens
+
+Open the integration options and pick **Build energy screens**. The integration
+reads your Home Assistant energy dashboard configuration and fills all five
+screens:
+
+1. Current electricity price, with a bar marking where it sits between today's
+   cheapest and dearest hour.
+2. House load, with import and export below it and today's totals per direction.
+3. Battery charge, coloured pink while charging and teal while discharging.
+4. Solar production, with today's yield and the day's curve behind it.
+5. The day-ahead price graph, with gas and water along the bottom.
+
+Colours follow the ones the energy dashboard uses, so blue means import and
+purple means export. Screens for a source you do not have stay blank. The
+generated pages are ordinary screen configurations, so you can edit any of them
+afterwards and the generator will not touch them again unless you run it again.
+
+Numbers refresh on the device's own poll, roughly every 10 seconds, while the
+artwork behind them is only re-sent when it actually changes.
+
+## Presets
+
+A preset is a named set of five screens. Generating the energy screens stores
+them as the `energy` preset and keeps whatever you had as `default`, and a
+**Screen preset** select entity switches between them. Add your own under the
+`presets` option:
+
+```yaml
+presets:
+  night:
+    - page_type: clock
+    - page_type: "off"
+    - page_type: "off"
+    - page_type: "off"
+    - page_type: "off"
+```
+
 ## Credits
 
 Rendering approach and overall design are informed by
 [gickowtf/pixoo-homeassistant](https://github.com/gickowtf/pixoo-homeassistant)
 (MIT). This project is a separate implementation for the Times Gate's
 multi-screen / JPEG / LocalToken API.
+
+## Support
+
+This integration is a spare-time project. If it saved you an evening of
+reverse engineering, you can
+[buy me a coffee](https://buymeacoffee.com/averhaegen).
 
 ## License
 

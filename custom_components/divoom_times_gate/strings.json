@@ -49,33 +49,44 @@
           "screen_3": "Screen 4",
           "screen_4": "Screen 5",
           "settings": "Settings & faces",
-          "save": "Save & close"
+          "save": "Save & close",
+          "energy": "Build energy screens"
         }
       },
       "screen_0": {
         "title": "Screen 1",
         "description": "This screen's content: a single page, or a list of pages that rotate (by each page's 'duration'). See the README for the page schema.",
-        "data": { "screens": "Pages" }
+        "data": {
+          "screens": "Pages"
+        }
       },
       "screen_1": {
         "title": "Screen 2",
         "description": "This screen's content: a single page, or a list of pages that rotate.",
-        "data": { "screens": "Pages" }
+        "data": {
+          "screens": "Pages"
+        }
       },
       "screen_2": {
         "title": "Screen 3",
         "description": "This screen's content: a single page, or a list of pages that rotate.",
-        "data": { "screens": "Pages" }
+        "data": {
+          "screens": "Pages"
+        }
       },
       "screen_3": {
         "title": "Screen 4",
         "description": "This screen's content: a single page, or a list of pages that rotate.",
-        "data": { "screens": "Pages" }
+        "data": {
+          "screens": "Pages"
+        }
       },
       "screen_4": {
         "title": "Screen 5",
         "description": "This screen's content: a single page, or a list of pages that rotate.",
-        "data": { "screens": "Pages" }
+        "data": {
+          "screens": "Pages"
+        }
       },
       "settings": {
         "title": "Settings & faces",
@@ -85,6 +96,10 @@
           "dashboard_base": "Dashboard base preset",
           "faces": "Faces (favorites)"
         }
+      },
+      "energy": {
+        "title": "Build energy screens",
+        "description": "Read your Home Assistant energy dashboard and fill all five screens with a price panel, a house power panel, a battery panel, a solar panel and a day-ahead price graph. Found: {found}. Submit to replace the current screens; they stay editable afterwards."
       }
     }
   }

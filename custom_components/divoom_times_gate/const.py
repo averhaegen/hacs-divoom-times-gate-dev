@@ -10,6 +10,26 @@ CONF_MAC = "mac"
 CONF_DEVICE_ID = "device_id"
 CONF_DASHBOARD_BASE = "dashboard_base"  # preset position (0-4) used as overlay base
 CONF_DISPDATA_SECRET = "dispdata_secret"  # URL guard for the type-23 DispData view
+CONF_PRESETS = "presets"  # named screen sets the user can switch between
+CONF_ACTIVE_PRESET = "active_preset"
+
+DEFAULT_PRESET = "default"  # holds any `screens` config written before presets existed
+ENERGY_PRESET = "energy"
+
+# The energy dashboard palette, copied from the Home Assistant frontend
+# (src/resources/theme/color/color.globals.ts) so the panel and the dashboard
+# agree on what blue means. Note that grid import is blue and export purple,
+# which is the opposite of what people usually guess.
+ENERGY_COLORS = {
+    "grid_import": "#488fc2",
+    "grid_export": "#8353d1",
+    "solar": "#ff9800",
+    "non_fossil": "#0f9d58",
+    "battery_out": "#4db6ac",
+    "battery_in": "#f06292",
+    "gas": "#8e021b",
+    "water": "#00bcd4",
+}
 
 # Outcome of an authenticated probe against the device (TimesGate.check_auth).
 # The device never raises, so these three markers are how the rest of the

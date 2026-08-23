@@ -39,7 +39,37 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     entities: list[SelectEntity] = [DisplaySourceSelect(coordinator, entry)]
     entities += [ScreenSelect(coordinator, entry, i) for i in range(SCREEN_COUNT)]
+    if coordinator.preset_names:
+        entities.append(ScreenPresetSelect(coordinator, entry))
     async_add_entities(entities)
+
+
+class ScreenPresetSelect(TimesGateEntity, SelectEntity):
+    """Switch the whole set of five screens to another named preset.
+
+    Named "Screen preset" rather than "Preset" because the device already calls
+    its Independent Display groups presets, and those are a different thing.
+    """
+
+    _attr_name = "Screen preset"
+
+    def __init__(
+        self, coordinator: TimesGateCoordinator, entry: DivoomTimesGateConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_screen_preset"
+
+    @property
+    def options(self) -> list[str]:
+        return self.coordinator.preset_names
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.active_preset
+
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.async_set_preset(option)
+        self.async_write_ha_state()
 
 
 class DisplaySourceSelect(TimesGateEntity, SelectEntity, RestoreEntity):

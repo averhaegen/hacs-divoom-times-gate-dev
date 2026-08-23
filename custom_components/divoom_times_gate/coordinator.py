@@ -31,13 +31,14 @@ from PIL import Image
 
 from .const import (
     AUTH_INVALID,
+    CONF_ACTIVE_PRESET,
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_DISPDATA_SECRET,
     CONF_IP_ADDRESS,
     CONF_MAC,
-    CONF_SCREENS,
     DEFAULT_DURATION,
+    DEFAULT_PRESET,
     DOMAIN,
     NATIVE_KIND_TYPES,
     SCREEN_COUNT,
@@ -46,6 +47,7 @@ from .defaults import DEFAULT_SCREENS
 from .device import CommandPayload, TimesGate
 from .discovery import IndependentPreset, async_discover_devices
 from .dispdata import publish_card_background, register_allowed_entity
+from .presets import active_screens, read_presets
 from .screens import (
     is_enabled,
     normalize_pages,
@@ -150,8 +152,35 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int | str, str]]):
 
     @property
     def screens(self) -> list[Any]:
-        configured = self.config_entry.options.get(CONF_SCREENS)
+        configured = active_screens(dict(self.config_entry.options))
         return configured if configured else DEFAULT_SCREENS
+
+    @property
+    def preset_names(self) -> list[str]:
+        """Every configured preset name, or an empty list when none exist."""
+        return sorted(read_presets(dict(self.config_entry.options)))
+
+    @property
+    def active_preset(self) -> str | None:
+        """The preset currently driving the screens."""
+        names = self.preset_names
+        if not names:
+            return None
+        current = str(self.config_entry.options.get(CONF_ACTIVE_PRESET) or "")
+        if current in names:
+            return current
+        return DEFAULT_PRESET if DEFAULT_PRESET in names else names[0]
+
+    async def async_set_preset(self, name: str) -> None:
+        """Switch preset and repaint every screen."""
+        if name not in self.preset_names:
+            raise ValueError(f"unknown preset {name!r}")
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            options={**self.config_entry.options, CONF_ACTIVE_PRESET: name},
+        )
+        self.invalidate()
+        await self.async_request_refresh()
 
     def _pages_for(self, screen: int) -> list[dict[str, Any]]:
         if screen < len(self.screens):
