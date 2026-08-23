@@ -21,7 +21,13 @@ import logging
 
 import aiohttp
 
-from .const import SCREEN_COUNT, SCREEN_SIZE
+from .const import (
+    AUTH_INVALID,
+    AUTH_OK,
+    AUTH_UNREACHABLE,
+    SCREEN_COUNT,
+    SCREEN_SIZE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +83,31 @@ class TimesGate:
         """Return True if the device accepts our LocalToken."""
         data = await self._send({"Command": "Channel/GetAllConf"})
         return data.get("error_code") == 0
+
+    async def check_auth(self) -> str:
+        """Probe the device and report whether the LocalToken is still valid.
+
+        ``ping()`` collapses "unreachable" and "token rejected" into one False,
+        but the two need different recovery: a moved device wants IP
+        self-healing, a stale token wants a reauth flow. ``_send`` never
+        raises, so the distinction comes from its return shape:
+
+          * ``error_code == 0`` - the device answered and accepted the token.
+          * ``error_code == "exception"`` - transport failure, nothing answered.
+          * anything else - the device answered and rejected us. On a plain
+            read like ``Channel/GetAllConf`` the only thing left to reject is
+            the ``LocalToken`` (the device replies ``"DeviceToken is err"``),
+            so treat it as an auth failure.
+
+        Returns one of AUTH_OK, AUTH_UNREACHABLE, AUTH_INVALID.
+        """
+        data = await self._send({"Command": "Channel/GetAllConf"})
+        code = data.get("error_code")
+        if code == 0:
+            return AUTH_OK
+        if code == "exception":
+            return AUTH_UNREACHABLE
+        return AUTH_INVALID
 
     async def get_conf(self) -> dict:
         """Return the device config (brightness, light switch, etc.)."""

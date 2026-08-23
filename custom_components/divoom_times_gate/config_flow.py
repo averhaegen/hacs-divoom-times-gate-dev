@@ -1,6 +1,7 @@
 """Config and options flow for Divoom Times Gate."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.config_entries import (
@@ -24,6 +25,8 @@ from homeassistant.helpers.selector import (
 import voluptuous as vol
 
 from .const import (
+    AUTH_INVALID,
+    AUTH_OK,
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
     CONF_FACES,
@@ -117,6 +120,49 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Start reauth: the device stopped accepting the stored LocalToken."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None) -> ConfigFlowResult:
+        """Ask for a fresh LocalToken and write it to the existing entry.
+
+        The token changes when the user re-pairs the device in the Divoom app.
+        Updating the entry in place keeps entity ids, area assignments, screen
+        configuration and automations, which deleting and re-adding would not.
+        """
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            token = int(user_input[CONF_LOCAL_TOKEN])
+            device = TimesGate(
+                entry.data[CONF_IP_ADDRESS],
+                token,
+                async_get_clientsession(self.hass),
+                entry.data.get(CONF_HARDWARE, DEFAULT_HARDWARE),
+            )
+            status = await device.check_auth()
+            if status == AUTH_OK:
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_LOCAL_TOKEN: token}
+                )
+            errors["base"] = (
+                "invalid_auth" if status == AUTH_INVALID else "cannot_connect"
+            )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_LOCAL_TOKEN): int}),
+            errors=errors,
+            description_placeholders={
+                "device": entry.title,
+                "ip_address": entry.data.get(CONF_IP_ADDRESS, ""),
+            },
+        )
 
     async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
         """Change IP/token/interval on the existing entry (HA 'Reconfigure')."""

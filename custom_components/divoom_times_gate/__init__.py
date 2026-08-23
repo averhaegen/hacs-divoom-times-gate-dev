@@ -7,11 +7,13 @@ import secrets as secrets_module
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    AUTH_INVALID,
+    AUTH_OK,
     CONF_DEVICE_ID,
     CONF_DISPDATA_SECRET,
     CONF_HARDWARE,
@@ -98,11 +100,25 @@ async def async_setup_entry(
         entry.data.get(CONF_HARDWARE, DEFAULT_HARDWARE),
     )
 
-    if not await device.ping():
-        # The device may have moved to a new DHCP lease while HA was down.
-        # Try the cloud LAN discovery, match on MAC (or DeviceId), and retry.
+    status = await device.check_auth()
+    if status == AUTH_INVALID:
+        # The device answered and refused the token, so its address is fine
+        # and IP self-healing has nothing to fix. Ask the user for a fresh
+        # LocalToken instead (they re-paired in the Divoom app).
+        raise ConfigEntryAuthFailed(
+            f"Times Gate at {entry.data[CONF_IP_ADDRESS]} rejected the LocalToken"
+        )
+    if status != AUTH_OK:
+        # Nothing answered. The device may have moved to a new DHCP lease
+        # while HA was down: re-run cloud LAN discovery, match on MAC (or
+        # DeviceId), and retry there.
         device = await _try_heal_ip(hass, entry, session) or device
-        if not await device.ping():
+        status = await device.check_auth()
+        if status == AUTH_INVALID:
+            raise ConfigEntryAuthFailed(
+                f"Times Gate at {entry.data[CONF_IP_ADDRESS]} rejected the LocalToken"
+            )
+        if status != AUTH_OK:
             raise ConfigEntryNotReady(
                 f"Times Gate at {entry.data[CONF_IP_ADDRESS]} not reachable"
             )

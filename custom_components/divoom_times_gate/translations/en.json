@@ -18,13 +18,22 @@
           "local_token": "LocalToken",
           "refresh_interval": "Refresh interval (seconds)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Times Gate",
+        "description": "The Times Gate at {ip_address} rejected the stored LocalToken. This happens after you re-pair the device in the Divoom app. Enter the current LocalToken shown in the Divoom app under Device settings.",
+        "data": {
+          "local_token": "LocalToken"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Could not reach the device, or the LocalToken was rejected. Check the IP and token."
+      "cannot_connect": "Could not reach the device, or the LocalToken was rejected. Check the IP and token.",
+      "invalid_auth": "The device rejected this LocalToken. Check the value shown in the Divoom app under Device settings."
     },
     "abort": {
       "already_configured": "This Times Gate is already configured. Its IP address and token were updated in place.",
+      "reauth_successful": "Reauthentication successful. The new LocalToken was saved.",
       "reconfigure_successful": "Reconfiguration successful.",
       "wrong_device": "The device at this IP is a different Times Gate (MAC mismatch). Add it as a new device instead."
     }
