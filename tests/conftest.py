@@ -1,6 +1,7 @@
 """Shared pytest fixtures for the Divoom Times Gate integration."""
 from __future__ import annotations
 
+from collections.abc import Generator
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
@@ -8,6 +9,7 @@ from typing import Any
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.divoom_times_gate.config_flow import DivoomTimesGateConfigFlow
 from custom_components.divoom_times_gate.const import (
     CONF_DASHBOARD_BASE,
     CONF_DEVICE_ID,
@@ -23,11 +25,37 @@ from custom_components.divoom_times_gate.const import (
     DOMAIN,
 )
 from custom_components.divoom_times_gate.defaults import DEFAULT_FACES, DEFAULT_SCREENS
+from custom_components.divoom_times_gate.discovery import DiscoveredDevice
 
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow pytest-homeassistant-custom-component to load this repo's integration."""
+
+
+@pytest.fixture(autouse=True)
+def reset_discovery_cache() -> Generator[None]:
+    """Clear the config flow's class-level discovery cache between tests.
+
+    ``DivoomTimesGateConfigFlow._discovered`` is a mutable class attribute, so a
+    discovery result from one test would otherwise leak into the next one.
+    """
+    DivoomTimesGateConfigFlow._discovered = []
+    yield
+    DivoomTimesGateConfigFlow._discovered = []
+
+
+def make_discovered(
+    name: str = "Times Gate",
+    ip: str = "192.168.1.25",
+    mac: str = "aa:bb:cc:dd:ee:ff",
+    hardware: int = DEFAULT_HARDWARE,
+    device_id: int = 4242,
+) -> DiscoveredDevice:
+    """Build a ``DiscoveredDevice`` with sensible per-test defaults."""
+    return DiscoveredDevice(
+        name=name, ip=ip, mac=mac, hardware=hardware, device_id=device_id
+    )
 
 
 @dataclass
@@ -39,6 +67,7 @@ class FakeTimesGate:
     hardware: int = DEFAULT_HARDWARE
     consecutive_failures: int = 0
     calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = field(default_factory=list)
+    _pic_id: int = 0
 
     def _record(self, name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
         self.calls.append((name, args, kwargs))
@@ -93,6 +122,70 @@ class FakeTimesGate:
 
     async def set_independent_preset(self, independence_id: int) -> dict[str, Any]:
         return self._record("set_independent_preset", independence_id)
+
+    async def play_gif(self, screen: int, files: list[str]) -> dict[str, Any]:
+        return self._record("play_gif", screen, files)
+
+    async def send_animation(
+        self, frames: list[bytes], screen: int, speed_ms: int = 200
+    ) -> dict[str, Any]:
+        return self._record("send_animation", frames, screen, speed_ms)
+
+    # The coordinator batches a tick into one Draw/CommandList, so it calls the
+    # build_* helpers far more often than the send_* ones. They stay pure: they
+    # only shape a payload, so the fake returns the same dicts the real client
+    # would, without recording a call.
+    def build_jpeg(self, jpeg_bytes: bytes, screen: int) -> dict[str, Any]:
+        self._pic_id += 1
+        return {
+            "Command": "Draw/SendHttpGif",
+            "PicID": self._pic_id,
+            "LcdArray": [1 if i == screen else 0 for i in range(5)],
+        }
+
+    def build_clock_face(
+        self, screen: int, clock_id: int, independence_id: int | None = None
+    ) -> dict[str, Any]:
+        payload = {
+            "Command": "Channel/SetClockSelectId",
+            "ClockId": clock_id,
+            "LcdIndex": screen,
+        }
+        if independence_id:
+            payload["LcdIndependence"] = independence_id
+        return payload
+
+    def build_visualizer(
+        self, screen: int, eq_position: int, independence_id: int | None = None
+    ) -> dict[str, Any]:
+        payload = {
+            "Command": "Channel/SetEqPosition",
+            "EqPosition": eq_position,
+            "LcdIndex": screen,
+        }
+        if independence_id:
+            payload["LcdIndependence"] = independence_id
+        return payload
+
+    def build_play_gif(self, screen: int, files: list[str]) -> dict[str, Any]:
+        return {
+            "Command": "Device/PlayGif",
+            "FileName": files,
+            "LcdArray": [1 if i == screen else 0 for i in range(5)],
+        }
+
+    def build_item_list(
+        self, screen: int, items: list[dict[str, Any]], background_gif: str | None = None
+    ) -> dict[str, Any]:
+        payload = {
+            "Command": "Draw/SendHttpItemList",
+            "LcdIndex": screen,
+            "ItemList": items,
+            "NewFlag": 1 if background_gif else 0,
+        }
+        if background_gif:
+            payload["BackgroudGif"] = background_gif
+        return payload
 
 
 @pytest.fixture
