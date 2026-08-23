@@ -112,3 +112,12 @@ depends on device firmware support — not observed on all units yet.)
   reachable from the device over LAN (same requirement as dispdata_text).
 - The screen-preview image entity shows the rendered background; live
   values exist only on the device.
+
+## Other page types
+
+`card` is specific to this integration. The page types that come from
+`gickowtf/pixoo-homeassistant` are documented separately in
+[PIXOO_PAGES.md](PIXOO_PAGES.md): the fixed layouts `pv`, `progress_bar` and
+`fuel`, plus the image and `templatable` components a `components` page can
+use. Unlike cards, none of those push type-23 items; they render a plain
+image.
