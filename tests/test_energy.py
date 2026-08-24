@@ -15,6 +15,7 @@ from custom_components.divoom_times_gate.const import (
     ENERGY_HERO_CHAR_WIDTH,
     ENERGY_HERO_FONT,
     ENERGY_PRESET,
+    ENERGY_SCREENS,
     SCREEN_SIZE,
 )
 from custom_components.divoom_times_gate.units import quantize_fraction
@@ -273,6 +274,61 @@ def test_build_energy_preset_produces_five_screens() -> None:
     assert screens[1]["footer_height"] == 32
     assert [slot["name"] for slot in screens[1]["footer_slots"]] == ["Gas", "Water"]
     assert screens[4]["card"] == "energy_history"
+
+
+def test_build_energy_preset_selection_defaults_to_every_screen() -> None:
+    """Passing nothing keeps today's behaviour: naming all five changes nothing.
+
+    Selecting every slot has to match passing no selection at all, so the
+    default path the starter and the options flow rely on stays put.
+    """
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR, BATTERY]})
+
+    default = presets.build_energy_preset(found)
+    every = presets.build_energy_preset(found, set(ENERGY_SCREENS))
+
+    assert every == default
+
+
+def test_build_energy_preset_selection_blanks_a_screen_in_its_slot() -> None:
+    """A screen left out of the selection lands as an off page, in place."""
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR, BATTERY]})
+
+    screens = presets.build_energy_preset(
+        found, {"price", "house", "price_graph", "history"}
+    )
+
+    # Slot three is the merged screen, so dropping it blanks only slot three.
+    assert screens[2] == {"page_type": "off"}
+    assert screens[0]["mode"] == "price"
+    assert screens[1]["mode"] == "power"
+    assert screens[3]["card"] == "graph"
+    assert screens[4]["card"] == "energy_history"
+
+
+def test_candidate_screens_omits_a_screen_it_cannot_fill() -> None:
+    """A source the discovery lacks keeps its screen out of the candidates."""
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID]})
+
+    candidates = presets.candidate_screens(found)
+
+    # No solar and no battery, so the merged screen is not a candidate. The
+    # day-ahead graph needs a discovered forecast, which parse_sources does not
+    # resolve, so it stays out too.
+    assert "solar_battery" not in candidates
+    assert candidates == ["price", "house", "history"]
+
+
+def test_describe_energy_screens_names_sources_and_missing_ones() -> None:
+    """The report names the source per filled screen and why a screen is blank."""
+    found = energy.parse_sources({"energy_sources": [SOLAR]})
+
+    report = presets.describe_energy_screens(found)
+
+    # Solar fills the merged screen and the history, and names its statistic.
+    assert "Solar and battery: reads sensor.solar_energy" in report
+    # No price sensor, so the price panel says why it stays blank.
+    assert "Price panel: stays blank, needs a price sensor." in report
 
 
 def test_build_energy_preset_blanks_missing_sources() -> None:

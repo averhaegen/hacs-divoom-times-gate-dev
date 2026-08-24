@@ -10,6 +10,7 @@ afterwards without the generator overwriting your changes.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -21,6 +22,12 @@ from .const import (
     DEFAULT_PRESET,
     ENERGY_COLORS,
     ENERGY_PRESET,
+    ENERGY_SCREEN_HISTORY,
+    ENERGY_SCREEN_HOUSE,
+    ENERGY_SCREEN_PRICE,
+    ENERGY_SCREEN_PRICE_GRAPH,
+    ENERGY_SCREEN_SOLAR_BATTERY,
+    ENERGY_SCREENS,
 )
 from .energy import EnergySources, house_power_template
 
@@ -183,12 +190,20 @@ def _footer_slot(stat: str, name: str, color: str, unit: str) -> dict[str, Any]:
     return slot
 
 
-def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
+def build_energy_preset(
+    found: EnergySources, selection: Iterable[str] | None = None
+) -> list[dict[str, Any]]:
     """Build the five energy screens from the discovered sources.
 
     Screens without a matching source fall back to an off page rather than
     rendering an empty panel, so a home without a battery gets four screens and
     a blank one instead of a broken one.
+
+    Pass ``selection`` to keep only the named screens (see ``ENERGY_SCREENS``);
+    every slot left out is written as an off page so it stays yours to fill by
+    hand. The slots keep their order, so turning one off does not shuffle the
+    rest. Passing nothing keeps every screen the sources can fill, which is what
+    the options flow and the starter both want.
     """
     price_panel, price_graph = _price_pages(found)
 
@@ -225,7 +240,14 @@ def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
 
     # Solar and battery share one screen, so the fifth slot carries the 24 hour
     # history graph. It falls back to off when there is nothing to draw.
-    return [price_panel, power, solar_battery, price_graph, history]
+    pages = [price_panel, power, solar_battery, price_graph, history]
+    if selection is None:
+        return pages
+    wanted = set(selection)
+    return [
+        page if key in wanted else {"page_type": "off"}
+        for key, page in zip(ENERGY_SCREENS, pages, strict=True)
+    ]
 
 
 def _solar_battery_page(found: EnergySources) -> dict[str, Any]:
@@ -303,17 +325,110 @@ def _forecast_solar_goal_template(hass: HomeAssistant, found: EnergySources) -> 
     return None
 
 
-async def async_build_energy_preset(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Discover the energy configuration and turn it into five screens."""
+async def async_build_energy_preset(
+    hass: HomeAssistant, selection: Iterable[str] | None = None
+) -> list[dict[str, Any]]:
+    """Discover the energy configuration and turn it into five screens.
+
+    Pass ``selection`` to keep only the named screens (see ``ENERGY_SCREENS``);
+    passing nothing keeps every screen the sources can fill.
+    """
     from .energy import async_discover
 
     found = await async_discover(hass)
-    screens = build_energy_preset(found)
+    screens = build_energy_preset(found, selection)
     if template := _forecast_solar_goal_template(hass, found):
         for page in screens:
             if page.get("mode") == "solar_battery":
                 page["goal_template"] = template
     return screens
+
+
+def _has_consumption_stat(found: EnergySources) -> bool:
+    """True when a statistic can drive the consumption side of the history."""
+    return bool(
+        found.grid_import_stat
+        or found.grid_export_stat
+        or found.battery_in_stat
+        or found.battery_out_stat
+    )
+
+
+def candidate_screens(found: EnergySources) -> list[str]:
+    """The energy screens the discovery can fill, in slot order.
+
+    The screen picker offers a checkbox per entry, so a slot the sources cannot
+    fill is left out rather than offered as a checkbox the reader cannot act on.
+    A slot missing here still exists in the preset; it lands as an off page.
+    """
+    filled: list[str] = []
+    if found.price_now:
+        filled.append(ENERGY_SCREEN_PRICE)
+    if found.has_electricity:
+        filled.append(ENERGY_SCREEN_HOUSE)
+    if found.has_solar or found.has_battery:
+        filled.append(ENERGY_SCREEN_SOLAR_BATTERY)
+    if found.price_forecast:
+        filled.append(ENERGY_SCREEN_PRICE_GRAPH)
+    if found.solar_stat or _has_consumption_stat(found):
+        filled.append(ENERGY_SCREEN_HISTORY)
+    return filled
+
+
+# Each screen's name for the report, plus the source it needs when it is blank.
+_ENERGY_SCREEN_LABELS: dict[str, tuple[str, str]] = {
+    ENERGY_SCREEN_PRICE: ("Price panel", "a price sensor"),
+    ENERGY_SCREEN_HOUSE: ("House power", "grid or solar power"),
+    ENERGY_SCREEN_SOLAR_BATTERY: ("Solar and battery", "solar or a battery"),
+    ENERGY_SCREEN_PRICE_GRAPH: ("Day-ahead price graph", "a day-ahead price forecast"),
+    ENERGY_SCREEN_HISTORY: ("24 hour history", "solar or grid statistics"),
+}
+
+
+def _energy_screen_source(found: EnergySources, key: str) -> str:
+    """Name the entity or statistic a filled screen reads."""
+    if key == ENERGY_SCREEN_PRICE:
+        return str(found.price_now)
+    if key == ENERGY_SCREEN_HOUSE:
+        sources = [
+            found.grid_import_power,
+            found.grid_export_power,
+            found.grid_net_power,
+            found.solar_power,
+        ]
+        return ", ".join(source for source in sources if source)
+    if key == ENERGY_SCREEN_SOLAR_BATTERY:
+        sources = [found.solar_stat, found.solar_power, found.battery_soc, found.battery_power]
+        return ", ".join(source for source in sources if source)
+    if key == ENERGY_SCREEN_PRICE_GRAPH:
+        return str(found.price_forecast)
+    sources = [
+        found.solar_stat,
+        found.grid_import_stat,
+        found.grid_export_stat,
+        found.battery_in_stat,
+        found.battery_out_stat,
+    ]
+    return ", ".join(source for source in sources if source)
+
+
+def describe_energy_screens(found: EnergySources) -> str:
+    """A per-screen report, one line each, for the discovery step.
+
+    Name the entity or statistic every screen the discovery can fill will read,
+    so the reader can tell where a figure comes from. For a screen the discovery
+    cannot fill, say it stays blank and name the source it needs, so the reader
+    knows why before they commit.
+    """
+    fillable = set(candidate_screens(found))
+    lines: list[str] = []
+    for key in ENERGY_SCREENS:
+        name, missing = _ENERGY_SCREEN_LABELS[key]
+        if key in fillable:
+            lines.append(f"- {name}: reads {_energy_screen_source(found, key)}.")
+        else:
+            lines.append(f"- {name}: stays blank, needs {missing}.")
+    return "\n".join(lines)
 
 
 def with_energy_preset(

@@ -13,6 +13,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -58,13 +59,14 @@ from .discovery import (
 from .energy import async_discover
 from .presets import (
     active_screens,
-    build_energy_preset,
+    async_build_energy_preset,
+    candidate_screens,
+    describe_energy_screens,
     describe_page,
     read_presets,
 )
 from .starters import (
     async_available_starters,
-    describe_energy,
     get_starter,
     pad,
 )
@@ -349,6 +351,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
 
     _data: dict[str, Any] | None = None
     _index: int = 0
+    _energy_name: str = ENERGY_PRESET
 
     def _ensure(self) -> None:
         """Load the options into the shape the steps work on."""
@@ -802,29 +805,61 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
     async def async_step_energy(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Fill all five screens from the Home Assistant energy dashboard.
+        """Report what the energy discovery found, then pick the screens.
 
-        The generated pages are written as ordinary screens, so you can edit
-        any of them afterwards and the generator will not touch them again
-        unless you come back here.
+        This first step names, per screen, the entity or statistic it will read
+        and why a screen will be blank, so you can tell what you are getting
+        before you commit. The second step lets you drop any screen you do not
+        want. The generated pages are written as ordinary screens, so you can
+        edit any of them afterwards and nothing regenerates them.
         """
         self._ensure()
         assert self._data is not None
         found = await async_discover(self.hass)
         if user_input is not None:
-            name = str(user_input.get(PRESET_NAME) or "").strip() or ENERGY_PRESET
-            self._data[CONF_PRESETS][name] = build_energy_preset(found)
-            self._load(name)
-            return self._commit()
+            self._energy_name = (
+                str(user_input.get(PRESET_NAME) or "").strip() or ENERGY_PRESET
+            )
+            return await self.async_step_energy_screens()
 
         return self.async_show_form(
             step_id="energy",
             data_schema=vol.Schema(
                 {vol.Optional(PRESET_NAME, default=ENERGY_PRESET): str}
             ),
+            description_placeholders={"found": describe_energy_screens(found)},
+        )
+
+    async def async_step_energy_screens(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick which of the discovered screens to write.
+
+        Only screens the discovery can fill are offered, each defaulting on. A
+        screen you clear is written as an off page so the slot stays yours to
+        fill by hand, and the slots keep their order so clearing one does not
+        move the rest.
+        """
+        self._ensure()
+        assert self._data is not None
+        found = await async_discover(self.hass)
+        candidates = candidate_screens(found)
+        if user_input is not None:
+            selection = {key for key in candidates if user_input.get(key)}
+            screens = await async_build_energy_preset(self.hass, selection)
+            self._data[CONF_PRESETS][self._energy_name] = screens
+            self._load(self._energy_name)
+            return self._commit()
+
+        schema = vol.Schema(
+            {vol.Optional(key, default=True): BooleanSelector() for key in candidates}
+        )
+        return self.async_show_form(
+            step_id="energy_screens",
+            data_schema=schema,
             description_placeholders={
-                "found": describe_energy(found)
-                or "nothing (check your energy dashboard)"
+                "preset": self._energy_name,
+                "screens": describe_energy_screens(found),
             },
         )
 

@@ -16,6 +16,23 @@ CONF_ACTIVE_PRESET = "active_preset"
 DEFAULT_PRESET = "default"  # holds any `screens` config written before presets existed
 ENERGY_PRESET = "energy"
 
+# The five energy screens, one per device slot, in the order the builder emits
+# them. The screen picker keys its checkboxes on these, and the builder blanks a
+# slot whose key is left out of the selection, so the names live here rather than
+# as bare strings the flow and the builder would have to keep in step by hand.
+ENERGY_SCREEN_PRICE = "price"
+ENERGY_SCREEN_HOUSE = "house"
+ENERGY_SCREEN_SOLAR_BATTERY = "solar_battery"
+ENERGY_SCREEN_PRICE_GRAPH = "price_graph"
+ENERGY_SCREEN_HISTORY = "history"
+ENERGY_SCREENS = (
+    ENERGY_SCREEN_PRICE,
+    ENERGY_SCREEN_HOUSE,
+    ENERGY_SCREEN_SOLAR_BATTERY,
+    ENERGY_SCREEN_PRICE_GRAPH,
+    ENERGY_SCREEN_HISTORY,
+)
+
 # The energy dashboard palette, copied from the Home Assistant frontend
 # (src/resources/theme/color/color.globals.ts) so the panel and the dashboard
 # agree on what blue means. Note that grid import is blue and export purple,

@@ -10,10 +10,12 @@ Two properties matter most here and both are regressions waiting to happen:
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from custom_components.divoom_times_gate import energy
 from custom_components.divoom_times_gate.config_flow import DivoomTimesGateOptionsFlow
 from custom_components.divoom_times_gate.const import (
     CONF_ACTIVE_PRESET,
@@ -28,6 +30,24 @@ from custom_components.divoom_times_gate.const import (
 from custom_components.divoom_times_gate.discovery import IndependentPreset
 
 OFF = {"page_type": "off"}
+
+
+@contextmanager
+def energy_discovery(**fields):
+    """Patch both discovery call sites to return one set of sources.
+
+    The energy step discovers in ``config_flow`` and the builder discovers again
+    in ``presets``, so a flow run reads ``async_discover`` twice; pin both to the
+    same result.
+    """
+    found = energy.EnergySources(**fields)
+    mock = AsyncMock(return_value=found)
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_discover", mock
+    ), patch(
+        "custom_components.divoom_times_gate.config_flow.async_discover", mock
+    ):
+        yield found
 CLOCK = {"page_type": "clock"}
 
 
@@ -513,10 +533,138 @@ async def test_energy_step_writes_to_the_layout_you_name(
     )
     result = await pick(hass, result, "energy")
     result = await submit(hass, result, {"preset_name": "power"})
+    assert result["step_id"] == "energy_screens"
+    result = await submit(hass, result, {})
 
     assert result["data"][CONF_ACTIVE_PRESET] == "power"
     assert result["data"][CONF_PRESETS]["night"] == [CLOCK] * 5
     assert len(result["data"][CONF_PRESETS]["power"]) == SCREEN_COUNT
+
+
+# A discovery with every source, so all five screens are candidates.
+_FULL_DISCOVERY = {
+    "price_now": "sensor.price",
+    "price_forecast": "sensor.price_forecast",
+    "grid_import_power": "sensor.power_from_grid",
+    "grid_export_power": "sensor.power_to_grid",
+    "grid_import_stat": "sensor.from_grid",
+    "grid_export_stat": "sensor.to_grid",
+    "solar_power": "sensor.solar_power",
+    "solar_stat": "sensor.solar_energy",
+    "battery_soc": "sensor.battery_soc",
+    "battery_power": "sensor.battery_power",
+}
+
+
+async def test_energy_picker_offers_every_filled_screen(hass, mock_config_entry) -> None:
+    """Every screen the discovery can fill is a checkbox, defaulting on."""
+    result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+    with energy_discovery(**_FULL_DISCOVERY):
+        result = await pick(hass, result, "energy")
+        result = await submit(hass, result, {"preset_name": "power"})
+
+        assert result["step_id"] == "energy_screens"
+        fields = {str(key): key.default() for key in result["data_schema"].schema}
+        assert list(fields) == [
+            "price",
+            "house",
+            "solar_battery",
+            "price_graph",
+            "history",
+        ]
+        assert all(default is True for default in fields.values())
+
+
+async def test_energy_picker_turns_a_screen_off_in_its_own_slot(
+    hass, mock_config_entry
+) -> None:
+    """A screen you clear lands as an off page, and the rest keep their slot."""
+    result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+    with energy_discovery(**_FULL_DISCOVERY):
+        result = await pick(hass, result, "energy")
+        result = await submit(hass, result, {"preset_name": "power"})
+        # Clear only the merged solar-and-battery screen, slot three.
+        result = await submit(
+            hass,
+            result,
+            {
+                "price": True,
+                "house": True,
+                "solar_battery": False,
+                "price_graph": True,
+                "history": True,
+            },
+        )
+
+    screens = result["data"][CONF_PRESETS]["power"]
+    assert screens[2] == OFF
+    assert screens[0]["mode"] == "price"
+    assert screens[1]["mode"] == "power"
+    assert screens[3]["card"] == "graph"
+    assert screens[4]["card"] == "energy_history"
+
+
+async def test_energy_picker_hides_a_screen_it_cannot_fill(
+    hass, mock_config_entry
+) -> None:
+    """A source the discovery lacks is never offered as a checkbox.
+
+    Without a battery or solar source the merged screen cannot be filled, so the
+    picker omits it. It still lands as an off page in slot three.
+    """
+    result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+    with energy_discovery(
+        price_now="sensor.price",
+        price_forecast="sensor.price_forecast",
+        grid_import_power="sensor.power_from_grid",
+        grid_import_stat="sensor.from_grid",
+    ):
+        result = await pick(hass, result, "energy")
+        result = await submit(hass, result, {"preset_name": "power"})
+
+        assert "solar_battery" not in {
+            str(key) for key in result["data_schema"].schema
+        }
+        result = await submit(hass, result, {})
+
+    screens = result["data"][CONF_PRESETS]["power"]
+    assert screens[2] == OFF
+
+
+async def test_energy_flow_injects_the_solar_goal_template(hass, mock_config_entry) -> None:
+    """A Forecast.Solar entry gives the merged panel its goal target.
+
+    The flow calls the async builder, so the goal bar reads the production-today
+    sensor rather than falling back to the plain caption.
+    """
+    from homeassistant.helpers import entity_registry as er
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    forecast_entry = MockConfigEntry(domain="forecast_solar")
+    forecast_entry.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        "forecast_solar",
+        "uid_energy_production_today",
+        config_entry=forecast_entry,
+        suggested_object_id="solar_energy_production_today",
+    )
+
+    result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+    with energy_discovery(
+        solar_power="sensor.solar_power",
+        solar_stat="sensor.solar_energy",
+        solar_forecast_entries=[forecast_entry.entry_id],
+    ):
+        result = await pick(hass, result, "energy")
+        result = await submit(hass, result, {"preset_name": "power"})
+        result = await submit(hass, result, {"solar_battery": True})
+
+    merged = result["data"][CONF_PRESETS]["power"][2]
+    assert merged["mode"] == "solar_battery"
+    assert merged["goal_template"] == (
+        "{{ states('sensor.solar_energy_production_today') | float(0) }}"
+    )
 
 
 async def test_advanced_step_replaces_every_layout(hass, mock_config_entry) -> None:

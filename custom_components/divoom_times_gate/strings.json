@@ -175,9 +175,20 @@
       },
       "energy": {
         "title": "Build energy screens",
-        "description": "Read your Home Assistant energy dashboard and fill five screens with a price panel, a house power panel, a battery panel, a solar panel and a day-ahead price graph. Found: {found}. The screens are written to the layout you name below, which becomes the one you are editing. Existing layouts are left alone.",
+        "description": "Read your Home Assistant energy dashboard and see what each screen will show. The next step lets you drop any screen you do not want.\n\n{found}\n\nName the layout to write the screens to. It becomes the one you are editing, and existing layouts are left alone.",
         "data": {
           "preset_name": "Write to layout"
+        }
+      },
+      "energy_screens": {
+        "title": "Pick the energy screens",
+        "description": "Choose which screens to write to {preset}. Only screens the discovery can fill are listed. A screen you clear is written as a blank slot you can fill by hand, and the other screens keep their place.\n\n{screens}",
+        "data": {
+          "price": "Price panel",
+          "house": "House power",
+          "solar_battery": "Solar and battery",
+          "price_graph": "Day-ahead price graph",
+          "history": "24 hour history"
         }
       },
       "settings": {
