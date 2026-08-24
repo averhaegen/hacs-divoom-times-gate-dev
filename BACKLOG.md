@@ -375,6 +375,29 @@ gallery, experimental native-face authoring). In priority order:
   `Device/CreateLocalClock` is proven; `device.py` already routes 402
   there). Needs access to a HW 402 device.
 
+## Configuration UX (left over after the 2026-08 redesign)
+
+- [ ] **A second layout cannot be created from the menu.** The layout entry is
+  hidden until more than one layout exists, and "Save as copy" lives inside
+  it, so the first extra layout can only come from the energy generator or
+  from **Edit all layouts as YAML**. Either surface "Save as copy" one level
+  up, or drop the hide rule.
+- [ ] **No form for graph cards, gif, visualizer or image pages.** Those page
+  types get the YAML editor and a sentence saying why. `page_forms.py` is the
+  place to add them; each new form needs a matching entry in
+  `unsupported_reason` or it will start silently dropping keys.
+- [ ] **Generated screens that use `value_template` are YAML-only afterwards.**
+  Weather, the calendar agenda and the energy panels read attributes, which
+  the sensor form cannot express, so their screens fall back to the YAML
+  editor. Either teach the form about templates or add a per-slot
+  attribute picker.
+- [ ] **Media player and statistics starters.** Deferred in the design: both
+  need choices the registry cannot make on its own (which player, which
+  statistic, over which period).
+- [ ] **Per-screen faces are picked from the whole-device catalog.** The device
+  reports one face list; whether every id in it renders on a single screen is
+  unverified beyond hardware revision 400.
+
 ## Notes / dead ends
 
 - **No diagnostic sensors planned.** Device internal temperature is NOT available
