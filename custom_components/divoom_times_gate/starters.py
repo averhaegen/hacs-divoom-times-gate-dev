@@ -41,7 +41,7 @@ class Starter:
     async_build: Callable[[HomeAssistant], Awaitable[list[dict[str, Any]]]]
 
 
-def pad(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def pad(pages: list[Any]) -> list[Any]:
     """Return exactly ``SCREEN_COUNT`` screens, padding with off pages."""
     filled = list(pages[:SCREEN_COUNT])
     while len(filled) < SCREEN_COUNT:

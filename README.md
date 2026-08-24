@@ -179,14 +179,14 @@ dialog (options flow) for everything you can tweak later.
 | --- | --- | --- |
 | **IP address** (`ip_address`) | The device's current LAN IP. If discovery finds your Times Gate first, HA offers it in a dropdown; you can also type it manually. | Required. Default: the first discovered Times Gate if HA finds one, otherwise blank. |
 | **LocalToken** (`local_token`) | Required on every local API call. This is the integer shown in the Divoom app under the device's settings. | Required integer. No default. |
-| **Refresh interval** (`refresh_interval`) | How often Home Assistant refreshes the integration while HA is managing the display. | Integer seconds. Default: `60`. In **Configure → Settings & faces**, HA validates `5`–`3600` seconds. |
+| **Refresh interval** (`refresh_interval`) | How often Home Assistant refreshes the integration while HA is managing the display. | Integer seconds. Default: `60`. In **Configure → Settings and faces**, HA validates `5`–`3600` seconds. |
 
-### In Configure → Settings & faces
+### In Configure → Settings and faces
 
 | Field | What it does | Valid values / default |
 | --- | --- | --- |
 | **Refresh interval (seconds)** (`refresh_interval`) | Same setting as above, but editable later from the options flow. | `5`–`3600` seconds. Default: `60`. |
-| **Dashboard base preset** (`dashboard_base`) | Optional native **Independent display** preset that HA overlays onto when **Display source** is **HA Dashboard**. Pick a static face (or blank preset) if you want to avoid native live faces reloading underneath the HA overlay. | Dropdown built from the device's current independent presets, plus **Leave device as-is**. Default: **Leave device as-is** (empty value). |
+| **Independent Display preset to draw over** (`dashboard_base`) | Optional native **Independent display** preset that HA overlays onto when **Display source** is **HA Dashboard**. Pick a static face (or blank preset) if you want to avoid native live faces reloading underneath the HA overlay. | Dropdown built from the device's current independent presets, plus **Leave device as-is**. Default: **Leave device as-is** (empty value). |
 | **Faces (favorites)** (`faces`) | The favorites lists used to build the native-face dropdowns in Home Assistant. `overall` populates **Display source → Overall Display: ...**; `per_screen` populates **Screen N → Face: ...**. | Object/YAML with two keys: `overall` and `per_screen`, each a list of `{name, clock_id}` objects. Default: a small starter set shipped with the integration (see below). |
 
 Default `faces` value:
@@ -520,17 +520,20 @@ artwork behind them is only re-sent when it actually changes. Labels in that
 artwork are drawn in Pixel Operator SC Bold; the numbers themselves are drawn
 by the device in its own firmware font, so they look different by design.
 
-## Presets
+## Layouts
 
-A preset is a named set of five screens. Only one preset drives the clock at a
+A layout is a named set of five screens. Only one layout drives the clock at a
 time, so you can keep an energy layout, a night layout and a weekend layout
-side by side and switch between them without retyping any screen.
+side by side and switch between them without retyping any screen. In the
+options and in the stored configuration the key is still `presets`, and the
+select entity is still **Screen preset**, so nothing you already automated
+changes.
 
 ### Switching
 
 The integration creates a **Screen preset** select entity. Change it from a
 dashboard, a script or an automation and all five screens follow at the next
-refresh. For example, show the night preset after midnight:
+refresh. For example, show the night layout after midnight:
 
 ```yaml
 automation:
@@ -548,24 +551,25 @@ automation:
 
 ### Editing
 
-Open **Settings > Devices & services > Divoom Times Gate > Configure**. The
-menu header names the preset you are editing and lists what each of its five
-screens holds, so you always know which set you are changing.
+Open **Settings > Devices & services > Divoom Times Gate > Configure**. Each
+menu entry says what that screen currently holds, so "Screen 2: sensor_grid"
+tells you where to go without opening anything first.
 
-- **Preset** switches to another preset, and carries an action to add an empty
-  preset, copy the current one, rename it or delete it. Switching keeps the
-  edits you already made to the preset you are leaving.
-- **Screen 1** to **Screen 5** edit the five screens of that preset. Each step
-  repeats the preset name and the current page type in its description.
-- **Build energy screens** generates five screens and writes them to the preset
-  you name in that step, defaulting to `energy`. Your other presets are left
+- **Screen 1** to **Screen 5** edit the five screens of the layout you are on.
+- **Build energy screens** generates five screens and writes them to the layout
+  you name in that step, defaulting to `energy`. Your other layouts are left
   alone.
-- **Edit all presets (advanced)** shows the whole mapping of names to screen
-  lists at once, for pasting a set of screens in or copying one out.
+- **Layout** appears once you have more than one layout. It switches between
+  them, saves the current screens as a copy, or deletes one.
+- **Edit all layouts as YAML** shows the whole mapping of names to screen lists
+  at once, for pasting a set of screens in, copying one out, or adding a layout.
 
-Nothing is written to the config entry until you pick **Save & close**.
+**Every step saves on its own.** There is no "Save & close": the moment you
+submit a screen, the config entry is written and the integration reloads. An
+options edit reloads the entry either way, and the old working-copy pattern
+threw away everything you had typed if you navigated away instead of finishing.
 
-The mapping is a plain name-to-screens object, so a preset holds exactly what a
+The mapping is a plain name-to-screens object, so a layout holds exactly what a
 single screen editor holds, five times over:
 
 ```yaml
@@ -587,8 +591,9 @@ presets:
     - page_type: "off"
 ```
 
-Configurations written before presets existed keep working: their screens
-become the `default` preset the first time you open the options.
+Configurations written before layouts existed keep working: their screens become
+the `default` layout the first time you open the options. The integration keeps
+reading a bare `screens` list forever; it just no longer writes one.
 
 ## Credits
 
