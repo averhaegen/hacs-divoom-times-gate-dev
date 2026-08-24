@@ -448,7 +448,9 @@ Notable large fonts ✅:
 
 | Font | Size | Charset | Why it matters |
 |------|------|---------|----------------|
-| `246` | 18×22 | `0123456789.` | Current energy hero font |
+| `246` | 18×22 | `0123456789.` | Large clean value |
+| `608` | 16×14 | `0123456789.W` | Energy panel value font; LCD look, honours `color` |
+| `184` | 12×14 | `0123456789KMLIVEOFN.` | Blocky numerals, honours `color` |
 | `606` | 22×23 | `0123456789.W` | Only large font carrying a unit glyph (`W`) |
 | `584` | 7×22 | `0123456789-.km` | Narrow seven-segment/LCD look, has `k` and `m` |
 | `288` | 20×21 | `0123456789KM.` | Uppercase `K`/`M` only |
@@ -457,6 +459,12 @@ Notable large fonts ✅:
 
 No single font covers `kW`: `606` has `W` but no `k`, `584` has `k` but no `W`. Bake the
 unit into the background artwork when you need a mixed-case unit.
+
+**Most fonts bake in their own colour** ✅ (2026-08-24, firmware `400`). Sending
+`color: "#00FF00"` changed nothing for `260, 288, 290, 298, 356, 358, 428, 430, 432, 476`:
+each drew in its built-in colour (`288` red, `298` light grey, `476` white neon glow,
+`428` cyan neon glow). Only `246`, `584`, `608` and `184` honoured the requested colour.
+Pick from those four when a panel needs its own accent.
 
 ### 4.10 `Draw/SendHttpItemList` — rich item list with on-device data 📄❓
 
@@ -523,8 +531,10 @@ not across the full screen. To centre text on the full 128px screen: `x: 0`,
 
 > ⚠️ **`align: 2` did not render** ❓ (font `298`, type 22, 2026-08-24). Identical
 > items with `align: 1` and `align: 3` both drew correctly, so this is specific to
-> alignment mode 2. Not yet retested for type 23, where
-> `energy_cards._hero()` still passes `align=2` for the unit-less case.
+> alignment mode 2. Not retested for type 23, but a type-23 item sent with `align: 2`
+> did not read as centred either, so the energy panels now centre a value themselves:
+> they right-align it (`align: 3`) against a fixed edge and reserve a nominal digit
+> count in front of it.
 
 > 💡 **Multi-colour scrolling trick** ✅: place two (or more) adjacent scroll blocks
 > (`align: 0`) with the same `speed` and complementary `TextWidth` values that add up

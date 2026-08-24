@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from homeassistant.helpers.template import Template
 import pytest
 
 from custom_components.divoom_times_gate import energy, energy_cards, graphs, presets
@@ -11,7 +12,10 @@ from custom_components.divoom_times_gate.const import (
     CONF_PRESETS,
     CONF_SCREENS,
     DEFAULT_PRESET,
+    ENERGY_HERO_CHAR_WIDTH,
+    ENERGY_HERO_FONT,
     ENERGY_PRESET,
+    SCREEN_SIZE,
 )
 
 FLAT_GRID = {
@@ -382,3 +386,59 @@ async def test_energy_panel_prepare_renders_price_bounds(hass) -> None:
     )
 
     assert prepared["price_min"] == 0.05
+
+
+@pytest.mark.parametrize(
+    ("unit", "state", "expected"),
+    [
+        ("W", "1500", "1.50"),
+        ("kW", "2.5", "2.50"),
+        ("MW", "0.004", "4.00"),
+        ("mW", "1500000", "1.50"),
+        ("", "40", "0.04"),
+    ],
+)
+async def test_energy_panel_renders_every_power_unit_as_kilowatts(
+    hass, unit, state, expected
+) -> None:
+    hass.states.async_set("sensor.value", state, {"unit_of_measurement": unit})
+
+    prepared = await energy_cards.async_prepare_energy_panel(
+        hass, {"mode": "solar", "entity_id": "sensor.value"}
+    )
+
+    assert prepared["_hero_unit"] == "kW"
+    rendered = Template(prepared["_hero_template"], hass).async_render(parse_result=False)
+    assert rendered == expected
+
+
+async def test_energy_panel_drops_the_sign_from_a_battery_rate(hass) -> None:
+    hass.states.async_set(
+        "sensor.rate", "-1234", {"unit_of_measurement": "W"}
+    )
+
+    prepared = await energy_cards.async_prepare_energy_panel(
+        hass, {"mode": "battery", "power_entity": "sensor.rate"}
+    )
+
+    rendered = Template(
+        prepared["_row_templates"]["power"], hass
+    ).async_render(parse_result=False)
+    assert rendered == "1.23"
+
+
+async def test_energy_panel_centres_a_value_against_its_unit(hass) -> None:
+    hass.states.async_set("sensor.value", "0.184")
+
+    page = await energy_cards.async_prepare_energy_panel(
+        hass, {"mode": "price", "entity_id": "sensor.value"}
+    )
+    _, items = energy_cards.render_energy_panel(hass, page, "http://h/dispdata/s")
+
+    # `align: 2` does not centre on this firmware, so the panel right-aligns the
+    # number and reserves the digits in front of it. See docs/API.md §4.10.
+    hero = items[0]
+    assert hero["align"] == 3
+    assert hero["font"] == ENERGY_HERO_FONT
+    reserved = 5 * ENERGY_HERO_CHAR_WIDTH
+    assert hero["TextWidth"] - reserved == SCREEN_SIZE - hero["TextWidth"]

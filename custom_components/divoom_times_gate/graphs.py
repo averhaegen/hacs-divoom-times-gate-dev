@@ -32,7 +32,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 
-from .cards import _blend, _encode_gif, _rgb, draw_glyph_text
+from .cards import _blend, _encode_gif, _rgb, draw_glyph_text, draw_pixel_text
 from .const import ENERGY_FONT, ENERGY_LABEL_FONT, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_auto
@@ -299,7 +299,7 @@ def render_graph(
     show_value = bool(page.get("value", True))
     top = 2
     if title:
-        draw_glyph_text(draw, (2, top), title[:20], _blend(background, color, 0.75), "pico_8", 2)
+        draw_pixel_text(draw, (2, top), title[:20], _blend(background, color, 0.75), 2)
         top += 13
     if show_value:
         top += 18  # room for the overlay value item drawn by the device

@@ -153,7 +153,9 @@ class DispDataTemplateView(HomeAssistantView):
         if template is None:
             return web.json_response({"error": "unknown template"}, status=404)
         try:
-            value = str(Template(template, self._hass).async_render())
+            # Render without parsing: the panels format their own decimals, and
+            # parsing turns "1.50" back into 1.5 and drops the trailing zero.
+            value = str(Template(template, self._hass).async_render(parse_result=False))
         except TemplateError as err:
             _LOGGER.warning("dispdata_tpl %s render failed: %s", key, err)
             value = "err"

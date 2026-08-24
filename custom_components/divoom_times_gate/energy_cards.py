@@ -14,19 +14,20 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-from .cards import _blend, _encode_gif, _hex, _rgb
+from .cards import _blend, _encode_gif, _hex, _rgb, draw_pixel_text, pixel_text_size
 from .const import (
     ENERGY_COLORS,
+    ENERGY_HERO_CHAR_WIDTH,
     ENERGY_HERO_FONT,
     ENERGY_HERO_HEIGHT,
+    ENERGY_ROW_CHAR_WIDTH,
     ENERGY_ROW_FONT,
     ENERGY_ROW_HEIGHT,
     SCREEN_SIZE,
@@ -38,20 +39,8 @@ _LOGGER = logging.getLogger(__name__)
 
 MODES = ("price", "power", "battery", "solar")
 
-# Pixel Operator SC Bold (CC0, Jayvee Enaguas) draws the baked-in artwork
-# labels. It is a pixel face, so it stays crisp at these sizes where a hinted
-# desktop font would blur, and the bold weight holds up against the panel's
-# bloom better than the regular one. The superscripts it lacks fall back to
-# plain digits.
-_TTF_PATH = Path(__file__).parent / "fonts" / "PixelOperatorSC-Bold.ttf"
-_TTF_SUBSTITUTES = str.maketrans({"\u00b3": "3", "\u00b2": "2"})
-_TTF_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
-
-
-def _ttf_font(size: int) -> ImageFont.FreeTypeFont:
-    if size not in _TTF_CACHE:
-        _TTF_CACHE[size] = ImageFont.truetype(_TTF_PATH, size)
-    return _TTF_CACHE[size]
+# The gap between a number and the unit baked beside it.
+_UNIT_GAP = 4
 
 
 async def async_prepare_energy_panel(
@@ -128,10 +117,19 @@ def _unit_of(hass: HomeAssistant, entity_id: str | None) -> str:
     return str(state.attributes.get("unit_of_measurement") or "") if state else ""
 
 
-def _watts(source: str, unit: str) -> str:
-    """A Jinja body converting ``source`` to whole watts."""
-    scale = " * 1000" if unit.strip().lower() == "kw" else ""
-    return f"(({source}){scale}) | float(0) | round(0) | int"
+def _kilowatts(source: str, unit: str) -> str:
+    """A Jinja body converting ``source`` to kilowatts with two decimals.
+
+    Every panel reads in kW so the figures compare at a glance, and two
+    decimals keep a 40W standby load visible without the digits outgrowing the
+    panel. The unit is fixed, so it is baked into the artwork once instead of
+    following whatever the sensor happens to report.
+    """
+    scales = {"w": 0.001, "kw": 1.0, "mw": 1000.0}
+    # `mW` and `MW` differ only in case and by a factor of a billion, so match
+    # the milliwatt spelling exactly before folding case for the rest.
+    scale = 1e-6 if unit.strip() == "mW" else scales.get(unit.strip().lower(), 0.001)
+    return f"'%.2f' | format((({source}) | float(0)) * {scale:.9f})"
 
 
 def _prepare_overlay_templates(
@@ -139,11 +137,10 @@ def _prepare_overlay_templates(
 ) -> None:
     """Build digit-only templates for the values the device renders itself.
 
-    Font 246 draws `0123456789.` and nothing else, and the dispdata view
+    Font 608 draws `0123456789.W` and nothing else, and the dispdata view
     appends a state's own unit, so polling an entity directly would show
     `0.184k` for `0.184 EUR/kWh`. Render the number here instead and leave the
-    unit to the artwork. The row font (248) does carry `%`, `W` and a sign, so
-    a row keeps its unit in the polled text.
+    unit to the artwork beside it.
     """
     entity = page.get("entity_id")
     source = _inner(str(page["value_template"])) if page.get("value_template") else (
@@ -154,12 +151,15 @@ def _prepare_overlay_templates(
     if mode == "price":
         page["_hero_template"] = f"{{{{ '%.3f' | format(({source}) | float(0)) }}}}"
         page["_hero_unit"] = ""
+        page["_hero_chars"] = 5
     elif mode == "battery":
         page["_hero_template"] = f"{{{{ ({source}) | float(0) | round(0) | int }}}}"
         page["_hero_unit"] = "%"
+        page["_hero_chars"] = 3
     else:
-        page["_hero_template"] = f"{{{{ {_watts(source, unit)} }}}}"
-        page["_hero_unit"] = "W"
+        page["_hero_template"] = f"{{{{ {_kilowatts(source, unit)} }}}}"
+        page["_hero_unit"] = "kW"
+        page["_hero_chars"] = 5
 
     rows: dict[str, str] = {}
     for key, entity_key in (
@@ -168,12 +168,12 @@ def _prepare_overlay_templates(
         ("power", "power_entity"),
     ):
         if row_entity := page.get(entity_key):
-            body = _watts(f"states('{row_entity}')", _unit_of(hass, row_entity))
+            body = _kilowatts(f"states('{row_entity}')", _unit_of(hass, row_entity))
             if key == "power":
                 # The word beside it already says which way the energy flows,
                 # so a minus sign here would only read as a second opinion.
-                body = f"{body} | abs"
-            rows[key] = f"{{{{ {body} }}}}W"
+                body = f"{body} | replace('-', '')"
+            rows[key] = f"{{{{ {body} }}}}"
     page["_row_templates"] = rows
 
 
@@ -232,30 +232,76 @@ def _text(
     scale: int = 2,
     align: str = "left",
 ) -> None:
-    """Draw a baked-in label in Pixel Operator SC.
+    """Draw a baked-in artwork label. See ``cards.draw_pixel_text``."""
+    draw_pixel_text(draw, xy, text, color, scale, align)
 
-    Only the artwork uses this. The live figures stay type-23 overlays the
-    device renders in its own firmware fonts, so they are untouched.
 
-    ``scale`` keeps the old bitmap-font call sites working: one step is 8px of
-    font size, which puts scale 2 within a pixel of the pico_8 metrics the
-    layouts were positioned against. Anti-aliasing is off (``fontmode = "1"``)
-    because a grey edge pixel smears on an LED panel.
+def _value(
+    hass: HomeAssistant,
+    draw: ImageDraw.ImageDraw,
+    items: list[dict[str, Any]],
+    poll_base: str,
+    background: str,
+    *,
+    text_id: int,
+    y: int,
+    color: str,
+    unit: str,
+    chars: int,
+    font: int,
+    height: int,
+    char_width: int,
+    entity_id: str | None = None,
+    value_template: str | None = None,
+    right: int | None = None,
+) -> None:
+    """Place one live figure with the unit baked beside it.
 
-    ``xy`` is the top-left of the inked box unless ``align`` moves it:
-    ``center`` treats x as the midpoint, ``right`` as the right edge.
+    Every device font that carries a decimal point carries no ``k``, so the
+    unit has to be artwork. The number is right-aligned so its last digit
+    always meets that unit, which keeps the pair reading as one figure however
+    many digits arrive.
+
+    ``align: 2`` does not centre on this firmware (docs/API.md §4.10), so the
+    pair is centred here instead: reserve ``chars`` digit cells, add the unit,
+    and place the block. A value narrower than ``chars`` drifts right of centre
+    by half a digit, which is the cost of never letting the unit move.
+
+    ``right`` anchors the pair's right edge instead of centring it.
     """
-    font = _ttf_font(8 * max(1, int(scale)))
-    text = str(text).translate(_TTF_SUBSTITUTES)
-    box = font.getbbox(text)
-    left, top, width = int(box[0]), int(box[1]), int(box[2]) - int(box[0])
-    x, y = xy
-    if align == "center":
-        x -= width // 2
-    elif align == "right":
-        x -= width
-    draw.fontmode = "1"
-    draw.text((x - left, y - top), text, font=font, fill=color)
+    unit_width, unit_height = pixel_text_size(unit, 2) if unit else (0, 0)
+    gap = _UNIT_GAP if unit else 0
+    number_width = max(16, chars * char_width)
+    if right is None:
+        left = max(0, (SCREEN_SIZE - (number_width + gap + unit_width)) // 2)
+        edge = left + number_width
+    else:
+        edge = right - gap - unit_width
+    _poll_item(
+        hass,
+        items,
+        poll_base,
+        text_id=text_id,
+        entity_id=entity_id,
+        value_template=value_template,
+        x=0,
+        y=y,
+        width=edge,
+        font=font,
+        color=color,
+        align=3,
+        height=height,
+    )
+    if unit:
+        # Sit the unit on the number's baseline. `height` is the font's own cell
+        # height, so the digits fill the box and the unit drops to its foot.
+        _text(
+            draw,
+            (edge + gap, y + max(0, height - unit_height)),
+            unit,
+            _blend(background, color, 0.75),
+            2,
+        )
 
 
 def _hero(
@@ -269,33 +315,24 @@ def _hero(
     y: int,
     color: str,
 ) -> None:
-    """The one figure the panel exists for, with its unit beside it.
-
-    The device renders the number itself in font 246 (18x22), so it may only
-    contain digits and a dot. The unit is baked into the artwork to its right,
-    on the same line, because that is how the pair gets read out loud.
-    """
-    unit = str(page.get("_hero_unit") or "")
-    # A unit needs the right-hand gutter, so the number ends where it starts.
-    # Without one the number simply owns the full width.
-    number_width = SCREEN_SIZE - 28 if unit else SCREEN_SIZE
-    _poll_item(
+    """The one figure the panel exists for, with its unit beside it."""
+    _value(
         hass,
+        draw,
         items,
         poll_base,
+        background,
         text_id=1,
+        y=y,
+        color=color,
+        unit=str(page.get("_hero_unit") or ""),
+        chars=int(page.get("_hero_chars") or 5),
+        font=int(page.get("font", ENERGY_HERO_FONT)),
+        height=ENERGY_HERO_HEIGHT,
+        char_width=ENERGY_HERO_CHAR_WIDTH,
         entity_id=page.get("entity_id"),
         value_template=page.get("_hero_template") or page.get("value_template"),
-        x=0,
-        y=y,
-        width=number_width,
-        font=int(page.get("font", ENERGY_HERO_FONT)),
-        color=color,
-        align=3 if unit else 2,
-        height=ENERGY_HERO_HEIGHT,
     )
-    if unit:
-        _text(draw, (SCREEN_SIZE - 24, y + 6), unit, _blend(background, color, 0.75), 2)
 
 
 def _draw_price(
@@ -368,25 +405,31 @@ def _draw_power(
     )
     for index, (label, color, entity, stat, y) in enumerate(rows):
         draw.rectangle([0, y, 3, y + 26], fill=_rgb(color))
-        _text(draw, (8, y), label.upper(), _rgb(color), 2)
-        _poll_item(
+        _value(
             hass,
+            draw,
             items,
             poll_base,
+            background,
             text_id=2 + index,
+            y=y,
+            color=color,
+            unit="kW",
+            chars=5,
+            font=int(page.get("row_font", ENERGY_ROW_FONT)),
+            height=ENERGY_ROW_HEIGHT,
+            char_width=ENERGY_ROW_CHAR_WIDTH,
             entity_id=None if row_templates.get(label) else (str(entity) if entity else None),
             value_template=row_templates.get(label),
-            x=64,
-            y=y + 2,
-            width=60,
-            font=int(page.get("row_font", ENERGY_ROW_FONT)),
-            color=color,
-            align=3,
-            height=ENERGY_ROW_HEIGHT,
+            right=SCREEN_SIZE - 4,
         )
+        # The value owns the row's width, so the name and today's total share a
+        # small line beneath it rather than competing with it for the same one.
         total = totals.get(str(stat)) if stat else None
+        caption = label.upper()
         if total is not None:
-            _text(draw, (124, y + 18), f"{format_energy(total)} today", _blend(background, color, 0.75), 1, "right")
+            caption = f"{caption} {format_energy(total)} today"
+        _text(draw, (8, y + 18), caption, _blend(background, color, 0.75), 1)
 
 
 def _draw_battery(
@@ -420,24 +463,25 @@ def _draw_battery(
 
     _hero(hass, page, draw, items, poll_base, background, y=48, color=color)
     _text(draw, (64, 84), "charging" if charging else "discharging", _blend(background, color, 0.7), 2, "center")
-    _poll_item(
+    _value(
         hass,
+        draw,
         items,
         poll_base,
+        background,
         text_id=2,
+        y=104,
+        color=color,
+        unit="kW",
+        chars=5,
+        font=int(page.get("row_font", ENERGY_ROW_FONT)),
+        height=ENERGY_ROW_HEIGHT,
+        char_width=ENERGY_ROW_CHAR_WIDTH,
         entity_id=None
         if (page.get("_row_templates") or {}).get("power")
         else (str(page["power_entity"]) if page.get("power_entity") else None),
         value_template=(page.get("_row_templates") or {}).get("power"),
-        x=0,
-        y=104,
-        width=SCREEN_SIZE,
-        font=int(page.get("row_font", ENERGY_ROW_FONT)),
-        color=color,
-        align=2,
-        height=ENERGY_ROW_HEIGHT,
     )
-
 
 def _draw_solar(
     hass: HomeAssistant,

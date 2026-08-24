@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 from io import BytesIO
 import logging
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -66,6 +67,65 @@ def _label_font(size: int) -> LoadedFont:
 # The bitmap fonts hold ASCII only, so spell the few symbols a unit string
 # carries in characters they do have rather than dropping them.
 GLYPH_SUBSTITUTES = str.maketrans({"\u00b3": "3", "\u00b2": "2", "\u20ac": "E", "\u00b0": "*"})
+
+
+# Pixel Operator SC Bold (CC0, Jayvee Enaguas) draws the baked-in artwork
+# labels. It is a pixel face, so it stays crisp at these sizes where a hinted
+# desktop font would blur, and the bold weight holds up against the panel's
+# bloom better than the regular one. The superscripts it lacks fall back to
+# plain digits.
+_TTF_PATH = Path(__file__).parent / "fonts" / "PixelOperatorSC-Bold.ttf"
+_TTF_SUBSTITUTES = str.maketrans({"\u00b3": "3", "\u00b2": "2"})
+_TTF_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+
+
+def _ttf_font(size: int) -> ImageFont.FreeTypeFont:
+    if size not in _TTF_CACHE:
+        _TTF_CACHE[size] = ImageFont.truetype(_TTF_PATH, size)
+    return _TTF_CACHE[size]
+
+
+def pixel_text_size(text: str, scale: int = 2) -> tuple[int, int]:
+    """The width and height ``draw_pixel_text`` inks for ``text``."""
+    if not text:
+        return 0, 0
+    font = _ttf_font(8 * max(1, int(scale)))
+    box = font.getbbox(str(text).translate(_TTF_SUBSTITUTES))
+    return int(box[2]) - int(box[0]), int(box[3]) - int(box[1])
+
+
+def draw_pixel_text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    color: Any,
+    scale: int = 2,
+    align: str = "left",
+) -> None:
+    """Draw a baked-in label in Pixel Operator SC.
+
+    Only artwork uses this. Live figures stay type-23 overlays the device
+    renders in its own firmware fonts, so they are untouched.
+
+    ``scale`` keeps the old bitmap-font call sites working: one step is 8px of
+    font size, which puts scale 2 within a pixel of the pico_8 metrics the
+    layouts were positioned against. Anti-aliasing is off (``fontmode = "1"``)
+    because a grey edge pixel smears on an LED panel.
+
+    ``xy`` is the top-left of the inked box unless ``align`` moves it:
+    ``center`` treats x as the midpoint, ``right`` as the right edge.
+    """
+    font = _ttf_font(8 * max(1, int(scale)))
+    text = str(text).translate(_TTF_SUBSTITUTES)
+    box = font.getbbox(text)
+    left, top, width = int(box[0]), int(box[1]), int(box[2]) - int(box[0])
+    x, y = xy
+    if align == "center":
+        x -= width // 2
+    elif align == "right":
+        x -= width
+    draw.fontmode = "1"
+    draw.text((x - left, y - top), text, font=font, fill=color)
 
 
 def glyph_text_size(text: str, font_name: str = "pico_8", scale: int = 1) -> tuple[int, int]:
