@@ -28,6 +28,7 @@ from .const import (
     ENERGY_SCREEN_PRICE_GRAPH,
     ENERGY_SCREEN_SOLAR_BATTERY,
     ENERGY_SCREENS,
+    ENERGY_SOFT_INK,
 )
 from .energy import EnergySources, house_power_template
 
@@ -84,11 +85,10 @@ def active_screens(options: dict[str, Any]) -> list[Any]:
 def _history_page(found: EnergySources) -> dict[str, Any]:
     """The 24 hour history graph for screen five, or an off page.
 
-    Two series: solar production per hour from the solar statistic, and house
-    consumption per hour derived from the grid and battery statistics the house
-    panel already sums. The graph needs at least one of those to draw, so a home
-    with neither solar nor a grid statistic gets a blank screen rather than an
-    empty axis.
+    The graph stacks whichever sources this home reports: solar, grid import and
+    battery discharge above the zero rule, grid export and battery charge below
+    it, plus the net consumption line the house panel sums. A home with neither
+    solar nor a grid statistic gets a blank screen rather than an empty axis.
     """
     grid_stats = [
         found.grid_import_stat,
@@ -110,7 +110,7 @@ def _history_page(found: EnergySources) -> dict[str, Any]:
         "battery_in_stat": found.battery_in_stat,
         "battery_out_stat": found.battery_out_stat,
         "solar_color": ENERGY_COLORS["solar"],
-        "consumption_color": "#FFFFFF",
+        "consumption_color": ENERGY_SOFT_INK,
     }
 
 

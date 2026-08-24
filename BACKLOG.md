@@ -395,10 +395,12 @@ built anyway:
   the sensor's own seven-day min/max, with `power_min`/`power_max` overrides.
   Font 184 has no minus glyph, so the power figure strips its sign and leans on
   colour and fill direction.
-- [x] **24 hour history graph on the fifth screen.** Two series only (solar
-  production, derived house consumption), 24 hourly buckets from local midnight,
-  on the same axis as the day-ahead price graph. The review's redesign of the
-  power-flow idea: more buckets, fewer series.
+- [x] **24 hour history graph on the fifth screen.** 24 hourly buckets from
+  local midnight on the same axis as the day-ahead price graph, stacked per
+  source in the energy dashboard's palette and sign convention: solar, grid
+  import and battery discharge up, grid export and battery charge down, with the
+  derived house consumption as a light grey line over the top. Only the sources
+  the home reports get a band or a legend entry.
 - [x] **Compact house screen.** Import and export collapse onto one line, each
   behind an MDI arrow, and the gas and water footer moves here from the price
   graph, which goes back to full height.

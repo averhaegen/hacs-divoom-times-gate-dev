@@ -196,35 +196,51 @@ priciest_time: "07:00"   # baked under the high price; empty draws nothing
 
 ## `energy_history`
 
-The fifth energy screen: today's production and consumption per hour on the same
-24 hour axis the day-ahead price graph uses, so the two read as a pair. It draws
-two series only, because four filled areas at 128 pixels read as mud: solar
-production as bars, house consumption as a line on top. Consumption is derived
-per hour the way the house panel derives it (import minus export plus solar plus
-battery discharge minus battery charge). The background is baked artwork; there
-are no live overlays.
+The fifth energy screen: today's energy per hour on the same 24 hour axis the
+day-ahead price graph uses, so the two read as a pair. Each hour draws as one
+stacked bipolar bar in the Home Assistant energy dashboard's palette and sign
+convention. Energy arriving in the home stacks upward from the zero rule (solar,
+grid import, battery discharge) and energy leaving it stacks downward (grid
+export, battery charge), so the algebraic height of a bar is house consumption.
+Consumption also draws as a light grey line, derived per hour the way the house
+panel derives it (import minus export plus solar plus battery discharge minus
+battery charge). The background is baked artwork; there are no live overlays.
 
 ```yaml
 page_type: card
 card: energy_history
 title: Today             # optional; the legend tucks in beside it, or leads without one
 unit: kWh                # axis unit label
-solar_stat: sensor.solar_energy       # solar production statistic (the bars)
-import_stat: sensor.from_grid         # the four consumption statistics below are
-export_stat: sensor.to_grid           # summed per hour into the consumption line
+solar_stat: sensor.solar_energy       # each statistic that is set gets a band;
+import_stat: sensor.from_grid         # one that is left out is not drawn and
+export_stat: sensor.to_grid           # takes no legend entry either
 battery_in_stat: sensor.battery_charge
 battery_out_stat: sensor.battery_discharge
-solar_color: "#FF9800"   # bars; default #FFB300
-consumption_color: "#FFFFFF"  # line; default white
+solar_color: "#FF9800"          # band colours; each defaults to the energy
+grid_import_color: "#488FC2"    # dashboard palette in const.ENERGY_COLORS
+grid_export_color: "#8353D1"
+battery_out_color: "#4DB6AC"
+battery_in_color: "#F06292"
+consumption_color: "#B4B4B4"  # net line; default const.ENERGY_SOFT_INK
 # background: "#000000"
 ```
 
+The bottom axis labels every sixth hour (00, 06, 12, 18), on the column that
+holds that hour. The day-ahead price graph labels its axis the same way, so the
+two screens read on one time scheme.
+
 **Optional keys and what happens without them.** The graph draws whichever
-series it has data for. With no `solar_stat` it draws consumption alone; with no
-grid or battery statistic it draws solar alone rather than a line that only
-mirrors the bars; with neither it prints `no data`. Hours later than the current
-hour stay empty rather than drawing a zero. A `title` is optional: set it and the
-`solar`/`use` legend tucks in beside it, leave it out and the legend leads.
+sources the home reports and nothing else, so a grid-only meter draws a
+grid-only graph. With no statistic at all it prints `no data`. Hours later than
+the current hour stay empty rather than drawing a zero. The zero rule and the
+negative axis label only appear once something draws below zero. The net line is
+dropped when only one band is present, because it would only outline the bars.
+
+The legend carries one entry per source, with the two directions of a source
+sharing a split swatch (`grid` is import over export, `bat` is discharge over
+charge). A home reporting solar, grid and battery leaves no room for the `use`
+entry at a legible size, so that entry drops first; the row falls back to the
+smaller text size only after that.
 
 ## Other page types
 

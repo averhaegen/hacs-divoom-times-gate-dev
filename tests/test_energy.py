@@ -8,15 +8,18 @@ from homeassistant.helpers.template import Template
 import pytest
 
 from custom_components.divoom_times_gate import energy, energy_cards, graphs, presets
+from custom_components.divoom_times_gate.cards import _rgb
 from custom_components.divoom_times_gate.const import (
     CONF_ACTIVE_PRESET,
     CONF_PRESETS,
     CONF_SCREENS,
     DEFAULT_PRESET,
+    ENERGY_COLORS,
     ENERGY_HERO_CHAR_WIDTH,
     ENERGY_HERO_FONT,
     ENERGY_PRESET,
     ENERGY_SCREENS,
+    ENERGY_SOFT_INK,
     SCREEN_SIZE,
 )
 from custom_components.divoom_times_gate.units import quantize_fraction
@@ -1232,10 +1235,131 @@ async def test_energy_history_axis_label_fits_a_two_digit_peak(hass) -> None:
     assert colours != {(0, 0, 0)}
 
 
-def test_history_consumption_colour_matches_the_house_hero() -> None:
-    """The house screen draws consumption in white, so the history line agrees."""
+def test_history_consumption_colour_is_the_soft_ink() -> None:
+    """Pure white glares next to the dashboard palette, so the net line is grey."""
     history = presets.build_energy_preset(
         energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR]})
     )[4]
 
-    assert history["consumption_color"] == "#FFFFFF"
+    assert history["consumption_color"] == ENERGY_SOFT_INK
+
+
+def test_stack_series_only_carries_reported_sources() -> None:
+    """A home without a battery gets no battery band to draw."""
+    series = {"sol": [1.0] * 24, "imp": [0.5] * 24, "bin": [0.2] * 24}
+    page = {"solar_stat": "sol", "import_stat": "imp"}
+
+    stack = graphs._stack_series(page, series)
+
+    assert sorted(stack) == ["grid_import", "solar"]
+    assert stack["solar"] == series["sol"]
+
+
+def test_history_bands_sign_each_source_like_the_energy_dashboard() -> None:
+    """Import and discharge stack up, export and charge stack down."""
+    page = {
+        "_stack": {
+            "solar": [1.0],
+            "grid_import": [0.5],
+            "grid_export": [0.3],
+            "battery_in": [0.2],
+            "battery_out": [0.4],
+        }
+    }
+
+    signs = {key: sign for key, _color, sign, _values in graphs._history_bands(page)}
+
+    assert signs == {
+        "solar": 1,
+        "grid_import": 1,
+        "battery_out": 1,
+        "grid_export": -1,
+        "battery_in": -1,
+    }
+
+
+def test_history_bands_fall_back_to_a_legacy_solar_page() -> None:
+    """A page written before the stack existed still draws its solar bars."""
+    bands = graphs._history_bands({"_solar_series": [1.0, 2.0], "solar_color": "#123456"})
+
+    assert bands == [("solar", "#123456", 1, [1.0, 2.0])]
+
+
+async def test_energy_history_draws_the_negative_side(hass) -> None:
+    """Export pixels land below the zero rule, import pixels above it."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    page = {
+        "card": "energy_history",
+        "background": "#000000",
+        "_stack": {
+            "grid_import": [2.0, *[None] * 23],
+            "grid_export": [2.0, *[None] * 23],
+        },
+    }
+
+    gif, items = graphs.render_energy_history(hass, page, "http://h/dispdata/s")
+
+    assert items == []
+    image = Image.open(BytesIO(gif)).convert("RGB")
+    colours = {colour for _, colour in image.getcolors(maxcolors=100000)}
+    assert _rgb(ENERGY_COLORS["grid_import"]) in colours
+    assert _rgb(ENERGY_COLORS["grid_export"]) in colours
+
+
+async def test_energy_history_hides_a_net_line_that_traces_one_band(hass) -> None:
+    """One band means the net line would only outline the bars, so it is dropped."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    page = {
+        "card": "energy_history",
+        "background": "#000000",
+        "consumption_color": ENERGY_SOFT_INK,
+        "_stack": {"grid_import": [1.0, 2.0, *[None] * 22]},
+        "_consumption_series": [1.0, 2.0, *[None] * 22],
+    }
+
+    gif, _ = graphs.render_energy_history(hass, page, "http://h/dispdata/s")
+
+    image = Image.open(BytesIO(gif)).convert("RGB")
+    colours = {colour for _, colour in image.getcolors(maxcolors=100000)}
+    assert _rgb(ENERGY_SOFT_INK) not in colours
+
+
+def test_hour_labels_step_every_six_hours() -> None:
+    """Both 24 hour graphs label 00, 06, 12 and 18."""
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE)))
+    drawn: list[tuple[int, str]] = []
+
+    def record(_draw, xy, text, _color, _scale=2, _align="left") -> None:
+        drawn.append((xy[0], text))
+
+    with patch.object(graphs, "draw_pixel_text", record):
+        graphs._draw_hour_labels(draw, "#000000", list(range(24)), 1, 127, 116)
+
+    assert [text for _x, text in drawn] == ["00", "06", "12", "18"]
+    # Each label sits under the hour it names, left to right.
+    assert [x for x, _text in drawn] == sorted(x for x, _text in drawn)
+
+
+def test_hour_labels_follow_a_series_that_starts_mid_day() -> None:
+    """The day-ahead graph labels the hours its own columns carry."""
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE)))
+    drawn: list[str] = []
+
+    def record(_draw, xy, text, _color, _scale=2, _align="left") -> None:
+        drawn.append(text)
+
+    hours = [(3 + index) % 24 for index in range(24)]
+    with patch.object(graphs, "draw_pixel_text", record):
+        graphs._draw_hour_labels(draw, "#000000", hours, 1, 127, 116)
+
+    assert drawn == ["06", "12", "18", "00"]

@@ -48,6 +48,11 @@ ENERGY_COLORS = {
     "water": "#00bcd4",
 }
 
+# Ink for everything on the history graph that is not an energy source: the net
+# consumption line, the now marker and the zero rule. Pure white glares next to
+# the muted dashboard palette on an LED panel, so these read as a light grey.
+ENERGY_SOFT_INK = "#B4B4B4"
+
 # Outcome of an authenticated probe against the device (TimesGate.check_auth).
 # The device never raises, so these three markers are how the rest of the
 # integration tells "no answer at all" apart from "answered, token rejected".

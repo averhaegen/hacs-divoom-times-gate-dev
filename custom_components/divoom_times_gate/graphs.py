@@ -33,7 +33,7 @@ from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 
 from .cards import _blend, _encode_gif, _rgb, draw_pixel_text, pixel_text_size
-from .const import ENERGY_FONT, ENERGY_LABEL_FONT, SCREEN_SIZE
+from .const import ENERGY_COLORS, ENERGY_FONT, ENERGY_LABEL_FONT, ENERGY_SOFT_INK, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_axis
 
@@ -271,6 +271,39 @@ def _draw_axis_label(
     draw_pixel_text(draw, (x, y), text, _blend(background, "#FFFFFF", 0.75), 2, "right")
 
 
+def _draw_hour_labels(
+    draw: ImageDraw.ImageDraw,
+    background: str,
+    hours: list[int],
+    left: int,
+    width: int,
+    bottom: int,
+    step: int = 6,
+) -> None:
+    """Label the bottom axis every ``step`` hours, centred on the column it names.
+
+    Both 24 hour graphs share this so the history and the day-ahead price read on
+    one time scheme. A label is skipped when it would collide with the one before
+    it or run off the panel, which keeps the row honest on a narrow plot.
+    """
+    if not hours:
+        return
+    label_ink = _blend(background, "#FFFFFF", 0.45)
+    columns = len(hours)
+    cursor = 0
+    for index, hour in enumerate(hours):
+        if hour % step or (index and hours[index - 1] == hour):
+            continue
+        text = f"{hour:02d}"
+        text_width = pixel_text_size(text, 2)[0]
+        centre = left + (2 * index + 1) * width // (2 * columns)
+        x = max(0, min(SCREEN_SIZE - text_width, centre - text_width // 2))
+        if x < cursor:
+            continue
+        draw_pixel_text(draw, (x, bottom + 1), text, label_ink, 2)
+        cursor = x + text_width + 3
+
+
 def render_graph(
     hass: HomeAssistant,
     page: dict[str, Any],
@@ -410,15 +443,15 @@ def render_graph(
         _draw_axis_label(draw, background, format_axis(low, unit), bottom - 12)
 
     if page.get("x_labels"):
-        label_ink = _blend(background, "#FFFFFF", 0.45)
         times = [dt_util.parse_datetime(t) for t in page.get("_times") or []]
         if times and all(times):
-            for fraction in (0.0, 0.5, 1.0):
-                index = min(len(times) - 1, int(fraction * (len(times) - 1)))
-                when = dt_util.as_local(times[index])  # type: ignore[arg-type]
-                text = when.strftime("%H")
-                x = left + int(fraction * (width - 18))
-                draw_pixel_text(draw, (x, bottom + 1), text, label_ink, 2)
+            # One hour per plotted column, so a label lands on the column that
+            # holds that hour rather than at a fixed fraction of the axis.
+            hours = [
+                dt_util.as_local(times[min(len(times) - 1, index * len(times) // width)]).hour  # type: ignore[arg-type]
+                for index in range(width)
+            ]
+            _draw_hour_labels(draw, background, hours, left, width, bottom)
 
     if show_value:
         entity_id = str(page.get("value_entity") or page.get("entity_id") or "")
@@ -554,12 +587,34 @@ def _draw_footer_slots(
 # --- 24 hour history graph (screen five of the energy preset) ---------------
 #
 # This reads as a pair with the day-ahead price graph above: the same 24 hour
-# axis, the same right-hand peak label, the same now marker. It carries two
-# series only, because four overlaid filled areas at 128px read as mud. Solar
-# production draws as bars, house consumption as a line on top, so the two stay
-# apart where they cross.
+# axis, the same right-hand peak label, the same now marker. Each hour stacks
+# the energy sources the home actually reports, in the Home Assistant energy
+# dashboard's own palette and sign convention: solar, grid import and battery
+# discharge stack upward, grid export and battery charge stack downward. The
+# algebraic sum of a bar is house consumption, which also draws as a line so
+# the total stays readable where the stack is busy.
 
 CONSUMPTION_STATS = ("import_stat", "export_stat", "battery_in_stat", "battery_out_stat")
+
+# Stack order, outward from the zero rule. Each entry is the page key naming the
+# statistic, the key its column lands under in ``_stack``, the palette entry it
+# draws in, and which side of zero it belongs on.
+HISTORY_SOURCES: tuple[tuple[str, str, str, int], ...] = (
+    ("solar_stat", "solar", "solar", 1),
+    ("import_stat", "grid_import", "grid_import", 1),
+    ("battery_out_stat", "battery_out", "battery_out", 1),
+    ("export_stat", "grid_export", "grid_export", -1),
+    ("battery_in_stat", "battery_in", "battery_in", -1),
+)
+
+# The legend groups the two directions of one source under one label, because
+# "grid" with a blue half and a purple half says more in 30px than two entries
+# would. A home missing one direction gets a single-colour swatch.
+HISTORY_LEGEND: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("sun", ("solar",)),
+    ("grid", ("grid_import", "grid_export")),
+    ("bat", ("battery_out", "battery_in")),
+)
 
 
 def _consumption_series(
@@ -604,6 +659,24 @@ def _consumption_series(
     return out
 
 
+def _stack_series(
+    page: dict[str, Any], series: dict[str, list[float | None]]
+) -> dict[str, list[float | None]]:
+    """The per-source hourly columns this home can actually report.
+
+    A statistic the page does not name is left out entirely rather than carried
+    as a column of zeroes, so a solar-only home draws one band and a battery-only
+    home never reserves room for a grid band it has no numbers for.
+    """
+    stack: dict[str, list[float | None]] = {}
+    for stat_key, column_key, _color, _sign in HISTORY_SOURCES:
+        stat = page.get(stat_key)
+        column = series.get(str(stat)) if stat else None
+        if column:
+            stack[column_key] = column
+    return stack
+
+
 def _cell(column: list[float | None] | None, hour: int) -> float:
     """One hour of a series, treating a missing column or empty hour as zero."""
     if not column:
@@ -641,7 +714,100 @@ async def async_prepare_energy_history(
         **page,
         "_solar_series": solar,
         "_consumption_series": _consumption_series(page, series),
+        "_stack": _stack_series(page, series),
     }
+
+
+def _history_bands(page: dict[str, Any]) -> list[tuple[str, str, int, list[float | None]]]:
+    """The stack bands this page can draw, outward from the zero rule.
+
+    Each band is ``(key, colour, sign, values)``. A page may recolour any band with
+    a ``<key>_color`` entry, which is how the solar band keeps honouring the
+    ``solar_color`` key the graph has always taken. A page carrying only the
+    older ``_solar_series`` still draws its solar band, so a hand-written page
+    config keeps working.
+    """
+    stack = page.get("_stack") or {}
+    bands: list[tuple[str, str, int, list[float | None]]] = []
+    for _stat_key, column_key, palette_key, sign in HISTORY_SOURCES:
+        values = stack.get(column_key)
+        if not values:
+            continue
+        color = str(page.get(f"{column_key}_color") or ENERGY_COLORS[palette_key])
+        bands.append((column_key, color, sign, list(values)))
+    if not bands and (solar := page.get("_solar_series")):
+        color = str(page.get("solar_color") or ENERGY_COLORS["solar"])
+        bands.append(("solar", color, 1, list(solar)))
+    return bands
+
+
+def _stacked_total(
+    bands: list[tuple[str, str, int, list[float | None]]], hour: int, sign: int
+) -> float:
+    """How far one hour's bands reach on one side of the zero rule."""
+    total = 0.0
+    for _key, _color, band_sign, values in bands:
+        if band_sign != sign or hour >= len(values):
+            continue
+        value = values[hour]
+        if value is not None and value > 0:
+            total += value
+    return total
+
+
+def _draw_history_legend(
+    draw: ImageDraw.ImageDraw,
+    bands: list[tuple[str, str, int, list[float | None]]],
+    consumption: list[float | None] | None,
+    net_color: str,
+    y: int,
+) -> int:
+    """Draw the legend row and return the rows it used.
+
+    One entry per source the home reports, with the two directions of a source
+    sharing a split swatch: grid import over grid export, battery discharge over
+    battery charge. That keeps a five-band stack to three labels, and a home
+    missing one direction gets a plain swatch. The row drops to scale 1 rather
+    than run off the panel when every source is present.
+    """
+    present = {key: _rgb(color) for key, color, _sign, _values in bands}
+    entries: list[tuple[str, list[tuple[int, int, int]]]] = []
+    for label, keys in HISTORY_LEGEND:
+        inks = [present[key] for key in keys if key in present]
+        if inks:
+            entries.append((label, inks))
+    if consumption:
+        entries.append(("use", [_rgb(net_color)]))
+    if not entries:
+        return 0
+
+    def row_width(scale: int) -> int:
+        swatch = 5 if scale > 1 else 3
+        gap = 5 if scale > 1 else 4
+        return sum(
+            swatch + 2 + pixel_text_size(label, scale)[0] for label, _inks in entries
+        ) + gap * (len(entries) - 1)
+
+    # Four labels never fit at scale 2. The net line is the entry a reader can
+    # infer from the bars, so it is the one that goes before the row shrinks to
+    # a size nobody reads from across the room.
+    if row_width(2) > SCREEN_SIZE - 4 and len(entries) > 1 and entries[-1][0] == "use":
+        entries = entries[:-1]
+    scale = 2 if row_width(2) <= SCREEN_SIZE - 4 else 1
+    swatch_w = 5 if scale > 1 else 3
+    swatch_h = 7 if scale > 1 else 4
+    gap = 5 if scale > 1 else 4
+
+    x = 2
+    for label, inks in entries:
+        half = swatch_h // 2 if len(inks) > 1 else swatch_h
+        draw.rectangle([x, y, x + swatch_w - 1, y + half - 1], fill=inks[0])
+        if len(inks) > 1:
+            draw.rectangle([x, y + half, x + swatch_w - 1, y + swatch_h - 1], fill=inks[1])
+        x += swatch_w + 2
+        draw_pixel_text(draw, (x, y), label, inks[0], scale)
+        x += pixel_text_size(label, scale)[0] + gap
+    return 11 if scale > 1 else 8
 
 
 def render_energy_history(
@@ -649,27 +815,37 @@ def render_energy_history(
 ) -> tuple[bytes, list[dict[str, Any]]]:
     """Render the 24 hour history graph into ``(background_gif, overlays)``.
 
-    Both series are baked artwork: they change once the hour's statistics move,
+    Every series is baked artwork: it changes once the hour's statistics move,
     not on every device poll, so there is no live overlay to return.
+
+    Each hour draws as one stacked bipolar bar. Energy arriving in the home
+    (solar, grid import, battery discharge) stacks up from the zero rule and
+    energy leaving it (grid export, battery charge) stacks down, which is the
+    energy dashboard's own convention. Only the sources this home reports get a
+    band and a legend entry, so a grid-only meter draws a grid-only graph.
     """
     background = str(page.get("background") or DEFAULT_BACKGROUND)
-    solar_color = str(page.get("solar_color") or DEFAULT_COLOR)
-    solar_ink = _rgb(solar_color)
-    consumption_ink = _rgb(str(page.get("consumption_color") or "#FFFFFF"))
+    net_color = str(page.get("consumption_color") or ENERGY_SOFT_INK)
+    net_ink = _rgb(net_color)
 
     img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), background)
     draw = ImageDraw.Draw(img)
     items: list[dict[str, Any]] = []
 
-    # Title, and a two-word legend in the series colours so a glance across the
-    # room decodes the plot. The colour carries the meaning, so no swatch. If a
-    # title is set the legend tucks in beside it; without one the legend leads.
-    # Title and unit on one row, the two-word legend in the series colours on the
-    # next. Every string reads at scale 2, which is the smallest size legible
-    # from across a room, and three of them no longer fit one 128px row.
+    bands = _history_bands(page)
+    consumption = page.get("_consumption_series") or None
+    if len(bands) < 2:
+        # With one band the net line traces the bars it sits on, so it would only
+        # outline them. Drop it and let the bars speak.
+        consumption = None
+
+    # Title and unit on one row, the legend on the next. Every string reads at
+    # scale 2, which is the smallest size legible from across a room, and three
+    # rows of text would leave no plot.
     top = 2
     if title := str(page.get("title") or ""):
-        draw_pixel_text(draw, (2, top), title, _blend(background, solar_color, 0.75), 2)
+        title_color = bands[0][1] if bands else net_color
+        draw_pixel_text(draw, (2, top), title, _blend(background, title_color, 0.75), 2)
     if legend_unit := str(page.get("unit") or ""):
         draw_pixel_text(
             draw,
@@ -681,59 +857,84 @@ def render_energy_history(
         )
     if title or legend_unit:
         top += 11
-    legend_x = 2
-    draw_pixel_text(draw, (legend_x, top), "solar", solar_ink, 2)
-    legend_x += pixel_text_size("solar", 2)[0] + 6
-    draw_pixel_text(draw, (legend_x, top), "use", consumption_ink, 2)
-    top += 11
+    top += _draw_history_legend(draw, bands, consumption, net_color, top)
 
     left = 1
     bottom = SCREEN_SIZE - XLABEL_HEIGHT
 
-    solar = page.get("_solar_series") or None
-    consumption = page.get("_consumption_series") or None
     present = [
         value
-        for line in (solar, consumption)
-        if line
-        for value in line
+        for _key, _color, _sign, values in bands
+        for value in values
         if value is not None
     ]
+    present += [value for value in consumption or [] if value is not None]
     if not present:
         draw_pixel_text(
             draw, (left + 4, top + (bottom - top) // 2 - 4), "no data", (120, 120, 120), 2
         )
         return _encode_gif(img), items
 
-    # A flat or empty-so-far day still needs a non-zero scale so the axis draws.
-    peak = max(max(present), 0.001)
-    columns = len(solar or consumption or [])
-
-    # Every bucket is an hour's change in kWh, not a rate. The peak reads over
+    columns = max(
+        [len(values) for _key, _color, _sign, values in bands] + [len(consumption or [])]
+    )
+    # Every bucket is an hour's change in kWh, not a rate. Both peaks read over
     # the plot at the same size as the day-ahead graph's axis, and the unit sits
-    # once on the legend row rather than on both labels. A zero baseline needs
-    # no label, so the bottom one is gone.
+    # once on the header row rather than on every label.
+    rising = [_stacked_total(bands, hour, 1) for hour in range(columns)]
+    falling = [_stacked_total(bands, hour, -1) for hour in range(columns)]
+    peak_up = max([*rising, 0.0])
+    peak_down = max([*falling, 0.0])
+    if consumption:
+        # The net line has to fit even where it outruns the stack, which happens
+        # when a home reports consumption sources it has no statistic for.
+        values = [value for value in consumption if value is not None]
+        peak_up = max([peak_up, *(v for v in values if v > 0), 0.0])
+        peak_down = max([peak_down, *(-v for v in values if v < 0), 0.0])
+    # A flat or empty-so-far day still needs a non-zero scale so the axis draws.
+    span = max(peak_up + peak_down, 0.001)
+
     right = SCREEN_SIZE - 1
     width = max(1, right - left)
     height = max(1, bottom - top)
+    zero_y = top + int(round(peak_up / span * (height - 1)))
 
     def band(hour: int) -> tuple[int, int]:
         x0 = left + hour * width // columns
         x1 = left + (hour + 1) * width // columns - 1
         return x0, max(x0, x1)
 
-    def to_y(value: float) -> int:
-        ratio = max(0.0, min(1.0, value / peak))
-        return int(bottom - 1 - ratio * (height - 1))
+    def offset(value: float) -> int:
+        """Rows between the zero rule and ``value`` kWh, clamped to the plot."""
+        rows = int(round(abs(value) / span * (height - 1)))
+        return max(0, min(height - 1, rows))
 
-    if solar:
-        for hour, value in enumerate(solar):
-            if value is None or value <= 0:
-                continue
-            x0, x1 = band(hour)
-            if x1 - x0 >= 2:
-                x1 -= 1  # 1px gap once a bar can spare it
-            draw.rectangle([x0, to_y(value), x1, bottom - 1], fill=solar_ink)
+    def to_y(value: float) -> int:
+        return zero_y - offset(value) if value >= 0 else zero_y + offset(value)
+
+    for hour in range(columns):
+        x0, x1 = band(hour)
+        if x1 - x0 >= 2:
+            x1 -= 1  # 1px gap once a bar can spare it
+        for sign in (1, -1):
+            base = 0.0
+            for _key, color, band_sign, values in bands:
+                if band_sign != sign:
+                    continue
+                value = values[hour] if hour < len(values) else None
+                if value is None or value <= 0:
+                    continue
+                near, far = base, base + value
+                base = far
+                ink = _rgb(color)
+                if sign > 0:
+                    draw.rectangle([x0, to_y(far), x1, max(to_y(far), to_y(near) - 1)], fill=ink)
+                else:
+                    draw.rectangle([x0, min(to_y(-far), to_y(-near) + 1), x1, to_y(-far)], fill=ink)
+
+    # The zero rule only earns its row once something draws below it.
+    if peak_down > 0:
+        draw.line([(left, zero_y), (right - 1, zero_y)], fill=_blend(background, "#FFFFFF", 0.3))
 
     # The now marker sits under the consumption line so the line stays readable
     # where the two meet, the same stacking the day-ahead graph uses.
@@ -741,7 +942,7 @@ def render_energy_history(
     if 0 <= now_hour < columns:
         x0, x1 = band(now_hour)
         marker_x = (x0 + x1) // 2
-        draw.line([(marker_x, top), (marker_x, bottom - 1)], fill=_rgb("#FFFFFF"))
+        draw.line([(marker_x, top), (marker_x, bottom - 1)], fill=_blend(background, net_color, 0.7))
 
     if consumption:
         previous: tuple[int, int] | None = None
@@ -752,17 +953,16 @@ def render_energy_history(
             x0, x1 = band(hour)
             point = ((x0 + x1) // 2, to_y(value))
             if previous is not None:
-                draw.line([previous, point], fill=consumption_ink)
+                draw.line([previous, point], fill=net_ink)
             else:
-                draw.point(point, fill=consumption_ink)
+                draw.point(point, fill=net_ink)
             previous = point
 
-    _draw_axis_label(draw, background, f"{peak:.1f}", top)
+    if peak_up > 0:
+        _draw_axis_label(draw, background, f"{peak_up:.1f}", top)
+    if peak_down > 0:
+        _draw_axis_label(draw, background, f"-{peak_down:.1f}", bottom - 12)
 
-    label_ink = _blend(background, "#FFFFFF", 0.45)
-    for fraction in (0.0, 0.5, 1.0):
-        hour = int(fraction * (columns - 1))
-        x = left + int(fraction * (width - 18))
-        draw_pixel_text(draw, (x, bottom + 1), f"{hour:02d}", label_ink, 2)
+    _draw_hour_labels(draw, background, list(range(columns)), left, width, bottom)
 
     return _encode_gif(img), items
