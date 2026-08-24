@@ -560,6 +560,10 @@ def get_card_renderer(card_type: str) -> tuple[Any | None, Any]:
         from .graphs import async_prepare_graph, render_graph
 
         return render_graph, async_prepare_graph
+    if card_type == "energy_history":
+        from .graphs import async_prepare_energy_history, render_energy_history
+
+        return render_energy_history, async_prepare_energy_history
     if card_type == "energy_panel":
         from .energy_cards import async_prepare_energy_panel, render_energy_panel
 

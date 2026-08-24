@@ -32,7 +32,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 
-from .cards import _blend, _encode_gif, _rgb, draw_pixel_text
+from .cards import _blend, _encode_gif, _rgb, draw_pixel_text, pixel_text_size
 from .const import ENERGY_FONT, ENERGY_LABEL_FONT, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_auto
@@ -508,3 +508,215 @@ def _draw_footer_slots(
                 "TextString": url,
             }
         )
+
+
+# --- 24 hour history graph (screen five of the energy preset) ---------------
+#
+# This reads as a pair with the day-ahead price graph above: the same 24 hour
+# axis, the same right-hand peak label, the same now marker. It carries two
+# series only, because four overlaid filled areas at 128px read as mud. Solar
+# production draws as bars, house consumption as a line on top, so the two stay
+# apart where they cross.
+
+CONSUMPTION_STATS = ("import_stat", "export_stat", "battery_in_stat", "battery_out_stat")
+
+
+def _consumption_series(
+    page: dict[str, Any], series: dict[str, list[float | None]]
+) -> list[float | None] | None:
+    """Derive house consumption per hour, the same sum the house panel uses.
+
+    Consumption is import minus export plus solar plus battery discharge minus
+    battery charge, hour by hour. A stat the page does not carry contributes
+    zero. An hour no contributing stat has reached yet stays empty. Returns None
+    when the page names no grid or battery statistic, so the graph draws solar
+    alone rather than a line that only mirrors it.
+    """
+    if not any(page.get(key) for key in CONSUMPTION_STATS):
+        return None
+
+    def column(stat_key: str) -> list[float | None] | None:
+        stat = page.get(stat_key)
+        return series.get(str(stat)) if stat else None
+
+    imported = column("import_stat")
+    exported = column("export_stat")
+    charged = column("battery_in_stat")
+    discharged = column("battery_out_stat")
+    solar = series.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
+    contributors = [imported, exported, solar, discharged, charged]
+
+    hours = next((len(col) for col in contributors if col), 0)
+    out: list[float | None] = []
+    for hour in range(hours):
+        cells = [col[hour] for col in contributors if col]
+        if all(cell is None for cell in cells):
+            out.append(None)
+            continue
+        out.append(
+            _cell(imported, hour)
+            - _cell(exported, hour)
+            + _cell(solar, hour)
+            + _cell(discharged, hour)
+            - _cell(charged, hour)
+        )
+    return out
+
+
+def _cell(column: list[float | None] | None, hour: int) -> float:
+    """One hour of a series, treating a missing column or empty hour as zero."""
+    if not column:
+        return 0.0
+    value = column[hour]
+    return value if value is not None else 0.0
+
+
+async def async_prepare_energy_history(
+    hass: HomeAssistant, page: dict[str, Any]
+) -> dict[str, Any]:
+    """Read the hourly solar and consumption series on the event loop.
+
+    Recorder reads belong on the loop, so resolve both series here and leave the
+    executor-side renderer plain numbers. Both series come from one recorder
+    read, cached on the same clock the other statistics reads use, so an hourly
+    graph does not re-read on every refresh tick.
+    """
+    stats = [
+        str(page[key])
+        for key in ("solar_stat", *CONSUMPTION_STATS)
+        if page.get(key)
+    ]
+    from .energy import async_hourly_changes
+
+    try:
+        series = await async_hourly_changes(hass, stats)
+    except Exception as err:  # noqa: BLE001 - recorder may be absent
+        _LOGGER.debug("energy history series unavailable: %s", err)
+        series = {}
+
+    solar_stat = page.get("solar_stat")
+    solar = series.get(str(solar_stat)) if solar_stat else None
+    return {
+        **page,
+        "_solar_series": solar,
+        "_consumption_series": _consumption_series(page, series),
+    }
+
+
+def render_energy_history(
+    hass: HomeAssistant, page: dict[str, Any], poll_base: str
+) -> tuple[bytes, list[dict[str, Any]]]:
+    """Render the 24 hour history graph into ``(background_gif, overlays)``.
+
+    Both series are baked artwork: they change once the hour's statistics move,
+    not on every device poll, so there is no live overlay to return.
+    """
+    background = str(page.get("background") or DEFAULT_BACKGROUND)
+    solar_color = str(page.get("solar_color") or DEFAULT_COLOR)
+    solar_ink = _rgb(solar_color)
+    consumption_ink = _rgb(str(page.get("consumption_color") or "#FFFFFF"))
+
+    img = Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE), background)
+    draw = ImageDraw.Draw(img)
+    items: list[dict[str, Any]] = []
+
+    # Title, and a two-word legend in the series colours so a glance across the
+    # room decodes the plot. The colour carries the meaning, so no swatch. If a
+    # title is set the legend tucks in beside it; without one the legend leads.
+    top = 2
+    legend_x = 2
+    if title := str(page.get("title") or ""):
+        draw_pixel_text(draw, (2, top), title, _blend(background, solar_color, 0.75), 2)
+        legend_x = 2 + pixel_text_size(title, 2)[0] + 6
+    draw_pixel_text(draw, (legend_x, top + 3), "solar", solar_ink, 1)
+    legend_x += pixel_text_size("solar", 1)[0] + 4
+    draw_pixel_text(draw, (legend_x, top + 3), "use", consumption_ink, 1)
+    top += 13 if title else 9
+
+    left = 1
+    bottom = SCREEN_SIZE - XLABEL_HEIGHT
+
+    solar = page.get("_solar_series") or None
+    consumption = page.get("_consumption_series") or None
+    present = [
+        value
+        for line in (solar, consumption)
+        if line
+        for value in line
+        if value is not None
+    ]
+    if not present:
+        draw_pixel_text(
+            draw, (left + 4, top + (bottom - top) // 2 - 4), "no data", (120, 120, 120), 2
+        )
+        return _encode_gif(img), items
+
+    # A flat or empty-so-far day still needs a non-zero scale so the axis draws.
+    peak = max(max(present), 0.001)
+    columns = len(solar or consumption or [])
+
+    # Every bucket is an hour's change in kWh, not a rate, so the axis reads in
+    # kWh. Size the right gutter to the real label width instead of a fixed
+    # count of characters, or a two-digit "12.4kWh" would lose its trailing "h".
+    unit = page.get("unit")
+    top_label = format_auto(peak, unit)
+    bottom_label = format_auto(0.0, unit)
+    gutter = max(
+        AXIS_WIDTH,
+        max(pixel_text_size(top_label, 1)[0], pixel_text_size(bottom_label, 1)[0]) + 3,
+    )
+    right = SCREEN_SIZE - gutter
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+
+    def band(hour: int) -> tuple[int, int]:
+        x0 = left + hour * width // columns
+        x1 = left + (hour + 1) * width // columns - 1
+        return x0, max(x0, x1)
+
+    def to_y(value: float) -> int:
+        ratio = max(0.0, min(1.0, value / peak))
+        return int(bottom - 1 - ratio * (height - 1))
+
+    if solar:
+        for hour, value in enumerate(solar):
+            if value is None or value <= 0:
+                continue
+            x0, x1 = band(hour)
+            if x1 - x0 >= 2:
+                x1 -= 1  # 1px gap once a bar can spare it
+            draw.rectangle([x0, to_y(value), x1, bottom - 1], fill=solar_ink)
+
+    # The now marker sits under the consumption line so the line stays readable
+    # where the two meet, the same stacking the day-ahead graph uses.
+    now_hour = dt_util.as_local(dt_util.utcnow()).hour
+    if 0 <= now_hour < columns:
+        x0, x1 = band(now_hour)
+        marker_x = (x0 + x1) // 2
+        draw.line([(marker_x, top), (marker_x, bottom - 1)], fill=_rgb("#FFFFFF"))
+
+    if consumption:
+        previous: tuple[int, int] | None = None
+        for hour, value in enumerate(consumption):
+            if value is None:
+                previous = None
+                continue
+            x0, x1 = band(hour)
+            point = ((x0 + x1) // 2, to_y(value))
+            if previous is not None:
+                draw.line([previous, point], fill=consumption_ink)
+            else:
+                draw.point(point, fill=consumption_ink)
+            previous = point
+
+    axis_ink = _blend(background, "#FFFFFF", 0.55)
+    draw_pixel_text(draw, (right + 2, top), top_label, axis_ink, 1)
+    draw_pixel_text(draw, (right + 2, bottom - 6), bottom_label, axis_ink, 1)
+
+    label_ink = _blend(background, "#FFFFFF", 0.45)
+    for fraction in (0.0, 0.5, 1.0):
+        hour = int(fraction * (columns - 1))
+        x = left + int(fraction * (width - 10))
+        draw_pixel_text(draw, (x, bottom + 1), f"{hour:02d}", label_ink, 1)
+
+    return _encode_gif(img), items

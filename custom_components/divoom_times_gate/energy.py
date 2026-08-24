@@ -12,7 +12,7 @@ discovered" rather than raising.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import math
 from typing import Any
@@ -222,20 +222,24 @@ def house_power_template(found: EnergySources, *, battery_discharge_positive: bo
     return f"{{{{ ({expression}) | round(0) }}}}"
 
 
-async def async_daily_totals(
+async def _async_hourly_change_rows(
     hass: HomeAssistant, statistic_ids: list[str]
-) -> dict[str, float]:
-    """Sum today's change for each statistic id, local midnight until now.
+) -> dict[str, list[tuple[datetime | None, float]]]:
+    """Read each statistic's per-hour change since local midnight, cached.
 
-    This reads the same long-term statistics the energy dashboard reads, so
-    the totals on the panel match the totals on the dashboard. Results are
-    cached briefly because a daily total barely moves between refresh ticks.
+    The daily total and the hourly history graph both want the same recorder
+    read: today's change per hour, local midnight until now. Keep that read in
+    one place so they issue one query and share one cache rather than each
+    hitting the recorder on its own clock.
 
     Energy statistics come back in kilowatt hours whatever the sensor reports,
     because the panels label every energy figure ``kWh``. Without that the
     recorder returns the sensor's own unit and a meter reporting watt hours
     reads a thousand times too high. Other unit classes, such as the volume
     behind a gas or water meter, keep the unit the sensor uses.
+
+    A statistic the recorder has no rows for is left out of the result, so a
+    caller can tell "no data" apart from "zero used today".
     """
     wanted = {stat for stat in statistic_ids if stat}
     if not wanted:
@@ -265,16 +269,71 @@ async def async_daily_totals(
         {"energy": UnitOfEnergy.KILO_WATT_HOUR},
         {"change"},
     )
-    totals: dict[str, float] = {}
+    series: dict[str, list[tuple[datetime | None, float]]] = {}
     for stat, entries in rows.items():
-        total = 0.0
+        points: list[tuple[datetime | None, float]] = []
         for entry in entries:
-            if (value := as_float(entry.get("change"))) is not None:
-                total += value
-        totals[stat] = total
+            if (value := as_float(entry.get("change"))) is None:
+                continue
+            when = entry.get("start")
+            stamp = dt_util.utc_from_timestamp(float(when)) if when is not None else None
+            points.append((stamp, value))
+        series[stat] = points
     cache["at"] = now
-    cache["values"] = {**cache.get("values", {}), **totals}
-    return totals
+    cache["values"] = {**cache.get("values", {}), **series}
+    return {stat: series[stat] for stat in wanted if stat in series}
+
+
+async def async_daily_totals(
+    hass: HomeAssistant, statistic_ids: list[str]
+) -> dict[str, float]:
+    """Sum today's change for each statistic id, local midnight until now.
+
+    This reads the same long-term statistics the energy dashboard reads, so
+    the totals on the panel match the totals on the dashboard. Results are
+    cached briefly because a daily total barely moves between refresh ticks.
+    """
+    rows = await _async_hourly_change_rows(hass, statistic_ids)
+    return {stat: sum(value for _, value in points) for stat, points in rows.items()}
+
+
+HISTORY_HOURS = 24
+
+
+async def async_hourly_changes(
+    hass: HomeAssistant, statistic_ids: list[str]
+) -> dict[str, list[float | None]]:
+    """Today's change per hour for each statistic id, one slot per local hour.
+
+    Each result is a 24-slot list indexed by hour of the local day. An hour
+    that has already begun reads its change (zero when nothing moved); an hour
+    that has not happened yet stays ``None`` so the graph leaves it empty rather
+    than drawing a zero. Shares the recorder read and cache with
+    ``async_daily_totals`` through ``_async_hourly_change_rows``.
+    """
+    rows = await _async_hourly_change_rows(hass, statistic_ids)
+    now_local = dt_util.now()
+    current_hour = now_local.hour
+    result: dict[str, list[float | None]] = {}
+    for stat in statistic_ids:
+        if not stat:
+            continue
+        # Every hour up to and including the current one has elapsed, so start
+        # them at zero; leave the rest of the day empty.
+        slots: list[float | None] = [
+            0.0 if hour <= current_hour else None for hour in range(HISTORY_HOURS)
+        ]
+        for stamp, value in rows.get(stat, []):
+            if stamp is None:
+                continue
+            local = dt_util.as_local(stamp)
+            if local.date() != now_local.date():
+                continue
+            hour = local.hour
+            if 0 <= hour < HISTORY_HOURS:
+                slots[hour] = (slots[hour] or 0.0) + value
+        result[stat] = slots
+    return result
 
 
 async def async_day_curve(hass: HomeAssistant, statistic_id: str) -> list[float]:

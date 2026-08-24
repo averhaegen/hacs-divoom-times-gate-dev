@@ -74,6 +74,39 @@ def active_screens(options: dict[str, Any]) -> list[Any]:
     return next(iter(presets.values()))
 
 
+def _history_page(found: EnergySources) -> dict[str, Any]:
+    """The 24 hour history graph for screen five, or an off page.
+
+    Two series: solar production per hour from the solar statistic, and house
+    consumption per hour derived from the grid and battery statistics the house
+    panel already sums. The graph needs at least one of those to draw, so a home
+    with neither solar nor a grid statistic gets a blank screen rather than an
+    empty axis.
+    """
+    grid_stats = [
+        found.grid_import_stat,
+        found.grid_export_stat,
+        found.battery_in_stat,
+        found.battery_out_stat,
+    ]
+    has_consumption = any(grid_stats)
+    if not found.solar_stat and not has_consumption:
+        return {"page_type": "off"}
+    return {
+        "page_type": "card",
+        "card": "energy_history",
+        "title": "Today",
+        "unit": "kWh",
+        "solar_stat": found.solar_stat,
+        "import_stat": found.grid_import_stat,
+        "export_stat": found.grid_export_stat,
+        "battery_in_stat": found.battery_in_stat,
+        "battery_out_stat": found.battery_out_stat,
+        "solar_color": ENERGY_COLORS["solar"],
+        "consumption_color": "#FFFFFF",
+    }
+
+
 def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
     """The current-price panel and the day-ahead price graph."""
     forecast = found.price_forecast
@@ -130,8 +163,6 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
         "unit": "EUR/kWh",
         "entity_id": found.price_now,
         "value": True,
-        "footer_height": 32,
-        "footer_slots": [],
     }
     if forecast:
         graph["data_template"] = f"{{{{ {prices} }}}}"
@@ -177,19 +208,24 @@ def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
 
     solar_battery = _solar_battery_page(found)
 
+    # Gas and water sit on the house screen now, not on the price graph. Build
+    # the footer once and give it to the house panel; the price graph goes back
+    # to full height. Graceful omit stays: no slots means no band.
     footer: list[dict[str, Any]] = []
     if found.gas_stat:
         footer.append(_footer_slot(found.gas_stat, "Gas", ENERGY_COLORS["gas"], "m³"))
     for stat in found.water_stats:
         footer.append(_footer_slot(stat, "Water", ENERGY_COLORS["water"], "L"))
         break
-    price_graph["footer_slots"] = footer
-    if not footer:
-        price_graph["footer_height"] = 0
+    if footer:
+        power["footer_slots"] = footer
+        power["footer_height"] = 32
 
-    # Merging solar and battery frees the fifth slot. Leave it off for now; a
-    # later change fills it with a history graph.
-    return [price_panel, power, solar_battery, price_graph, {"page_type": "off"}]
+    history = _history_page(found)
+
+    # Solar and battery share one screen, so the fifth slot carries the 24 hour
+    # history graph. It falls back to off when there is nothing to draw.
+    return [price_panel, power, solar_battery, price_graph, history]
 
 
 def _solar_battery_page(found: EnergySources) -> dict[str, Any]:
@@ -233,6 +269,12 @@ def _solar_battery_page(found: EnergySources) -> dict[str, Any]:
             # Battery only: the hero is the state of charge, so point the panel's
             # value entity at the SoC sensor.
             page["entity_id"] = found.battery_soc
+    # Name the single-source fallbacks after what they draw, and keep the
+    # neutral "Energy" for the merged layout.
+    if found.has_solar and not found.has_battery:
+        page["name"] = "Solar"
+    elif found.has_battery and not found.has_solar:
+        page["name"] = "Battery"
     return page
 
 

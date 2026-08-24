@@ -263,23 +263,27 @@ def test_build_energy_preset_produces_five_screens() -> None:
     screens = presets.build_energy_preset(found)
 
     assert len(screens) == 5
-    # Solar and battery merge onto one screen, freeing the fifth slot.
+    # Solar and battery merge onto one screen, and the fifth carries the history.
     assert [s.get("mode") for s in screens[:3]] == ["price", "power", "solar_battery"]
     assert screens[3]["card"] == "graph"
-    assert screens[3]["footer_height"] == 32
-    assert [slot["name"] for slot in screens[3]["footer_slots"]] == ["Gas", "Water"]
-    assert screens[4] == {"page_type": "off"}
+    # The day-ahead graph no longer carries the footer, so it stays full height.
+    assert "footer_slots" not in screens[3]
+    assert "footer_height" not in screens[3]
+    # Gas and water moved onto the house screen.
+    assert screens[1]["footer_height"] == 32
+    assert [slot["name"] for slot in screens[1]["footer_slots"]] == ["Gas", "Water"]
+    assert screens[4]["card"] == "energy_history"
 
 
 def test_build_energy_preset_blanks_missing_sources() -> None:
     screens = presets.build_energy_preset(energy.parse_sources({"energy_sources": [FLAT_GRID]}))
 
-    # No solar and no battery, so the merged screen blanks and the graph keeps
-    # its footerless self.
+    # No solar and no battery, so the merged screen blanks. The grid statistics
+    # still drive a consumption history, so screen five is a graph, not off.
     assert screens[2] == {"page_type": "off"}
     assert screens[3]["card"] == "graph"
-    assert screens[3]["footer_height"] == 0
-    assert screens[4] == {"page_type": "off"}
+    assert "footer_height" not in screens[3]
+    assert screens[4]["card"] == "energy_history"
 
 
 def test_build_energy_preset_reads_a_statistic_only_gas_from_the_recorder() -> None:
@@ -287,7 +291,7 @@ def test_build_energy_preset_reads_a_statistic_only_gas_from_the_recorder() -> N
         {"energy_sources": [{"type": "gas", "stat_energy_from": "nhc2:abc_gasvolume"}]}
     )
 
-    slot = presets.build_energy_preset(found)[3]["footer_slots"][0]
+    slot = presets.build_energy_preset(found)[1]["footer_slots"][0]
 
     assert slot["stat"] == "nhc2:abc_gasvolume"
     assert "entity_id" not in slot
@@ -299,7 +303,7 @@ def test_build_energy_preset_reads_a_meter_backed_water_as_a_daily_total() -> No
         {"energy_sources": [{"type": "water", "stat_energy_from": "sensor.energyhome_water"}]}
     )
 
-    slot = presets.build_energy_preset(found)[3]["footer_slots"][0]
+    slot = presets.build_energy_preset(found)[1]["footer_slots"][0]
 
     # A water meter counts up forever, so its state is the meter reading rather
     # than today's usage. Read the statistic and keep the entity as a fallback.
@@ -690,7 +694,7 @@ async def test_async_power_range_default_span_without_a_statistic(hass) -> None:
     assert low < 0 < high
 
 
-def test_merged_preset_produces_four_panels_and_an_off_slot() -> None:
+def test_merged_preset_produces_four_panels_and_a_history_slot() -> None:
     found = energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR, BATTERY]})
 
     screens = presets.build_energy_preset(found)
@@ -701,7 +705,7 @@ def test_merged_preset_produces_four_panels_and_an_off_slot() -> None:
     assert merged["solar_stat"] == "sensor.solar_energy"
     assert merged["battery_soc"] == "sensor.battery_soc"
     assert merged["goal"] == 0
-    assert screens[4] == {"page_type": "off"}
+    assert screens[4]["card"] == "energy_history"
 
 
 def test_merged_preset_falls_back_to_solar_only() -> None:
@@ -758,3 +762,395 @@ async def test_merged_panel_renders(hass, sources) -> None:
 
     assert gif.startswith(b"GIF")
     assert all(item["type"] == 23 for item in items)
+
+
+def _hourly_rows(hour_to_change: dict[int, float]) -> list[dict[str, float]]:
+    """Build recorder-shaped hourly change rows for a UTC day at 2026-08-24."""
+    from datetime import UTC, datetime
+
+    midnight = datetime(2026, 8, 24, tzinfo=UTC).timestamp()
+    return [
+        {"start": midnight + hour * 3600, "change": change}
+        for hour, change in sorted(hour_to_change.items())
+    ]
+
+
+async def test_hourly_changes_bucket_by_hour_and_ask_for_kilowatt_hours(hass) -> None:
+    """The history graph needs per-hour change, in kWh, one slot per hour.
+
+    A watt hour meter must not read a thousand times too high, so the request
+    pins energy to kWh just like the daily total does. Hours that have not
+    happened yet stay empty.
+    """
+    from freezegun import freeze_time
+
+    await hass.config.async_set_time_zone("UTC")
+    captured: dict[str, object] = {}
+
+    def fake_statistics(hass, start, end, statistic_ids, period, units, types):
+        captured["units"] = units
+        captured["period"] = period
+        return {"sensor.solar": _hourly_rows({1: 1.0, 2: 2.0, 3: 1.5})}
+
+    class _Recorder:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    hass.data.pop("divoom_times_gate_energy_totals", None)
+    with (
+        freeze_time("2026-08-24 05:30:00"),
+        patch(
+            "homeassistant.components.recorder.statistics.statistics_during_period",
+            fake_statistics,
+        ),
+        patch("homeassistant.components.recorder.get_instance", return_value=_Recorder()),
+    ):
+        series = await energy.async_hourly_changes(hass, ["sensor.solar"])
+
+    assert captured["units"] == {"energy": "kWh"}
+    assert captured["period"] == "hour"
+    slots = series["sensor.solar"]
+    assert len(slots) == 24
+    # Elapsed hours read their change, zero where nothing moved.
+    assert slots[:6] == [0.0, 1.0, 2.0, 1.5, 0.0, 0.0]
+    # Hours after the current one stay empty.
+    assert slots[6:] == [None] * 18
+
+
+async def test_daily_total_still_sums_the_hourly_change(hass) -> None:
+    """The daily total shares the hourly read and sums it, kWh unchanged."""
+    from freezegun import freeze_time
+
+    await hass.config.async_set_time_zone("UTC")
+
+    def fake_statistics(hass, start, end, statistic_ids, period, units, types):
+        return {"sensor.solar": _hourly_rows({1: 1.0, 2: 2.0, 3: 1.5})}
+
+    class _Recorder:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    hass.data.pop("divoom_times_gate_energy_totals", None)
+    with (
+        freeze_time("2026-08-24 05:30:00"),
+        patch(
+            "homeassistant.components.recorder.statistics.statistics_during_period",
+            fake_statistics,
+        ),
+        patch("homeassistant.components.recorder.get_instance", return_value=_Recorder()),
+    ):
+        totals = await energy.async_daily_totals(hass, ["sensor.solar"])
+
+    assert totals == {"sensor.solar": pytest.approx(4.5)}
+
+
+def test_consumption_series_sums_grid_and_battery() -> None:
+    """Consumption is import minus export plus solar plus discharge minus charge."""
+    empty = [None] * 22
+    series = {
+        "imp": [4.0, 3.0, *empty],
+        "exp": [1.0, 0.5, *empty],
+        "sol": [0.0, 2.0, *empty],
+        "bout": [0.5, 0.0, *empty],
+        "bin": [0.0, 1.0, *empty],
+    }
+    page = {
+        "import_stat": "imp",
+        "export_stat": "exp",
+        "solar_stat": "sol",
+        "battery_out_stat": "bout",
+        "battery_in_stat": "bin",
+    }
+
+    consumption = graphs._consumption_series(page, series)
+
+    assert consumption is not None
+    assert consumption[0] == pytest.approx(3.5)  # 4 - 1 + 0 + 0.5 - 0
+    assert consumption[1] == pytest.approx(3.5)  # 3 - 0.5 + 2 + 0 - 1
+    # A future hour with no contributing stat stays empty.
+    assert consumption[2:] == [None] * 22
+
+
+def test_consumption_series_is_none_without_a_grid_or_battery_stat() -> None:
+    # Solar alone is not a consumption source, so there is no line to draw.
+    assert graphs._consumption_series({"solar_stat": "sol"}, {"sol": [1.0] * 24}) is None
+
+
+async def test_prepare_energy_history_splits_solar_from_consumption(hass) -> None:
+    page = {
+        "card": "energy_history",
+        "solar_stat": "sensor.solar",
+        "import_stat": "sensor.imp",
+        "export_stat": "sensor.exp",
+    }
+    hourly = {
+        "sensor.solar": [0.0, 3.0, *[None] * 22],
+        "sensor.imp": [2.0, 1.0, *[None] * 22],
+        "sensor.exp": [0.0, 0.5, *[None] * 22],
+    }
+
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_hourly_changes",
+        return_value=hourly,
+    ) as changes:
+        prepared = await graphs.async_prepare_energy_history(hass, page)
+
+    # Only the configured stats are read.
+    assert sorted(changes.call_args[0][1]) == ["sensor.exp", "sensor.imp", "sensor.solar"]
+    assert prepared["_solar_series"] == [0.0, 3.0, *[None] * 22]
+    # Consumption folds import, export and solar together per hour.
+    assert prepared["_consumption_series"][0] == pytest.approx(2.0)  # 2 - 0 + 0
+    assert prepared["_consumption_series"][1] == pytest.approx(3.5)  # 1 - 0.5 + 3
+
+
+async def test_energy_history_renders_without_overlays(hass) -> None:
+    page = {
+        "card": "energy_history",
+        "title": "Today",
+        "unit": "kWh",
+        "_solar_series": [0.0, 1.0, 2.0, *[None] * 21],
+        "_consumption_series": [1.0, 1.5, 2.5, *[None] * 21],
+    }
+
+    gif, items = graphs.render_energy_history(hass, page, "http://h/dispdata/s")
+
+    assert gif.startswith(b"GIF")
+    # Both series are baked artwork, so nothing is polled live.
+    assert items == []
+
+
+async def test_energy_history_draws_consumption_alone(hass) -> None:
+    # No solar statistic, so the graph degrades to the consumption line only.
+    page = {
+        "card": "energy_history",
+        "_solar_series": None,
+        "_consumption_series": [1.0, 1.5, *[None] * 22],
+    }
+
+    gif, _ = graphs.render_energy_history(hass, page, "http://h/dispdata/s")
+
+    assert gif.startswith(b"GIF")
+
+
+async def test_energy_history_falls_back_to_no_data(hass) -> None:
+    # Neither series has a value, so the graph draws the no-data treatment.
+    page = {"card": "energy_history", "_solar_series": None, "_consumption_series": None}
+
+    gif, items = graphs.render_energy_history(hass, page, "http://h/dispdata/s")
+
+    assert gif.startswith(b"GIF")
+    assert items == []
+
+
+def test_history_page_carries_grid_and_solar_statistics() -> None:
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR, BATTERY]})
+
+    history = presets.build_energy_preset(found)[4]
+
+    assert history["card"] == "energy_history"
+    assert history["solar_stat"] == "sensor.solar_energy"
+    assert history["import_stat"] == "sensor.from_grid"
+    assert history["export_stat"] == "sensor.to_grid"
+    assert history["battery_in_stat"] == "sensor.battery_in"
+    assert history["battery_out_stat"] == "sensor.battery_out"
+
+
+def test_history_page_present_with_only_solar() -> None:
+    # Solar but no grid: the history still draws, consumption just stays absent.
+    history = presets.build_energy_preset(energy.parse_sources({"energy_sources": [SOLAR]}))[4]
+
+    assert history["card"] == "energy_history"
+    assert history["solar_stat"] == "sensor.solar_energy"
+    assert history["import_stat"] is None
+
+
+def test_history_page_off_without_any_source() -> None:
+    # No solar and no grid statistic, so there is nothing to draw.
+    screens = presets.build_energy_preset(energy.parse_sources({}))
+
+    assert screens[4] == {"page_type": "off"}
+
+
+async def test_power_panel_bakes_grid_totals_and_the_footer(hass) -> None:
+    """The house screen carries baked import/export totals and the gas/water band."""
+    page = presets.build_energy_preset(
+        energy.parse_sources(
+            {
+                "energy_sources": [
+                    FLAT_GRID,
+                    {"type": "gas", "stat_energy_from": "sensor.gas"},
+                ],
+                "device_consumption_water": [{"stat_consumption": "sensor.water"}],
+            }
+        )
+    )[1]
+
+    assert page["footer_height"] == 32
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_daily_totals",
+        return_value={
+            "sensor.from_grid": 6.4,
+            "sensor.to_grid": 2.1,
+            "sensor.gas": 1.2,
+            "sensor.water": 30.0,
+        },
+    ):
+        prepared = await energy_cards.async_prepare_energy_panel(hass, page)
+
+    # The footer totals resolve the same way the price graph used to.
+    assert prepared["_footer_totals"]["sensor.gas"] == 1.2
+    gif, items = energy_cards.render_energy_panel(hass, prepared, "http://h/dispdata/s")
+
+    assert gif.startswith(b"GIF")
+    # Only the live house-power hero polls; the grid totals and footer are baked.
+    assert [item["TextId"] for item in items] == [1]
+
+
+def test_grid_totals_lead_each_figure_with_an_mdi_arrow() -> None:
+    """Import and export read behind bundled MDI arrows in their own colours."""
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE)))
+    calls: list[tuple[str, tuple[int, int, int]]] = []
+
+    def _spy(_draw, icon, _xy, _size, color):
+        calls.append((icon, color))
+        return True
+
+    with patch.object(energy_cards, "draw_icon", _spy):
+        energy_cards._draw_grid_totals(
+            draw,
+            "#000000",
+            y=68,
+            import_total=6.4,
+            export_total=2.1,
+            import_color=energy_cards.ENERGY_COLORS["grid_import"],
+            export_color=energy_cards.ENERGY_COLORS["grid_export"],
+        )
+
+    grid_import = tuple(
+        int(energy_cards.ENERGY_COLORS["grid_import"][i : i + 2], 16) for i in (1, 3, 5)
+    )
+    grid_export = tuple(
+        int(energy_cards.ENERGY_COLORS["grid_export"][i : i + 2], 16) for i in (1, 3, 5)
+    )
+    assert calls == [
+        ("arrow-down-bold", grid_import),
+        ("arrow-up-bold", grid_export),
+    ]
+
+
+def test_grid_totals_omit_the_missing_side() -> None:
+    """A grid-in-only home draws just the import arrow, no export."""
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", (SCREEN_SIZE, SCREEN_SIZE)))
+    icons: list[str] = []
+
+    with patch.object(
+        energy_cards, "draw_icon", lambda *a, **k: icons.append(a[1]) or True
+    ):
+        energy_cards._draw_grid_totals(
+            draw,
+            "#000000",
+            y=68,
+            import_total=6.4,
+            export_total=None,
+            import_color=energy_cards.ENERGY_COLORS["grid_import"],
+            export_color=energy_cards.ENERGY_COLORS["grid_export"],
+        )
+
+    assert icons == ["arrow-down-bold"]
+
+
+async def test_merged_battery_only_draws_a_percentage_hero_and_a_filled_bar(hass) -> None:
+    """A home with a battery and no solar reads its state of charge, not 0 kW."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    hass.states.async_set("sensor.battery_soc", "73", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.battery_power", "-350", {"unit_of_measurement": "W"})
+    page = presets.build_energy_preset(
+        energy.parse_sources({"energy_sources": [FLAT_GRID, BATTERY]})
+    )[2]
+
+    assert page["name"] == "Battery"
+    prepared = await energy_cards.async_prepare_energy_panel(hass, page)
+
+    # The hero is the rounded state of charge with a baked percent, and the bar
+    # reads the same value so it fills instead of sitting at zero.
+    assert prepared["_hero_unit"] == "%"
+    assert prepared["_current"] == 73.0
+    rendered = Template(prepared["_hero_template"], hass).async_render(parse_result=False)
+    assert rendered == "73"
+
+    gif, items = energy_cards.render_energy_panel(hass, prepared, "http://h/dispdata/s")
+    # A negative rate is charging, so the bar draws in the charge colour.
+    charge = tuple(
+        int(energy_cards.ENERGY_COLORS["battery_in"][i : i + 2], 16) for i in (1, 3, 5)
+    )
+    image = Image.open(BytesIO(gif)).convert("RGB")
+    colours = {colour for _, colour in image.getcolors(maxcolors=100000)}
+    assert charge in colours
+
+
+async def test_merged_solar_only_keeps_the_kilowatt_hero(hass) -> None:
+    """A home with solar and no battery still reads current production in kW."""
+    hass.states.async_set("sensor.solar_power", "2500", {"unit_of_measurement": "W"})
+    page = presets.build_energy_preset(
+        energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR]})
+    )[2]
+
+    assert page["name"] == "Solar"
+    prepared = await energy_cards.async_prepare_energy_panel(hass, page)
+
+    assert prepared["_hero_unit"] == "kW"
+    rendered = Template(prepared["_hero_template"], hass).async_render(parse_result=False)
+    assert rendered == "2.50"
+
+
+def test_history_axis_labels_read_in_kwh_not_kw() -> None:
+    """Every bucket is an hour's change in kWh, so the axis reads kWh.
+
+    A two-digit peak keeps its trailing "h": the renderer sizes the gutter to
+    the label instead of capping at a fixed character count.
+    """
+    from custom_components.divoom_times_gate.units import format_auto
+
+    assert format_auto(3.6, "kWh") == "3.6kWh"
+    assert format_auto(12.4, "kWh") == "12.4kWh"
+    assert format_auto(0.0, "kWh") == "0.0kWh"
+
+
+async def test_energy_history_axis_label_fits_a_two_digit_peak(hass) -> None:
+    """The full "kWh" label reaches the right edge instead of losing its "h"."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    page = {
+        "card": "energy_history",
+        "unit": "kWh",
+        "background": "#000000",
+        "_solar_series": [12.4, 8.0, *[None] * 22],
+        "_consumption_series": None,
+    }
+
+    gif, _ = graphs.render_energy_history(hass, page, "http://h/dispdata/s")
+
+    # "12.4kWh" is 33px wide, so a fitted label lights pixels within a few of the
+    # right edge. A label truncated to "12.4kW" would stop short of that.
+    image = Image.open(BytesIO(gif)).convert("RGB")
+    top_band = image.crop((SCREEN_SIZE - 4, 0, SCREEN_SIZE, 20))
+    colours = {colour for _, colour in top_band.getcolors(maxcolors=100000)}
+    assert colours != {(0, 0, 0)}
+
+
+def test_history_consumption_colour_matches_the_house_hero() -> None:
+    """The house screen draws consumption in white, so the history line agrees."""
+    history = presets.build_energy_preset(
+        energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR]})
+    )[4]
+
+    assert history["consumption_color"] == "#FFFFFF"

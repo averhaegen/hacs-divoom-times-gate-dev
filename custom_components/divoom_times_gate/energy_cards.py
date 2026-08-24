@@ -6,7 +6,7 @@ figures keep ticking on the device's own poll.
 
 Modes:
   ``price``          current price large, with a min-to-max bar marking where it sits
-  ``power``          house load large, import and export below with today's totals
+  ``power``          house load large, one line of grid totals, gas and water below
   ``battery``        state of charge bar, percentage large, watts with direction
   ``solar``          current production large, today's yield below, day curve behind
   ``solar_battery``  solar on top with a goal bar, battery below with an SoC icon
@@ -35,6 +35,7 @@ from .const import (
     SCREEN_SIZE,
 )
 from .dispdata import register_allowed_entity, register_value_template
+from .graphs import _draw_footer_slots, _footer_totals
 from .mdi import draw_icon
 from .units import as_float, format_energy, format_price, quantize_fraction
 
@@ -77,6 +78,15 @@ async def async_prepare_energy_panel(
     else:
         prepared["_totals"] = {}
 
+    # The house screen carries the gas and water footer, so resolve its totals
+    # the same way the price graph does. `_footer_totals` reads today's change
+    # for every slot that names a statistic and leaves the rest to a live poll.
+    if page.get("footer_slots"):
+        try:
+            prepared["_footer_totals"] = await _footer_totals(hass, page)
+        except Exception as err:  # noqa: BLE001 - recorder may be absent
+            _LOGGER.debug("energy_panel footer totals unavailable: %s", err)
+            prepared["_footer_totals"] = {}
     for key in ("price_min", "price_max", "price_now", "goal"):
         if template := page.get(f"{key}_template"):
             try:
@@ -104,6 +114,13 @@ async def async_prepare_energy_panel(
         prepared["_battery_soc"] = as_float(
             (state := hass.states.get(str(entity))) and state.state
         )
+        # A battery-only merged screen draws the state of charge as its hero and
+        # its bar, so resolve `_current` from the SoC sensor even when no page
+        # entity_id points at it. Solar keeps `_current` for its own hero.
+        if mode == "solar_battery" and not (
+            page.get("solar_stat") or page.get("solar_power_entity")
+        ):
+            prepared["_current"] = prepared["_battery_soc"]
 
     if mode in ("solar", "solar_battery"):
         stat = str(page.get("solar_stat") or page.get("entity_id") or "")
@@ -182,6 +199,19 @@ def _prepare_overlay_templates(
         f"states('{entity}')" if entity else "0"
     )
     unit = _unit_of(hass, entity)
+
+    if mode == "solar_battery":
+        # The merged screen picks its own hero from the sources present so each
+        # fallback shows the figure it draws, rather than trusting a page-level
+        # entity_id to point at the right sensor. Solar wins when it exists; a
+        # battery-only home reads its state of charge instead.
+        if page.get("solar_stat") or page.get("solar_power_entity"):
+            if solar_entity := (page.get("solar_power_entity") or entity):
+                source = f"states('{solar_entity}')"
+                unit = _unit_of(hass, str(solar_entity))
+        elif soc_entity := page.get("battery_soc"):
+            source = f"states('{soc_entity}')"
+            unit = ""
 
     if mode == "price":
         page["_hero_template"] = f"{{{{ '%.3f' | format(({source}) | float(0)) }}}}"
@@ -458,6 +488,55 @@ def _draw_price(
         _text(draw, (bar_x + bar_w, time_y), priciest, _blend(background, dear, 0.7), 1, "right")
 
 
+def _draw_grid_totals(
+    draw: ImageDraw.ImageDraw,
+    background: str,
+    *,
+    y: int,
+    import_total: float | None,
+    export_total: float | None,
+    import_color: str,
+    export_color: str,
+) -> None:
+    """Bake one line of today's import and export, each behind its arrow.
+
+    These are daily totals from long-term statistics, not live values, so bake
+    them as artwork rather than polling. A down arrow marks import, an up arrow
+    marks export, each in its own colour. Omit the side the recorder has no
+    total for so a grid-in-only home still reads as one clean line.
+    """
+    gap = 3  # arrow to number
+    span = 8  # import block to export block
+    scale = 2
+    blocks: list[tuple[str, str, str]] = []
+    if import_total is not None:
+        blocks.append(("arrow-down-bold", f"{import_total:.1f}", import_color))
+    if export_total is not None:
+        blocks.append(("arrow-up-bold", f"{export_total:.1f}", export_color))
+    if not blocks:
+        return
+
+    # Size the arrow so its visible glyph matches the figure height beside it,
+    # not a round number. The webfont draws a bold arrow at about three quarters
+    # of its point size, so scale the point size up by four thirds to land the
+    # glyph on the same optical line. The whole line still has to fit 128px:
+    # a down arrow, a figure, an up arrow, a figure and the trailing unit.
+    text_h = pixel_text_size("0", scale)[1]
+    icon = round(text_h * 4 / 3)
+    suffix = "kWh today"
+    suffix_w = pixel_text_size(suffix, 1)[0]
+    widths = [icon + gap + pixel_text_size(text, scale)[0] for _, text, _ in blocks]
+    total_w = sum(widths) + span * (len(blocks) - 1) + gap + suffix_w
+    x = max(0, (SCREEN_SIZE - total_w) // 2)
+    for (name, text, color), width in zip(blocks, widths, strict=True):
+        draw_icon(draw, name, (x, y), icon, _rgb(color))
+        _text(draw, (x + icon + gap, y), text, _rgb(color), scale)
+        x += width + span
+    # The unit trails the last number, sat on its baseline and dimmed so the
+    # figures stay the thing the eye lands on.
+    _text(draw, (x - span + gap, y + text_h - pixel_text_size(suffix, 1)[1]), suffix, _blend(background, "#FFFFFF", 0.5), 1)
+
+
 def _draw_power(
     hass: HomeAssistant,
     page: dict[str, Any],
@@ -466,46 +545,33 @@ def _draw_power(
     poll_base: str,
     background: str,
 ) -> None:
-    """House load large, then an import row and an export row with day totals."""
+    """House load large, one line of grid totals, then the gas and water band."""
     import_color = str(page.get("import_color", ENERGY_COLORS["grid_import"]))
     export_color = str(page.get("export_color", ENERGY_COLORS["grid_export"]))
     totals: dict[str, float] = page.get("_totals") or {}
-    row_templates: dict[str, str] = page.get("_row_templates") or {}
 
-    _text(draw, (64, 4), str(page.get("name", "House")), _blend(background, "#FFFFFF", 0.55), 2, "center")
-    _hero(hass, page, draw, items, poll_base, background, y=22, color="#FFFFFF")
+    _text(draw, (64, 6), str(page.get("name", "House")), _blend(background, "#FFFFFF", 0.55), 2, "center")
+    # The live house load is the hero and stays a polled overlay. The freed rows
+    # give it and the footer room, so sit it high and let the line breathe below.
+    _hero(hass, page, draw, items, poll_base, background, y=34, color="#FFFFFF")
 
-    rows = (
-        ("import", import_color, page.get("import_entity"), page.get("import_stat"), 60),
-        ("export", export_color, page.get("export_entity"), page.get("export_stat"), 92),
+    import_total = totals.get(str(page["import_stat"])) if page.get("import_stat") else None
+    export_total = totals.get(str(page["export_stat"])) if page.get("export_stat") else None
+    _draw_grid_totals(
+        draw,
+        background,
+        y=68,
+        import_total=import_total,
+        export_total=export_total,
+        import_color=import_color,
+        export_color=export_color,
     )
-    for index, (label, color, entity, stat, y) in enumerate(rows):
-        draw.rectangle([0, y, 3, y + 26], fill=_rgb(color))
-        _value(
-            hass,
-            draw,
-            items,
-            poll_base,
-            background,
-            text_id=2 + index,
-            y=y,
-            color=color,
-            unit="kW",
-            chars=5,
-            font=int(page.get("row_font", ENERGY_ROW_FONT)),
-            height=ENERGY_ROW_HEIGHT,
-            char_width=ENERGY_ROW_CHAR_WIDTH,
-            entity_id=None if row_templates.get(label) else (str(entity) if entity else None),
-            value_template=row_templates.get(label),
-            right=SCREEN_SIZE - 4,
-        )
-        # The value owns the row's width, so the name and today's total share a
-        # small line beneath it rather than competing with it for the same one.
-        total = totals.get(str(stat)) if stat else None
-        caption = label.upper()
-        if total is not None:
-            caption = f"{caption} {format_energy(total)} today"
-        _text(draw, (8, y + 18), caption, _blend(background, color, 0.75), 1)
+
+    # Gas and water live here now, drawn by the same footer renderer the price
+    # graph used. An empty footer draws no band, so a home with neither still
+    # reads clean.
+    footer = int(page.get("footer_height", 0))
+    _draw_footer_slots(hass, page, draw, items, poll_base, background, footer)
 
 
 def _draw_battery(
