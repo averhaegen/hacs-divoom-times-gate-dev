@@ -206,7 +206,7 @@
       },
       "faces_yaml": {
         "title": "Edit faces as YAML",
-        "description": "Two lists, 'overall' and 'per_screen', each holding {name, clock_id} entries. Use this to rename a face or to add one the device did not report.",
+        "description": "Two lists, 'overall' and 'per_screen', each holding entries with a name and a clock_id. Use this to rename a face or to add one the device did not report.",
         "data": {
           "faces": "Faces"
         }
