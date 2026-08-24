@@ -8,6 +8,9 @@
           "ip_address": "Device / IP address",
           "local_token": "LocalToken",
           "refresh_interval": "Refresh interval (seconds)"
+        },
+        "data_description": {
+          "refresh_interval": "Set how many seconds Home Assistant waits between repaints of the screens."
         }
       },
       "reconfigure": {
@@ -17,6 +20,9 @@
           "ip_address": "Device / IP address",
           "local_token": "LocalToken",
           "refresh_interval": "Refresh interval (seconds)"
+        },
+        "data_description": {
+          "refresh_interval": "Set how many seconds Home Assistant waits between repaints of the screens."
         }
       },
       "starter": {
@@ -59,7 +65,7 @@
       },
       "screen_0": {
         "title": "Screen 1",
-        "description": "Screen 1 of layout **{preset}**, currently {current}. {reason}",
+        "description": "Choose what this screen shows in layout **{preset}**. It currently shows {current}. {reason}",
         "menu_options": {
           "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
@@ -70,7 +76,7 @@
       },
       "screen_1": {
         "title": "Screen 2",
-        "description": "Screen 2 of layout **{preset}**, currently {current}. {reason}",
+        "description": "Choose what this screen shows in layout **{preset}**. It currently shows {current}. {reason}",
         "menu_options": {
           "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
@@ -81,7 +87,7 @@
       },
       "screen_2": {
         "title": "Screen 3",
-        "description": "Screen 3 of layout **{preset}**, currently {current}. {reason}",
+        "description": "Choose what this screen shows in layout **{preset}**. It currently shows {current}. {reason}",
         "menu_options": {
           "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
@@ -92,7 +98,7 @@
       },
       "screen_3": {
         "title": "Screen 4",
-        "description": "Screen 4 of layout **{preset}**, currently {current}. {reason}",
+        "description": "Choose what this screen shows in layout **{preset}**. It currently shows {current}. {reason}",
         "menu_options": {
           "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
@@ -103,7 +109,7 @@
       },
       "screen_4": {
         "title": "Screen 5",
-        "description": "Screen 5 of layout **{preset}**, currently {current}. {reason}",
+        "description": "Choose what this screen shows in layout **{preset}**. It currently shows {current}. {reason}",
         "menu_options": {
           "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
@@ -200,10 +206,14 @@
       },
       "settings": {
         "title": "Settings",
-        "description": "Refresh interval; the Independent Display preset Home Assistant draws over (pick one with static faces, or a blank one, so native faces do not reload under the overlay); and favorite faces, a mapping with 'overall' and 'per_screen' lists of name plus clock_id.",
+        "description": "Set how often Home Assistant repaints the screens, and pick the Independent Display preset that the HA Dashboard overlay draws on top of.",
         "data": {
           "refresh_interval": "Refresh interval (seconds)",
           "dashboard_base": "Independent Display preset to draw over"
+        },
+        "data_description": {
+          "refresh_interval": "Set how many seconds Home Assistant waits between repaints of the screens.",
+          "dashboard_base": "Pick the Independent Display preset (Control1 to Control5) that the HA Dashboard overlay draws on top of, so live native faces do not reload and flash under it. Choose Leave device as-is to make no change."
         }
       },
       "faces": {
