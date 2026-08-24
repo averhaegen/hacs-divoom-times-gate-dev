@@ -175,20 +175,27 @@
       },
       "energy": {
         "title": "Build energy screens",
-        "description": "Read your Home Assistant energy dashboard and see what each screen will show. The next step lets you drop any screen you do not want.\n\n{found}\n\nName the layout to write the screens to. It becomes the one you are editing, and existing layouts are left alone.",
+        "description": "Here is what your Home Assistant energy dashboard gives each screen.\n\n{found}\n\nThe next step lets you drop any screen you do not want. Name the layout to write the screens to. It becomes the one you are editing, and existing layouts are left alone.",
         "data": {
           "preset_name": "Write to layout"
         }
       },
       "energy_screens": {
         "title": "Pick the energy screens",
-        "description": "Choose which screens to write to {preset}. Only screens the discovery can fill are listed. A screen you clear is written as a blank slot you can fill by hand, and the other screens keep their place.\n\n{screens}",
+        "description": "Every screen you leave on is written to {preset}. Turn one off and its slot is written blank for you to fill by hand, and the other screens keep their place. Only screens your energy dashboard can fill are listed.\n\n{screens}",
         "data": {
           "price": "Price panel",
           "house": "House power",
           "solar_battery": "Solar and battery",
           "price_graph": "Day-ahead price graph",
           "history": "24 hour history"
+        },
+        "data_description": {
+          "price": "The price now, with the cheapest and the priciest hour of the day.",
+          "house": "Power from and to the grid, plus today's gas and water totals.",
+          "solar_battery": "Solar today against the forecast, and the battery's charge and rate.",
+          "price_graph": "Today's and tomorrow's hourly price as a graph.",
+          "history": "Production and consumption per hour over the last 24 hours."
         }
       },
       "settings": {

@@ -385,49 +385,79 @@ _ENERGY_SCREEN_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def _energy_screen_source(found: EnergySources, key: str) -> str:
-    """Name the entity or statistic a filled screen reads."""
+def _energy_screen_sources(found: EnergySources, key: str) -> list[str]:
+    """List the entities and statistics a filled screen reads, in reading order."""
     if key == ENERGY_SCREEN_PRICE:
-        return str(found.price_now)
-    if key == ENERGY_SCREEN_HOUSE:
+        sources = [found.price_now]
+    elif key == ENERGY_SCREEN_HOUSE:
         sources = [
             found.grid_import_power,
             found.grid_export_power,
             found.grid_net_power,
             found.solar_power,
         ]
-        return ", ".join(source for source in sources if source)
-    if key == ENERGY_SCREEN_SOLAR_BATTERY:
+    elif key == ENERGY_SCREEN_SOLAR_BATTERY:
         sources = [found.solar_stat, found.solar_power, found.battery_soc, found.battery_power]
-        return ", ".join(source for source in sources if source)
-    if key == ENERGY_SCREEN_PRICE_GRAPH:
-        return str(found.price_forecast)
-    sources = [
-        found.solar_stat,
-        found.grid_import_stat,
-        found.grid_export_stat,
-        found.battery_in_stat,
-        found.battery_out_stat,
-    ]
-    return ", ".join(source for source in sources if source)
+    elif key == ENERGY_SCREEN_PRICE_GRAPH:
+        sources = [found.price_forecast]
+    else:
+        sources = [
+            found.solar_stat,
+            found.grid_import_stat,
+            found.grid_export_stat,
+            found.battery_in_stat,
+            found.battery_out_stat,
+        ]
+    return [source for source in sources if source]
 
 
-def describe_energy_screens(found: EnergySources) -> str:
+def _source_label(hass: HomeAssistant | None, source: str) -> str:
+    """Read a source's friendly name, falling back to the id itself.
+
+    Entity ids run long enough to wrap several times in the config flow dialog,
+    which buries the report. A friendly name is both shorter and the name the
+    reader already knows the sensor by. External statistics such as
+    ``hame:battery_charge`` have no state, so they keep their id.
+    """
+    if hass is None:
+        return source
+    state = hass.states.get(source)
+    if state is None:
+        return source
+    return state.name or source
+
+
+def _source_summary(hass: HomeAssistant | None, sources: list[str]) -> str:
+    """Name the first two sources, then count the rest.
+
+    Naming every source is what made the report a wall of text. The first source
+    is the figure the screen leads with, so it carries most of the meaning; the
+    count tells the reader the screen draws on more than that without spending a
+    line per sensor.
+    """
+    labels = [_source_label(hass, source) for source in sources]
+    if len(labels) <= 2:
+        return " and ".join(labels)
+    return f"{labels[0]}, {labels[1]} and {len(labels) - 2} more"
+
+
+def describe_energy_screens(found: EnergySources, hass: HomeAssistant | None = None) -> str:
     """A per-screen report, one line each, for the discovery step.
 
-    Name the entity or statistic every screen the discovery can fill will read,
-    so the reader can tell where a figure comes from. For a screen the discovery
-    cannot fill, say it stays blank and name the source it needs, so the reader
-    knows why before they commit.
+    Name what every screen the discovery can fill will read, so the reader can
+    tell where a figure comes from. For a screen the discovery cannot fill, say
+    it stays blank and name the source it needs, so the reader knows why before
+    they commit. Pass ``hass`` to read friendly names instead of entity ids.
     """
     fillable = set(candidate_screens(found))
     lines: list[str] = []
     for key in ENERGY_SCREENS:
         name, missing = _ENERGY_SCREEN_LABELS[key]
         if key in fillable:
-            lines.append(f"- {name}: reads {_energy_screen_source(found, key)}.")
+            summary = _source_summary(hass, _energy_screen_sources(found, key))
+            lines.append(f"- **{name}** reads {summary}.")
         else:
-            lines.append(f"- {name}: stays blank, needs {missing}.")
+            lines.append(f"- **{name}** stays blank, needs {missing}.")
     return "\n".join(lines)
 
 

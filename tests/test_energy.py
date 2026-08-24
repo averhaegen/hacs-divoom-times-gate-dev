@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 import pytest
 
@@ -326,9 +327,37 @@ def test_describe_energy_screens_names_sources_and_missing_ones() -> None:
     report = presets.describe_energy_screens(found)
 
     # Solar fills the merged screen and the history, and names its statistic.
-    assert "Solar and battery: reads sensor.solar_energy" in report
+    assert "**Solar and battery** reads sensor.solar_energy" in report
     # No price sensor, so the price panel says why it stays blank.
-    assert "Price panel: stays blank, needs a price sensor." in report
+    assert "**Price panel** stays blank, needs a price sensor." in report
+
+
+async def test_describe_energy_screens_prefers_friendly_names(hass: HomeAssistant) -> None:
+    """Given hass, the report reads friendly names, not entity ids."""
+    hass.states.async_set(
+        "sensor.solar_energy", "12", {"friendly_name": "Solar production today"}
+    )
+
+    report = presets.describe_energy_screens(
+        energy.parse_sources({"energy_sources": [SOLAR]}), hass
+    )
+
+    assert "Solar production today" in report
+    assert "sensor.solar_energy" not in report
+
+
+def test_describe_energy_screens_counts_sources_beyond_the_first_two() -> None:
+    """A screen reading many sensors names two and counts the rest."""
+    found = energy.EnergySources(
+        grid_import_power="sensor.a",
+        grid_export_power="sensor.b",
+        grid_net_power="sensor.c",
+        solar_power="sensor.d",
+    )
+
+    report = presets.describe_energy_screens(found)
+
+    assert "**House power** reads sensor.a, sensor.b and 2 more." in report
 
 
 def test_build_energy_preset_blanks_missing_sources() -> None:

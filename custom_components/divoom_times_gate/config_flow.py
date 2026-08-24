@@ -827,7 +827,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {vol.Optional(PRESET_NAME, default=ENERGY_PRESET): str}
             ),
-            description_placeholders={"found": describe_energy_screens(found)},
+            description_placeholders={"found": describe_energy_screens(found, self.hass)},
         )
 
     async def async_step_energy_screens(
@@ -859,7 +859,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             data_schema=schema,
             description_placeholders={
                 "preset": self._energy_name,
-                "screens": describe_energy_screens(found),
+                "screens": describe_energy_screens(found, self.hass),
             },
         )
 
