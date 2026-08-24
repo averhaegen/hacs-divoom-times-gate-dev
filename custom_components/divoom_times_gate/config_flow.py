@@ -50,7 +50,11 @@ from .const import (
 )
 from .defaults import DEFAULT_FACES, DEFAULT_SCREENS
 from .device import TimesGate
-from .discovery import DiscoveredDevice, async_discover_devices
+from .discovery import (
+    DiscoveredDevice,
+    async_discover_devices,
+    async_get_whole_faces,
+)
 from .energy import async_discover
 from .presets import (
     active_screens,
@@ -435,7 +439,8 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         # there is something to switch between.
         if len(self._data[CONF_PRESETS]) > 1:
             menu["layout"] = f"Layout: {self._data[CONF_ACTIVE_PRESET]}"
-        menu["settings"] = "Settings and faces"
+        menu["faces"] = "Favorite faces"
+        menu["settings"] = "Settings"
         menu["advanced"] = "Edit all layouts as YAML"
         return self.async_show_menu(
             step_id="init",
@@ -831,8 +836,6 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         if user_input is not None:
             self._data[CONF_REFRESH_INTERVAL] = int(user_input[CONF_REFRESH_INTERVAL])
             self._data[CONF_DASHBOARD_BASE] = user_input.get(CONF_DASHBOARD_BASE, "")
-            if isinstance(user_input.get(CONF_FACES), dict):
-                self._data[CONF_FACES] = user_input[CONF_FACES]
             return self._commit()
 
         # Build the base-preset options from the device's presets.
@@ -858,9 +861,114 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
                         options=base_options, mode=SelectSelectorMode.DROPDOWN
                     )
                 ),
-                vol.Required(
-                    CONF_FACES, default=self._data[CONF_FACES]
-                ): ObjectSelector(),
             }
         )
         return self.async_show_form(step_id="settings", data_schema=schema)
+
+    # --- favorite faces ----------------------------------------------------
+
+    def _favorites(self, group: str) -> list[dict[str, Any]]:
+        """The configured favorites of one group, defensively typed."""
+        assert self._data is not None
+        faces = self._data.get(CONF_FACES) or {}
+        return [
+            face
+            for face in (faces.get(group) or [])
+            if isinstance(face, dict) and face.get("clock_id") is not None
+        ]
+
+    async def _face_catalog(self) -> dict[int, str]:
+        """Ask the device which faces it has. Empty when it does not answer."""
+        return await async_get_whole_faces(
+            async_get_clientsession(self.hass),
+            int(self.config_entry.data.get(CONF_DEVICE_ID, 0)),
+        )
+
+    async def async_step_faces(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Which native faces show up in the dropdowns elsewhere."""
+        self._ensure()
+        return self.async_show_menu(
+            step_id="faces",
+            menu_options=["faces_pick", "faces_yaml"],
+        )
+
+    async def async_step_faces_pick(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick faces by name, out of what the device reports.
+
+        The old form asked for numeric clock ids in an object editor, which
+        meant knowing the ids before you could pick one.
+        """
+        self._ensure()
+        assert self._data is not None
+        catalog = await self._face_catalog()
+        names: dict[str, str] = {
+            str(clock_id): name for clock_id, name in catalog.items()
+        }
+        for group in ("overall", "per_screen"):
+            for face in self._favorites(group):
+                names.setdefault(str(face["clock_id"]), str(face.get("name") or ""))
+
+        if user_input is not None:
+            self._data[CONF_FACES] = {
+                group: [
+                    {
+                        "name": names.get(str(clock_id)) or f"Face {clock_id}",
+                        "clock_id": int(clock_id),
+                    }
+                    for clock_id in user_input.get(group) or []
+                    if str(clock_id).strip().isdigit()
+                ]
+                for group in ("overall", "per_screen")
+            }
+            return self._commit()
+
+        options = [
+            SelectOptionDict(value=value, label=label or f"Face {value}")
+            for value, label in sorted(names.items(), key=lambda kv: kv[1].lower())
+        ]
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    group,
+                    default=[
+                        str(face["clock_id"]) for face in self._favorites(group)
+                    ],
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        multiple=True,
+                        custom_value=True,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                )
+                for group in ("overall", "per_screen")
+            }
+        )
+        return self.async_show_form(
+            step_id="faces_pick",
+            data_schema=schema,
+            description_placeholders={"count": str(len(catalog))},
+        )
+
+    async def async_step_faces_yaml(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The escape hatch: rename a face, or add one the device did not list."""
+        self._ensure()
+        assert self._data is not None
+        if user_input is not None:
+            if isinstance(user_input.get(CONF_FACES), dict):
+                self._data[CONF_FACES] = user_input[CONF_FACES]
+            return self._commit()
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_FACES, default=self._data[CONF_FACES]
+                ): ObjectSelector()
+            }
+        )
+        return self.async_show_form(step_id="faces_yaml", data_schema=schema)

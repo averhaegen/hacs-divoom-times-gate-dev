@@ -130,7 +130,7 @@
       },
       "screen_face": {
         "title": "Native face",
-        "description": "Screen {screen} shows one of the device's own faces instead of anything from Home Assistant. The list holds your favorites from Settings and faces.",
+        "description": "Screen {screen} shows one of the device's own faces instead of anything from Home Assistant. The list holds your favorites from Favorite faces.",
         "data": {
           "clock_id": "Face",
           "duration": "Seconds on screen"
@@ -181,12 +181,34 @@
         }
       },
       "settings": {
-        "title": "Settings and faces",
+        "title": "Settings",
         "description": "Refresh interval; the Independent Display preset Home Assistant draws over (pick one with static faces, or a blank one, so native faces do not reload under the overlay); and favorite faces, a mapping with 'overall' and 'per_screen' lists of name plus clock_id.",
         "data": {
           "refresh_interval": "Refresh interval (seconds)",
-          "dashboard_base": "Independent Display preset to draw over",
-          "faces": "Faces (favorites)"
+          "dashboard_base": "Independent Display preset to draw over"
+        }
+      },
+      "faces": {
+        "title": "Favorite faces",
+        "description": "Favorites are the native device faces offered under Display source and under a screen's Native face.",
+        "menu_options": {
+          "faces_pick": "Pick faces",
+          "faces_yaml": "Edit faces as YAML"
+        }
+      },
+      "faces_pick": {
+        "title": "Pick faces",
+        "description": "The device reported {count} faces. Overall faces drive the whole display at once; per-screen faces are offered on a single screen. The order you pick them in is the order the dropdowns show. If the device did not answer, type a numeric face id to add it anyway.",
+        "data": {
+          "overall": "Overall Display favorites",
+          "per_screen": "Per-screen favorites"
+        }
+      },
+      "faces_yaml": {
+        "title": "Edit faces as YAML",
+        "description": "Two lists, 'overall' and 'per_screen', each holding {name, clock_id} entries. Use this to rename a face or to add one the device did not report.",
+        "data": {
+          "faces": "Faces"
         }
       },
       "advanced": {
@@ -205,7 +227,7 @@
       "too_many_entities": "A screen holds at most 8 entities."
     },
     "abort": {
-      "no_faces": "No favorite faces are configured. Add some under Settings and faces first.",
+      "no_faces": "No favorite faces are configured. Add some under Favorite faces first.",
       "no_starters": "No template found anything to show on a single screen."
     }
   }

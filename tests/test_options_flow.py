@@ -10,6 +10,8 @@ Two properties matter most here and both are regressions waiting to happen:
 """
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from custom_components.divoom_times_gate.config_flow import DivoomTimesGateOptionsFlow
@@ -568,39 +570,123 @@ async def test_settings_step_without_a_presets_attribute(
     assert base_options(result) == [{"value": "", "label": "Leave device as-is"}]
 
 
-async def test_settings_step_saves_interval_base_and_faces(
-    hass, mock_config_entry
-) -> None:
+async def test_settings_step_saves_interval_and_base(hass, mock_config_entry) -> None:
     mock_config_entry.runtime_data = coordinator_with(
         IndependentPreset("Control3", 333, 2)
     )
     result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
     result = await pick(hass, result, "settings")
-    faces = {"Clock": 61, "Weather": 62}
     result = await submit(
-        hass,
-        result,
-        {CONF_REFRESH_INTERVAL: "20", CONF_DASHBOARD_BASE: "2", CONF_FACES: faces},
+        hass, result, {CONF_REFRESH_INTERVAL: "20", CONF_DASHBOARD_BASE: "2"}
     )
 
     assert result["data"][CONF_REFRESH_INTERVAL] == 20
     assert result["data"][CONF_DASHBOARD_BASE] == "2"
+
+
+# --- favorite faces --------------------------------------------------------
+
+
+def patch_catalog(catalog: dict[int, str]):
+    """Patch what the device reports as its face catalog."""
+    return patch(
+        "custom_components.divoom_times_gate.config_flow.async_get_whole_faces",
+        AsyncMock(return_value=catalog),
+    )
+
+
+async def test_the_face_picker_lists_what_the_device_reports(
+    hass, mock_config_entry
+) -> None:
+    """The old form asked for clock ids, which you had to know up front."""
+    with patch_catalog({61: "Clock face", 1040: "Neon"}):
+        result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+        result = await pick(hass, result, "faces")
+        result = await pick(hass, result, "faces_pick")
+        fields = {
+            str(key): value for key, value in result["data_schema"].schema.items()
+        }
+        labels = [o["label"] for o in fields["overall"].config["options"]]
+        assert "Neon" in labels and "Clock face" in labels
+
+        result = await submit(
+            hass, result, {"overall": ["1040"], "per_screen": ["61", "1040"]}
+        )
+
+    assert result["data"][CONF_FACES] == {
+        "overall": [{"name": "Neon", "clock_id": 1040}],
+        "per_screen": [
+            {"name": "Clock face", "clock_id": 61},
+            {"name": "Neon", "clock_id": 1040},
+        ],
+    }
+
+
+async def test_the_face_picker_keeps_configured_faces_when_the_device_is_silent(
+    hass, mock_config_entry
+) -> None:
+    """An offline device must not quietly empty somebody's favorites list."""
+    configured = {
+        "overall": [{"name": "Neon", "clock_id": 1040}],
+        "per_screen": [{"name": "Big Time", "clock_id": 152}],
+    }
+    with patch_catalog({}):
+        result = await open_options(
+            hass, mock_config_entry, {**TWO_LAYOUTS, CONF_FACES: configured}
+        )
+        result = await pick(hass, result, "faces")
+        result = await pick(hass, result, "faces_pick")
+        fields = {
+            str(key): value for key, value in result["data_schema"].schema.items()
+        }
+        assert [o["label"] for o in fields["overall"].config["options"]] == [
+            "Big Time",
+            "Neon",
+        ]
+        result = await submit(
+            hass, result, {"overall": ["1040"], "per_screen": ["152"]}
+        )
+
+    assert result["data"][CONF_FACES] == configured
+
+
+async def test_a_typed_face_id_is_accepted(hass, mock_config_entry) -> None:
+    """custom_value keeps the power user whole when the catalog is short."""
+    with patch_catalog({}):
+        result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+        result = await pick(hass, result, "faces")
+        result = await pick(hass, result, "faces_pick")
+        result = await submit(
+            hass, result, {"overall": ["999", "not-a-number"], "per_screen": []}
+        )
+
+    assert result["data"][CONF_FACES]["overall"] == [
+        {"name": "Face 999", "clock_id": 999}
+    ]
+
+
+async def test_the_faces_yaml_editor_still_writes_the_map(
+    hass, mock_config_entry
+) -> None:
+    """Renaming a face, or adding one the device did not report, stays possible."""
+    faces = {"overall": [{"name": "Mine", "clock_id": 7}], "per_screen": []}
+    result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
+    result = await pick(hass, result, "faces")
+    result = await pick(hass, result, "faces_yaml")
+    result = await submit(hass, result, {CONF_FACES: faces})
+
     assert result["data"][CONF_FACES] == faces
 
 
-async def test_settings_step_ignores_a_non_dict_face_map(
+async def test_the_faces_yaml_editor_ignores_a_non_dict_map(
     hass, mock_config_entry
 ) -> None:
-    """Faces map names to ClockIds; anything else keeps the previous map."""
-    mock_config_entry.runtime_data = None
+    """Faces are two named lists; anything else keeps the previous map."""
     original = dict(mock_config_entry.options[CONF_FACES])
     result = await open_options(hass, mock_config_entry)
-    result = await pick(hass, result, "settings")
-    result = await submit(
-        hass,
-        result,
-        {CONF_REFRESH_INTERVAL: 60, CONF_DASHBOARD_BASE: "", CONF_FACES: []},
-    )
+    result = await pick(hass, result, "faces")
+    result = await pick(hass, result, "faces_yaml")
+    result = await submit(hass, result, {CONF_FACES: []})
 
     assert result["data"][CONF_FACES] == original
 

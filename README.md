@@ -179,15 +179,22 @@ dialog (options flow) for everything you can tweak later.
 | --- | --- | --- |
 | **IP address** (`ip_address`) | The device's current LAN IP. If discovery finds your Times Gate first, HA offers it in a dropdown; you can also type it manually. | Required. Default: the first discovered Times Gate if HA finds one, otherwise blank. |
 | **LocalToken** (`local_token`) | Required on every local API call. This is the integer shown in the Divoom app under the device's settings. | Required integer. No default. |
-| **Refresh interval** (`refresh_interval`) | How often Home Assistant refreshes the integration while HA is managing the display. | Integer seconds. Default: `60`. In **Configure → Settings and faces**, HA validates `5`–`3600` seconds. |
+| **Refresh interval** (`refresh_interval`) | How often Home Assistant refreshes the integration while HA is managing the display. | Integer seconds. Default: `60`. In **Configure → Settings**, HA validates `5`–`3600` seconds. |
 
-### In Configure → Settings and faces
+### In Configure → Settings
 
 | Field | What it does | Valid values / default |
 | --- | --- | --- |
 | **Refresh interval (seconds)** (`refresh_interval`) | Same setting as above, but editable later from the options flow. | `5`–`3600` seconds. Default: `60`. |
 | **Independent Display preset to draw over** (`dashboard_base`) | Optional native **Independent display** preset that HA overlays onto when **Display source** is **HA Dashboard**. Pick a static face (or blank preset) if you want to avoid native live faces reloading underneath the HA overlay. | Dropdown built from the device's current independent presets, plus **Leave device as-is**. Default: **Leave device as-is** (empty value). |
-| **Faces (favorites)** (`faces`) | The favorites lists used to build the native-face dropdowns in Home Assistant. `overall` populates **Display source → Overall Display: ...**; `per_screen` populates **Screen N → Face: ...**. | Object/YAML with two keys: `overall` and `per_screen`, each a list of `{name, clock_id}` objects. Default: a small starter set shipped with the integration (see below). |
+### In Configure → Favorite faces
+
+| Field | What it does | Valid values / default |
+| --- | --- | --- |
+| **Faces (favorites)** (`faces`) | The favorites lists used to build the native-face dropdowns in Home Assistant. `overall` populates **Display source → Overall Display: ...**; `per_screen` populates **Screen N → Native face**. | **Pick faces** lists the faces the device reports, by name, and remembers the order you pick them in. **Edit faces as YAML** takes an object with two keys, `overall` and `per_screen`, each a list of `{name, clock_id}` objects, for renaming a face or adding one the device did not report. Default: a small starter set shipped with the integration (see below). |
+
+If the device does not answer, the picker falls back to the faces you already
+have and lets you type a numeric face id.
 
 Default `faces` value:
 
@@ -566,6 +573,7 @@ tells you where to go without opening anything first.
   alone.
 - **Layout** appears once you have more than one layout. It switches between
   them, saves the current screens as a copy, or deletes one.
+- **Favorite faces** picks which native device faces show up in the dropdowns.
 - **Edit all layouts as YAML** shows the whole mapping of names to screen lists
   at once, for pasting a set of screens in, copying one out, or adding a layout.
 
