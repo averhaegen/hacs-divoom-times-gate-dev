@@ -14,9 +14,12 @@ drop in 2–8 sensors and it renders a themed, icon-labelled layout for you (see
 [docs/CARDS.md](docs/CARDS.md)). For full manual control, `components` pages
 give you pixel-level drawing.
 
-> ⚠️ **Development repo.** Under active development. The default screens use the
-> author's entity IDs as worked examples — edit them via **Configure** to match
-> your own sensors.
+> ⚠️ **Development repo.** Under active development.
+
+Out of the box, before you configure anything, screen 1 shows a native device
+clock and screens 2–5 are off. The defaults name no entity on purpose. Adding
+the integration ends in a step that offers to fill all five screens from what
+it finds on your system, and **Configure** lets you edit each screen later.
 
 > ℹ️ This is an unofficial, community-maintained integration. It is not
 > affiliated with, endorsed by, or supported by Divoom.
