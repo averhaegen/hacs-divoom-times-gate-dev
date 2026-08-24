@@ -424,7 +424,8 @@ Single line, fixed height 16pt, scrolls if it doesn't fit.
 `{ id, name, width, high, charset, type }`. `type` `0` = scrolls when text overflows,
 `1` = no scroll. The `id` is what you pass as `font` in `SendHttpItemList`.
 
-**Verified working font IDs on Times Gate** ✅ (exhaustively tested, all even — odd IDs do not exist):
+**Verified working font IDs on Times Gate** ✅ (all even — odd IDs do not exist). This table
+covers the low range only; it is not the full set, see the note below on fonts above 262:
 
 | Size class | Font IDs |
 |------------|----------|
@@ -436,8 +437,26 @@ Single line, fixed height 16pt, scrolls if it doesn't fit.
 > (full-screen height). Additionally they only render correctly when sent with **`NewFlag: 0`**
 > *after* the screen has already been initialised with `NewFlag: 1`. Sending them directly
 > with `NewFlag: 1` results in a black screen.
->
-> Fonts 262+ were tested and did not render — likely not present on this firmware.
+
+**Fonts above 262 do render** ✅. An earlier note here claimed they did not; that was a
+test-harness fault, not a firmware limit. Retested 2026-08-24 on firmware `400`: fonts
+`288, 290, 358, 428, 430, 432, 476, 584, 606` all render, all support the decimal point.
+Send them the same way as any other font (`Textheight: 56`, `speed: 0`, no `update_time`,
+at most two items per screen). See `scripts/show_font_samples.py` for the working recipe.
+
+Notable large fonts ✅:
+
+| Font | Size | Charset | Why it matters |
+|------|------|---------|----------------|
+| `246` | 18×22 | `0123456789.` | Current energy hero font |
+| `606` | 22×23 | `0123456789.W` | Only large font carrying a unit glyph (`W`) |
+| `584` | 7×22 | `0123456789-.km` | Narrow seven-segment/LCD look, has `k` and `m` |
+| `288` | 20×21 | `0123456789KM.` | Uppercase `K`/`M` only |
+| `358` | 25×26 | `0123456789KM.` | Largest of the `KM` set |
+| `276`, `280` | 18×19 | `A-Za-z` | Full alphabet, **no digits** — pair with a digit font |
+
+No single font covers `kW`: `606` has `W` but no `k`, `584` has `k` but no `W`. Bake the
+unit into the background artwork when you need a mixed-case unit.
 
 ### 4.10 `Draw/SendHttpItemList` — rich item list with on-device data 📄❓
 
@@ -475,9 +494,37 @@ optional), `align` (see table below ✅ — Times Gate values match `SendHttpTex
 **Scrolling** is triggered automatically when `TextString` is longer than `TextWidth`,
 regardless of `align`. It is not controlled by `align` or `dir`.
 
+> ⚠️ **The first item is dropped when `BackgroudGif` is present, type 22 only** ✅
+> (verified 2026-08-24). Send type-22 items together with a `BackgroudGif` and the
+> device draws every item **except the first one**, returning `error_code: 0`. Proven
+> by sending the same white `1.23` in five list positions: it stayed invisible as
+> item 1 of 1 and item 1 of 2, and drew as item 2 of 2, item 2 of 3 and item 3 of 3.
+> Put a throwaway item first, or omit `BackgroudGif`, in which case a lone item draws.
+>
+> **Type 23 is not affected** ✅: a polled item renders in any list position, including
+> first and alone. The energy cards rely on this, so the quirk costs nothing in
+> production; it only bites test scripts that push static strings over artwork.
+
+> ⚠️ **`Draw/SendHttpItemList` clears the screen** ✅. Pushing artwork first with
+> `Draw/SendHttpGif` and then sending an item list **without** `BackgroudGif` wipes
+> the artwork: the items draw on black. Artwork and items must travel together in
+> one request via `BackgroudGif`.
+
 `align` controls alignment **within the text block** (defined by `x` + `TextWidth`),
 not across the full screen. To centre text on the full 128px screen: `x: 0`,
 `TextWidth: 128`, `align: 3`.
+
+> ⚠️ **`Textheight` must be at least the font's pixel height** ✅ (verified 2026-08-24
+> with font `298`, which is 27px tall). Set it lower and the glyphs clip from the
+> bottom (`Textheight: 24` cut the last row); set it well below and nothing renders
+> at all (`Textheight: 16` drew an empty block). Values `24, 27, 32, 48, 56, 64` all
+> rendered. This is the most common reason a type-22 item silently shows nothing:
+> the request still returns `error_code: 0`. When in doubt use `Textheight: 56`.
+
+> ⚠️ **`align: 2` did not render** ❓ (font `298`, type 22, 2026-08-24). Identical
+> items with `align: 1` and `align: 3` both drew correctly, so this is specific to
+> alignment mode 2. Not yet retested for type 23, where
+> `energy_cards._hero()` still passes `align=2` for the unit-less case.
 
 > 💡 **Multi-colour scrolling trick** ✅: place two (or more) adjacent scroll blocks
 > (`align: 0`) with the same `speed` and complementary `TextWidth` values that add up
