@@ -556,6 +556,9 @@ menu entry says what that screen currently holds, so "Screen 2: sensor_grid"
 tells you where to go without opening anything first.
 
 - **Screen 1** to **Screen 5** edit the five screens of the layout you are on.
+  Each one opens a small menu: **Sensors** for a grid of up to eight entity
+  states with a colour theme, **Native face** for one of the device's own
+  faces, **Off** for a black screen, and **Edit as YAML** for everything else.
 - **Build energy screens** generates five screens and writes them to the layout
   you name in that step, defaulting to `energy`. Your other layouts are left
   alone.
@@ -563,6 +566,13 @@ tells you where to go without opening anything first.
   them, saves the current screens as a copy, or deletes one.
 - **Edit all layouts as YAML** shows the whole mapping of names to screen lists
   at once, for pasting a set of screens in, copying one out, or adding a layout.
+
+A screen that holds something the forms cannot express keeps its
+configuration. If the page rotates through several pages, is a page type the
+forms do not cover, or sets a per-slot `icon`, `color`, `color_template` or
+`value_template`, the menu offers **Edit as YAML** alone and says which of
+those it found. A form is never allowed to write a screen it would have to
+simplify first.
 
 **Every step saves on its own.** There is no "Save & close": the moment you
 submit a screen, the config entry is written and the integration reloads. An

@@ -55,35 +55,74 @@
       },
       "screen_0": {
         "title": "Screen 1",
-        "description": "Screen 1 of layout **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
-        "data": {
-          "screens": "Pages"
+        "description": "Screen 1 of layout **{preset}**, currently {current}. {reason}",
+        "menu_options": {
+          "screen_sensors": "Sensors",
+          "screen_face": "Native face",
+          "screen_off": "Off",
+          "screen_yaml": "Edit as YAML"
         }
       },
       "screen_1": {
         "title": "Screen 2",
-        "description": "Screen 2 of layout **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
-        "data": {
-          "screens": "Pages"
+        "description": "Screen 2 of layout **{preset}**, currently {current}. {reason}",
+        "menu_options": {
+          "screen_sensors": "Sensors",
+          "screen_face": "Native face",
+          "screen_off": "Off",
+          "screen_yaml": "Edit as YAML"
         }
       },
       "screen_2": {
         "title": "Screen 3",
-        "description": "Screen 3 of layout **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
-        "data": {
-          "screens": "Pages"
+        "description": "Screen 3 of layout **{preset}**, currently {current}. {reason}",
+        "menu_options": {
+          "screen_sensors": "Sensors",
+          "screen_face": "Native face",
+          "screen_off": "Off",
+          "screen_yaml": "Edit as YAML"
         }
       },
       "screen_3": {
         "title": "Screen 4",
-        "description": "Screen 4 of layout **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
-        "data": {
-          "screens": "Pages"
+        "description": "Screen 4 of layout **{preset}**, currently {current}. {reason}",
+        "menu_options": {
+          "screen_sensors": "Sensors",
+          "screen_face": "Native face",
+          "screen_off": "Off",
+          "screen_yaml": "Edit as YAML"
         }
       },
       "screen_4": {
         "title": "Screen 5",
-        "description": "Screen 5 of layout **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
+        "description": "Screen 5 of layout **{preset}**, currently {current}. {reason}",
+        "menu_options": {
+          "screen_sensors": "Sensors",
+          "screen_face": "Native face",
+          "screen_off": "Off",
+          "screen_yaml": "Edit as YAML"
+        }
+      },
+      "screen_sensors": {
+        "title": "Sensors",
+        "description": "Screen {screen} draws up to {max} entity states in a grid. Pick the entities in the order you want them, then a colour theme.",
+        "data": {
+          "entities": "Entities",
+          "theme": "Theme",
+          "duration": "Seconds on screen"
+        }
+      },
+      "screen_face": {
+        "title": "Native face",
+        "description": "Screen {screen} shows one of the device's own faces instead of anything from Home Assistant. The list holds your favorites from Settings and faces.",
+        "data": {
+          "clock_id": "Face",
+          "duration": "Seconds on screen"
+        }
+      },
+      "screen_yaml": {
+        "title": "Edit as YAML",
+        "description": "Screen {screen} of layout **{preset}**, currently {current}. Give it a single page, or a list of pages that rotate by each page's 'duration'. See the README for the page schema.",
         "data": {
           "screens": "Pages"
         }
@@ -145,7 +184,12 @@
     "error": {
       "preset_name_required": "Give the new layout a name.",
       "preset_name_taken": "A layout with that name already exists.",
-      "preset_last": "This is the only layout left, so it cannot be deleted."
+      "preset_last": "This is the only layout left, so it cannot be deleted.",
+      "entities_required": "Pick at least one entity.",
+      "too_many_entities": "A screen holds at most 8 entities."
+    },
+    "abort": {
+      "no_faces": "No favorite faces are configured. Add some under Settings and faces first."
     }
   }
 }

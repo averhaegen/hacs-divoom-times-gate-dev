@@ -51,6 +51,12 @@ async def submit(hass, result, payload: dict):
     )
 
 
+async def yaml_editor(hass, result, index: int):
+    """Open a screen's menu and step into its YAML editor."""
+    result = await pick(hass, result, f"screen_{index}")
+    return await pick(hass, result, "screen_yaml")
+
+
 def coordinator_with(*presets):
     """A stand-in coordinator exposing only the presets the settings step reads."""
     return type("Coordinator", (), {"presets": list(presets)})()
@@ -135,7 +141,7 @@ async def test_each_screen_step_commits_on_its_own(
         mock_config_entry,
         {CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5}, CONF_ACTIVE_PRESET: DEFAULT_PRESET},
     )
-    result = await pick(hass, result, f"screen_{index}")
+    result = await yaml_editor(hass, result, index)
     result = await submit(hass, result, {CONF_SCREENS: {"page_type": "image"}})
 
     screens = result["data"][CONF_PRESETS][DEFAULT_PRESET]
@@ -148,7 +154,7 @@ async def test_a_screen_edit_lands_in_the_active_layout(
 ) -> None:
     """The clock shows the active layout, so that is what an edit must change."""
     result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
-    result = await pick(hass, result, "screen_0")
+    result = await yaml_editor(hass, result, 0)
     result = await submit(hass, result, {CONF_SCREENS: OFF})
 
     presets = result["data"][CONF_PRESETS]
@@ -162,7 +168,7 @@ async def test_options_never_write_a_second_copy_of_the_screens(
 ) -> None:
     """``screens`` is still read forever, but writing it invited a drift."""
     result = await open_options(hass, mock_config_entry, dict(TWO_LAYOUTS))
-    result = await pick(hass, result, "screen_0")
+    result = await yaml_editor(hass, result, 0)
     result = await submit(hass, result, {CONF_SCREENS: OFF})
 
     assert CONF_SCREENS not in result["data"]
@@ -175,7 +181,7 @@ async def test_a_pre_layout_screen_list_still_opens_and_survives(
     result = await open_options(
         hass, mock_config_entry, {CONF_SCREENS: [CLOCK, OFF, OFF, OFF, OFF]}
     )
-    result = await pick(hass, result, "screen_1")
+    result = await yaml_editor(hass, result, 1)
     result = await submit(hass, result, {CONF_SCREENS: {"page_type": "image"}})
 
     screens = result["data"][CONF_PRESETS][DEFAULT_PRESET]
@@ -204,6 +210,167 @@ async def test_options_fall_back_to_the_neutral_defaults(
     result = await open_options(hass, mock_config_entry, {})
 
     assert result["menu_options"]["screen_0"] == "Screen 1: clock"
+
+
+# --- screen forms ----------------------------------------------------------
+
+
+async def test_a_screen_menu_offers_the_forms_when_the_page_fits_one(
+    hass, mock_config_entry
+) -> None:
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5}, CONF_ACTIVE_PRESET: DEFAULT_PRESET},
+    )
+    result = await pick(hass, result, "screen_0")
+
+    assert result["menu_options"] == [
+        "screen_sensors",
+        "screen_face",
+        "screen_off",
+        "screen_yaml",
+    ]
+    assert result["description_placeholders"]["reason"] == ""
+
+
+async def test_a_hand_written_screen_is_offered_yaml_only(
+    hass, mock_config_entry
+) -> None:
+    """The protection rule. A form that cannot say it must not get to write it."""
+    hand_written = {
+        "page_type": "card",
+        "card": "sensor_grid",
+        "slots": [{"entity_id": "sensor.a", "value_template": "{{ states(x) }}"}],
+    }
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {
+            CONF_PRESETS: {DEFAULT_PRESET: [hand_written] + [OFF] * 4},
+            CONF_ACTIVE_PRESET: DEFAULT_PRESET,
+        },
+    )
+    result = await pick(hass, result, "screen_0")
+
+    assert result["menu_options"] == ["screen_yaml"]
+    assert "value_template" in result["description_placeholders"]["reason"]
+
+
+async def test_a_hand_written_screen_survives_the_yaml_editor_untouched(
+    hass, mock_config_entry
+) -> None:
+    """Open it, submit the default, get back exactly what was stored."""
+    hand_written = {
+        "page_type": "components",
+        "components": [{"type": "text", "content": "hi", "x": 1, "y": 2}],
+    }
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {
+            CONF_PRESETS: {DEFAULT_PRESET: [OFF, hand_written, OFF, OFF, OFF]},
+            CONF_ACTIVE_PRESET: DEFAULT_PRESET,
+        },
+    )
+    result = await pick(hass, result, "screen_1")
+    assert result["menu_options"] == ["screen_yaml"]
+    result = await pick(hass, result, "screen_yaml")
+    result = await submit(hass, result, {CONF_SCREENS: hand_written})
+
+    assert result["data"][CONF_PRESETS][DEFAULT_PRESET][1] == hand_written
+
+
+async def test_the_sensor_form_writes_a_sensor_grid_card(
+    hass, mock_config_entry
+) -> None:
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5}, CONF_ACTIVE_PRESET: DEFAULT_PRESET},
+    )
+    result = await pick(hass, result, "screen_2")
+    result = await pick(hass, result, "screen_sensors")
+    result = await submit(
+        hass,
+        result,
+        {"entities": ["sensor.a", "sensor.b"], "theme": "navy", "duration": 20},
+    )
+
+    assert result["data"][CONF_PRESETS][DEFAULT_PRESET][2] == {
+        "page_type": "card",
+        "card": "sensor_grid",
+        "theme": "navy",
+        "duration": 20,
+        "slots": [{"entity_id": "sensor.a"}, {"entity_id": "sensor.b"}],
+    }
+
+
+async def test_the_sensor_form_refuses_more_than_eight_entities(
+    hass, mock_config_entry
+) -> None:
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5}, CONF_ACTIVE_PRESET: DEFAULT_PRESET},
+    )
+    result = await pick(hass, result, "screen_0")
+    result = await pick(hass, result, "screen_sensors")
+    result = await submit(
+        hass,
+        result,
+        {
+            "entities": [f"sensor.s{i}" for i in range(9)],
+            "theme": "dark",
+            "duration": 15,
+        },
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"entities": "too_many_entities"}
+
+
+async def test_the_off_entry_needs_no_form(hass, mock_config_entry) -> None:
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {
+            CONF_PRESETS: {DEFAULT_PRESET: [CLOCK] * 5},
+            CONF_ACTIVE_PRESET: DEFAULT_PRESET,
+        },
+    )
+    result = await pick(hass, result, "screen_3")
+    result = await pick(hass, result, "screen_off")
+
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_PRESETS][DEFAULT_PRESET][3] == {"page_type": "off"}
+
+
+async def test_the_face_form_lists_the_configured_favorites(
+    hass, mock_config_entry
+) -> None:
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {
+            CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5},
+            CONF_ACTIVE_PRESET: DEFAULT_PRESET,
+            CONF_FACES: {"per_screen": [{"name": "Big Time", "clock_id": 152}]},
+        },
+    )
+    result = await pick(hass, result, "screen_0")
+    result = await pick(hass, result, "screen_face")
+    fields = {str(key): value for key, value in result["data_schema"].schema.items()}
+    assert fields["clock_id"].config["options"] == [
+        {"value": "152", "label": "Big Time"}
+    ]
+
+    result = await submit(hass, result, {"clock_id": "152", "duration": 15})
+    assert result["data"][CONF_PRESETS][DEFAULT_PRESET][0] == {
+        "page_type": "clock",
+        "clock_id": 152,
+        "duration": 15,
+    }
 
 
 # --- layouts ---------------------------------------------------------------

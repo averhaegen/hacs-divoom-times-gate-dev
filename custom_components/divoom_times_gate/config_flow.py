@@ -13,6 +13,8 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -24,6 +26,8 @@ from homeassistant.helpers.selector import (
 )
 import voluptuous as vol
 
+from . import page_forms
+from .cards import MAX_SLOTS, THEMES
 from .const import (
     AUTH_INVALID,
     AUTH_OK,
@@ -317,6 +321,7 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
     """
 
     _data: dict[str, Any] | None = None
+    _index: int = 0
 
     def _ensure(self) -> None:
         """Load the options into the shape the steps work on."""
@@ -420,7 +425,151 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
     async def _screen_step(
         self, index: int, user_input: dict[str, Any] | None
     ) -> ConfigFlowResult:
+        """A menu per screen, offering only the editors this page survives."""
         self._ensure()
+        self._index = index
+        pages = self._screens[index]
+        reason = page_forms.unsupported_reason(pages)
+        placeholders = self._placeholders()
+        placeholders["current"] = describe_page(pages)
+        placeholders["reason"] = (
+            ""
+            if reason is None
+            else (
+                f"This screen can only be edited as YAML, because {reason}. "
+                "A form would drop that."
+            )
+        )
+        menu = (
+            ["screen_yaml"]
+            if reason is not None
+            else ["screen_sensors", "screen_face", "screen_off", "screen_yaml"]
+        )
+        return self.async_show_menu(
+            step_id=f"screen_{index}",
+            menu_options=menu,
+            description_placeholders=placeholders,
+        )
+
+    def _screen_placeholders(self) -> dict[str, str]:
+        placeholders = self._placeholders()
+        placeholders["screen"] = str(self._index + 1)
+        placeholders["current"] = describe_page(self._screens[self._index])
+        return placeholders
+
+    async def async_step_screen_sensors(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick entities and a theme; the rest of the card is derived."""
+        self._ensure()
+        errors: dict[str, str] = {}
+        defaults = page_forms.sensor_defaults(self._screens[self._index])
+        if user_input is not None:
+            entities = list(user_input.get(page_forms.CONF_ENTITIES) or [])
+            if not entities:
+                errors[page_forms.CONF_ENTITIES] = "entities_required"
+            elif len(entities) > MAX_SLOTS:
+                errors[page_forms.CONF_ENTITIES] = "too_many_entities"
+            else:
+                return self._write(self._index, page_forms.sensor_page(user_input))
+            defaults = dict(user_input)
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    page_forms.CONF_ENTITIES,
+                    default=defaults[page_forms.CONF_ENTITIES],
+                ): EntitySelector(EntitySelectorConfig(multiple=True)),
+                vol.Required(
+                    page_forms.CONF_THEME, default=defaults[page_forms.CONF_THEME]
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(value=name, label=name.replace("_", " "))
+                            for name in sorted(THEMES)
+                        ],
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    page_forms.CONF_DURATION, default=defaults[page_forms.CONF_DURATION]
+                ): NumberSelector(
+                    NumberSelectorConfig(min=5, max=600, mode=NumberSelectorMode.BOX)
+                ),
+            }
+        )
+        placeholders = self._screen_placeholders()
+        placeholders["max"] = str(MAX_SLOTS)
+        return self.async_show_form(
+            step_id="screen_sensors",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    def _face_options(self, current: str) -> list[SelectOptionDict]:
+        """The configured favorites, plus whatever this screen already shows."""
+        assert self._data is not None
+        faces = self._data.get(CONF_FACES) or {}
+        per_screen = faces.get("per_screen") or []
+        options = [
+            SelectOptionDict(value=str(face["clock_id"]), label=str(face["name"]))
+            for face in per_screen
+            if isinstance(face, dict) and face.get("clock_id") is not None
+        ]
+        if current not in {option["value"] for option in options} and current != "0":
+            options.insert(0, SelectOptionDict(value=current, label=f"Face {current}"))
+        return options
+
+    async def async_step_screen_face(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Hand the screen back to a native face."""
+        self._ensure()
+        defaults = page_forms.face_defaults(self._screens[self._index])
+        if user_input is not None:
+            return self._write(self._index, page_forms.face_page(user_input))
+        options = self._face_options(str(defaults[page_forms.CONF_CLOCK_ID]))
+        if not options:
+            return self.async_abort(reason="no_faces")
+        current = str(defaults[page_forms.CONF_CLOCK_ID])
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    page_forms.CONF_CLOCK_ID,
+                    default=current
+                    if current in {option["value"] for option in options}
+                    else options[0]["value"],
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options, mode=SelectSelectorMode.DROPDOWN
+                    )
+                ),
+                vol.Required(
+                    page_forms.CONF_DURATION, default=defaults[page_forms.CONF_DURATION]
+                ): NumberSelector(
+                    NumberSelectorConfig(min=5, max=600, mode=NumberSelectorMode.BOX)
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="screen_face",
+            data_schema=schema,
+            description_placeholders=self._screen_placeholders(),
+        )
+
+    async def async_step_screen_off(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Turn the screen black. No form, there is nothing to ask."""
+        self._ensure()
+        return self._write(self._index, page_forms.off_page())
+
+    async def async_step_screen_yaml(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The escape hatch. Everything a form refuses stays editable here."""
+        self._ensure()
+        index = self._index
         if user_input is not None:
             pages = user_input.get(CONF_SCREENS)
             if isinstance(pages, list | dict):
@@ -428,12 +577,10 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {vol.Required(CONF_SCREENS, default=self._screens[index]): ObjectSelector()}
         )
-        placeholders = self._placeholders()
-        placeholders["current"] = describe_page(self._screens[index])
         return self.async_show_form(
-            step_id=f"screen_{index}",
+            step_id="screen_yaml",
             data_schema=schema,
-            description_placeholders=placeholders,
+            description_placeholders=self._screen_placeholders(),
         )
 
     async def async_step_screen_0(
