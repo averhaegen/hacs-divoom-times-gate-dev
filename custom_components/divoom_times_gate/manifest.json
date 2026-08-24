@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/averhaegen/hacs-divoom-times-gate-dev/issues",
   "loggers": ["custom_components.divoom_times_gate"],
   "requirements": ["Pillow>=10.1.0"],
-  "version": "0.5.0"
+  "version": "0.5.1"
 }
