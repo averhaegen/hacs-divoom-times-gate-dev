@@ -17,6 +17,7 @@ from custom_components.divoom_times_gate.const import (
     ENERGY_PRESET,
     SCREEN_SIZE,
 )
+from custom_components.divoom_times_gate.units import quantize_fraction
 
 FLAT_GRID = {
     "type": "grid",
@@ -95,6 +96,24 @@ def test_parse_sources_tolerates_an_empty_configuration() -> None:
 
     assert not found.has_electricity
     assert found.water_stats == []
+    assert found.solar_forecast_entries == []
+
+
+def test_parse_sources_reads_solar_forecast_entries() -> None:
+    solar = {**SOLAR, "config_entry_solar_forecast": ["abc123", "def456"]}
+    found = energy.parse_sources({"energy_sources": [solar]})
+
+    assert found.solar_forecast_entries == ["abc123", "def456"]
+
+
+def test_parse_sources_without_forecast_entries_still_discovers_solar() -> None:
+    # The key is absent here, and the older config also stores it as None, so a
+    # solar source must still discover normally without a forecast.
+    for solar in (SOLAR, {**SOLAR, "config_entry_solar_forecast": None}):
+        found = energy.parse_sources({"energy_sources": [solar]})
+
+        assert found.has_solar
+        assert found.solar_forecast_entries == []
 
 
 def test_house_power_template_combines_every_source() -> None:
@@ -154,6 +173,41 @@ async def test_async_discover_survives_a_missing_energy_component(hass) -> None:
     assert isinstance(found, energy.EnergySources)
 
 
+async def test_goal_template_resolves_forecast_entry_to_production_today(hass) -> None:
+    from homeassistant.helpers import entity_registry as er
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(domain="forecast_solar")
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    # A same-entry sensor with another suffix must not stand in for the goal.
+    registry.async_get_or_create(
+        "sensor", "forecast_solar", "uid_now", config_entry=entry
+    )
+    registry.async_get_or_create(
+        "sensor",
+        "forecast_solar",
+        "uid_energy_production_today",
+        config_entry=entry,
+        suggested_object_id="solar_energy_production_today",
+    )
+
+    found = energy.EnergySources(
+        solar_power="sensor.solar_power", solar_forecast_entries=[entry.entry_id]
+    )
+    template = presets._forecast_solar_goal_template(hass, found)
+
+    assert template == (
+        "{{ states('sensor.solar_energy_production_today') | float(0) }}"
+    )
+
+
+async def test_goal_template_is_none_without_forecast_entries(hass) -> None:
+    found = energy.EnergySources(solar_power="sensor.solar_power")
+
+    assert presets._forecast_solar_goal_template(hass, found) is None
+
+
 def test_read_presets_migrates_a_plain_screen_list() -> None:
     found = presets.read_presets({CONF_SCREENS: [{"page_type": "off"}]})
 
@@ -209,18 +263,23 @@ def test_build_energy_preset_produces_five_screens() -> None:
     screens = presets.build_energy_preset(found)
 
     assert len(screens) == 5
-    assert [s.get("mode") for s in screens[:4]] == ["price", "power", "battery", "solar"]
-    assert screens[4]["card"] == "graph"
-    assert screens[4]["footer_height"] == 32
-    assert [slot["name"] for slot in screens[4]["footer_slots"]] == ["Gas", "Water"]
+    # Solar and battery merge onto one screen, freeing the fifth slot.
+    assert [s.get("mode") for s in screens[:3]] == ["price", "power", "solar_battery"]
+    assert screens[3]["card"] == "graph"
+    assert screens[3]["footer_height"] == 32
+    assert [slot["name"] for slot in screens[3]["footer_slots"]] == ["Gas", "Water"]
+    assert screens[4] == {"page_type": "off"}
 
 
 def test_build_energy_preset_blanks_missing_sources() -> None:
     screens = presets.build_energy_preset(energy.parse_sources({"energy_sources": [FLAT_GRID]}))
 
+    # No solar and no battery, so the merged screen blanks and the graph keeps
+    # its footerless self.
     assert screens[2] == {"page_type": "off"}
-    assert screens[3] == {"page_type": "off"}
-    assert screens[4]["footer_height"] == 0
+    assert screens[3]["card"] == "graph"
+    assert screens[3]["footer_height"] == 0
+    assert screens[4] == {"page_type": "off"}
 
 
 def test_build_energy_preset_reads_a_statistic_only_gas_from_the_recorder() -> None:
@@ -228,7 +287,7 @@ def test_build_energy_preset_reads_a_statistic_only_gas_from_the_recorder() -> N
         {"energy_sources": [{"type": "gas", "stat_energy_from": "nhc2:abc_gasvolume"}]}
     )
 
-    slot = presets.build_energy_preset(found)[4]["footer_slots"][0]
+    slot = presets.build_energy_preset(found)[3]["footer_slots"][0]
 
     assert slot["stat"] == "nhc2:abc_gasvolume"
     assert "entity_id" not in slot
@@ -240,7 +299,7 @@ def test_build_energy_preset_reads_a_meter_backed_water_as_a_daily_total() -> No
         {"energy_sources": [{"type": "water", "stat_energy_from": "sensor.energyhome_water"}]}
     )
 
-    slot = presets.build_energy_preset(found)[4]["footer_slots"][0]
+    slot = presets.build_energy_preset(found)[3]["footer_slots"][0]
 
     # A water meter counts up forever, so its state is the meter reading rather
     # than today's usage. Read the statistic and keep the entity as a fallback.
@@ -473,3 +532,229 @@ async def test_daily_totals_ask_the_recorder_for_kilowatt_hours(hass) -> None:
     assert captured["units"] == {"energy": "kWh"}
     assert captured["types"] == {"change"}
     assert totals["sensor.solar"] == pytest.approx(30.618)
+
+
+@pytest.mark.parametrize(
+    ("value", "lo", "hi", "step", "expected"),
+    [
+        (0.0, 0.0, 100.0, 0.1, 0.0),  # bottom clamps to zero
+        (100.0, 0.0, 100.0, 0.1, 1.0),  # top clamps to one
+        (-5.0, 0.0, 100.0, 0.1, 0.0),  # below range clamps
+        (250.0, 0.0, 100.0, 0.1, 1.0),  # above range clamps
+        (55.0, 0.0, 100.0, 0.1, 0.5),  # snaps down, not to nearest
+        (5.0, 0.0, 100.0, 0.1, 0.0),  # a value below one band reads as empty
+        (0.5, 0.0, 1.0, 1.0, 0.0),  # a coarse step floors the middle
+        (5.0, 5.0, 5.0, 0.1, 0.0),  # a zero-width range is safe
+        (5.0, 10.0, 5.0, 0.1, 0.0),  # an inverted range is safe
+    ],
+)
+def test_quantize_fraction_edges(value, lo, hi, step, expected) -> None:
+    assert quantize_fraction(value, lo, hi, step) == pytest.approx(expected)
+
+
+def test_quantize_fraction_places_a_bipolar_zero() -> None:
+    # abs(power_min) / (power_max - power_min) is where 0 W sits on the bar.
+    assert quantize_fraction(0.0, -2500.0, 800.0, 0.1) == pytest.approx(0.7)
+
+
+PRICES_TODAY = [
+    {"time": "2026-08-24T07:00:00+02:00", "price": 0.206},
+    {"time": "2026-08-24T13:00:00+02:00", "price": 0.030},
+    {"time": "2026-08-24T18:00:00+02:00", "price": 0.120},
+]
+
+
+async def test_price_page_extracts_cheapest_and_priciest_time(hass) -> None:
+    await hass.config.async_set_time_zone("Europe/Brussels")
+    hass.states.async_set(
+        "sensor.engie_average_price", "0.1", {"prices_today": PRICES_TODAY}
+    )
+    found = energy.EnergySources(
+        price_now="sensor.engie_current", price_forecast="sensor.engie_average_price"
+    )
+
+    panel, _ = presets._price_pages(found)
+    prepared = await energy_cards.async_prepare_energy_panel(hass, panel)
+
+    assert prepared["cheapest_time"] == "13:00"
+    assert prepared["priciest_time"] == "07:00"
+
+
+async def test_price_page_draws_nothing_for_a_malformed_price_list(hass) -> None:
+    hass.states.async_set("sensor.engie_average_price", "0.1", {"prices_today": "oops"})
+    found = energy.EnergySources(
+        price_now="sensor.engie_current", price_forecast="sensor.engie_average_price"
+    )
+
+    panel, _ = presets._price_pages(found)
+    prepared = await energy_cards.async_prepare_energy_panel(hass, panel)
+
+    assert prepared.get("cheapest_time", "") == ""
+    assert prepared.get("priciest_time", "") == ""
+
+
+def test_goal_bar_fraction_caps_at_one() -> None:
+    from PIL import Image, ImageDraw
+
+    draw = ImageDraw.Draw(Image.new("RGB", (128, 128)))
+
+    # Over the goal: the fraction caps at 1.0, so the bar draws and returns True.
+    assert energy_cards._draw_goal_bar(
+        draw, {"goal": 24}, "#000000", "#ff9800", 30.0, x=12, y=34, w=104, h=6
+    )
+    # No goal set: keep the plain caption, so the helper returns False.
+    assert not energy_cards._draw_goal_bar(
+        draw, {"goal": 0}, "#000000", "#ff9800", 18.3, x=12, y=34, w=104, h=6
+    )
+
+
+@pytest.mark.parametrize(
+    ("soc", "charging", "expected"),
+    [
+        (100.0, False, "mdi:battery"),
+        (0.0, False, "mdi:battery-outline"),
+        (46.0, False, "mdi:battery-50"),
+        (44.0, False, "mdi:battery-40"),
+        (100.0, True, "mdi:battery-charging-100"),
+        (55.0, True, "mdi:battery-charging-60"),
+        (0.0, True, "mdi:battery-charging-outline"),
+        (-5.0, False, "mdi:battery-outline"),
+        (250.0, False, "mdi:battery"),
+    ],
+)
+def test_battery_band_icon_selection(soc, charging, expected) -> None:
+    assert energy_cards._battery_band_icon(soc, charging) == expected
+
+
+def test_battery_band_icons_exist_in_the_font() -> None:
+    from custom_components.divoom_times_gate.mdi import icon_char
+
+    for soc in range(0, 101, 10):
+        for charging in (False, True):
+            assert icon_char(energy_cards._battery_band_icon(float(soc), charging))
+
+
+def test_round_power_range_rounds_outward() -> None:
+    assert energy.round_power_range(-2430.0, 780.0) == (-2500.0, 800.0)
+    assert energy.round_power_range(-455.0, 118.0) == (-460.0, 120.0)
+
+
+async def test_async_power_range_reads_seven_day_min_max(hass) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_statistics(hass, start, end, statistic_ids, period, units, types):
+        captured["period"] = period
+        captured["types"] = types
+        return {"sensor.battery_power": [{"min": -2430.0, "max": 780.0}]}
+
+    class _Recorder:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    hass.data.pop("divoom_times_gate_energy_power_range", None)
+    with (
+        patch(
+            "homeassistant.components.recorder.statistics.statistics_during_period",
+            fake_statistics,
+        ),
+        patch("homeassistant.components.recorder.get_instance", return_value=_Recorder()),
+    ):
+        low, high = await energy.async_power_range(hass, "sensor.battery_power", -400.0)
+
+    assert captured["period"] == "day"
+    assert captured["types"] == {"min", "max"}
+    assert (low, high) == (-2500.0, 800.0)
+
+
+async def test_async_power_range_falls_back_without_data(hass) -> None:
+    class _Recorder:
+        async def async_add_executor_job(self, func, *args):
+            return {}
+
+    hass.data.pop("divoom_times_gate_energy_power_range", None)
+    with (
+        patch("homeassistant.components.recorder.statistics.statistics_during_period"),
+        patch("homeassistant.components.recorder.get_instance", return_value=_Recorder()),
+    ):
+        low, high = await energy.async_power_range(hass, "sensor.battery_power", -400.0)
+
+    # Symmetric around the current value, and never zero-width.
+    assert low == -400.0 and high == 400.0
+    assert high > low
+
+
+async def test_async_power_range_default_span_without_a_statistic(hass) -> None:
+    # An empty statistic id short-circuits to the default symmetric span.
+    low, high = await energy.async_power_range(hass, "", None)
+
+    assert low < 0 < high
+
+
+def test_merged_preset_produces_four_panels_and_an_off_slot() -> None:
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR, BATTERY]})
+
+    screens = presets.build_energy_preset(found)
+
+    assert len(screens) == 5
+    merged = screens[2]
+    assert merged["mode"] == "solar_battery"
+    assert merged["solar_stat"] == "sensor.solar_energy"
+    assert merged["battery_soc"] == "sensor.battery_soc"
+    assert merged["goal"] == 0
+    assert screens[4] == {"page_type": "off"}
+
+
+def test_merged_preset_falls_back_to_solar_only() -> None:
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID, SOLAR]})
+
+    merged = presets.build_energy_preset(found)[2]
+
+    assert merged["mode"] == "solar_battery"
+    assert merged["solar_stat"] == "sensor.solar_energy"
+    assert "battery_soc" not in merged
+    # Solar is the hero when there is no battery.
+    assert merged["entity_id"] == "sensor.solar_power"
+
+
+def test_merged_preset_falls_back_to_battery_only() -> None:
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID, BATTERY]})
+
+    merged = presets.build_energy_preset(found)[2]
+
+    assert merged["mode"] == "solar_battery"
+    assert "solar_stat" not in merged
+    # The state of charge is the hero when there is no solar.
+    assert merged["entity_id"] == "sensor.battery_soc"
+
+
+def test_merged_preset_blanks_without_solar_or_battery() -> None:
+    found = energy.parse_sources({"energy_sources": [FLAT_GRID]})
+
+    assert presets.build_energy_preset(found)[2] == {"page_type": "off"}
+
+
+@pytest.mark.parametrize(
+    "sources",
+    [
+        [FLAT_GRID, SOLAR, BATTERY],
+        [FLAT_GRID, SOLAR],
+        [FLAT_GRID, BATTERY],
+    ],
+    ids=["both", "solar_only", "battery_only"],
+)
+async def test_merged_panel_renders(hass, sources) -> None:
+    hass.states.async_set("sensor.solar_power", "1200", {"unit_of_measurement": "W"})
+    hass.states.async_set("sensor.battery_soc", "55", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.battery_power", "-400", {"unit_of_measurement": "W"})
+    page = presets.build_energy_preset(energy.parse_sources({"energy_sources": sources}))[2]
+
+    with patch(
+        "custom_components.divoom_times_gate.energy.async_daily_totals",
+        return_value={"sensor.solar_energy": 18.3},
+    ):
+        prepared = await energy_cards.async_prepare_energy_panel(hass, page)
+
+    gif, items = energy_cards.render_energy_panel(hass, prepared, "http://h/dispdata/secret")
+
+    assert gif.startswith(b"GIF")
+    assert all(item["type"] == 23 for item in items)

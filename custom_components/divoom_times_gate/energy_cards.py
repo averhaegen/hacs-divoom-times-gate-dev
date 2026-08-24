@@ -5,10 +5,12 @@ type-23 overlays, so the panel repaints only when the artwork changes while the
 figures keep ticking on the device's own poll.
 
 Modes:
-  ``price``    current price large, with a min-to-max bar marking where it sits
-  ``power``    house load large, import and export below with today's totals
-  ``battery``  state of charge bar, percentage large, watts with direction
-  ``solar``    current production large, today's yield below, day curve behind
+  ``price``          current price large, with a min-to-max bar marking where it sits
+  ``power``          house load large, import and export below with today's totals
+  ``battery``        state of charge bar, percentage large, watts with direction
+  ``solar``          current production large, today's yield below, day curve behind
+  ``solar_battery``  solar on top with a goal bar, battery below with an SoC icon
+                     and a bipolar power bar
 """
 from __future__ import annotations
 
@@ -33,11 +35,12 @@ from .const import (
     SCREEN_SIZE,
 )
 from .dispdata import register_allowed_entity, register_value_template
-from .units import as_float, format_energy, format_price
+from .mdi import draw_icon
+from .units import as_float, format_energy, format_price, quantize_fraction
 
 _LOGGER = logging.getLogger(__name__)
 
-MODES = ("price", "power", "battery", "solar")
+MODES = ("price", "power", "battery", "solar", "solar_battery")
 
 # The gap between a number and the unit baked beside it. One pixel, because the
 # device font already leaves a right side bearing inside the last digit's cell
@@ -74,12 +77,20 @@ async def async_prepare_energy_panel(
     else:
         prepared["_totals"] = {}
 
-    for key in ("price_min", "price_max", "price_now"):
+    for key in ("price_min", "price_max", "price_now", "goal"):
         if template := page.get(f"{key}_template"):
             try:
                 prepared[key] = as_float(Template(str(template), hass).async_render())
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("energy_panel %s_template failed: %s", key, err)
+    for key in ("cheapest_time", "priciest_time"):
+        if template := page.get(f"{key}_template"):
+            try:
+                rendered = Template(str(template), hass).async_render()
+                prepared[key] = str(rendered or "").strip()
+            except Exception as err:  # noqa: BLE001 - a malformed list draws nothing
+                _LOGGER.debug("energy_panel %s_template failed: %s", key, err)
+                prepared[key] = ""
     for key in ("battery_power", "solar_power", "house_power"):
         if entity := page.get(f"{key}_entity"):
             prepared[f"_{key}"] = as_float(
@@ -89,8 +100,12 @@ async def async_prepare_energy_panel(
         prepared["_current"] = as_float(
             (state := hass.states.get(str(entity))) and state.state
         )
+    if entity := page.get("battery_soc"):
+        prepared["_battery_soc"] = as_float(
+            (state := hass.states.get(str(entity))) and state.state
+        )
 
-    if mode == "solar":
+    if mode in ("solar", "solar_battery"):
         stat = str(page.get("solar_stat") or page.get("entity_id") or "")
         from .energy import async_day_curve
 
@@ -99,6 +114,24 @@ async def async_prepare_energy_panel(
         except Exception as err:  # noqa: BLE001 - recorder may be absent
             _LOGGER.debug("energy_panel day curve unavailable: %s", err)
             prepared["_curve"] = []
+
+    if mode == "solar_battery" and page.get("battery_power_entity"):
+        # The bipolar bar needs its charging and discharging ends. Read them
+        # once here from long-term statistics; a page override wins so a user
+        # can still pin the range by hand.
+        from .energy import async_power_range
+
+        try:
+            low, high = await async_power_range(
+                hass,
+                str(page["battery_power_entity"]),
+                prepared.get("_battery_power"),
+            )
+        except Exception as err:  # noqa: BLE001 - recorder may be absent
+            _LOGGER.debug("energy_panel power range unavailable: %s", err)
+            low, high = -1000.0, 1000.0
+        prepared["_power_min"] = as_float(page.get("power_min"), low)
+        prepared["_power_max"] = as_float(page.get("power_max"), high)
 
     _prepare_overlay_templates(hass, prepared, mode)
     return prepared
@@ -154,7 +187,12 @@ def _prepare_overlay_templates(
         page["_hero_template"] = f"{{{{ '%.3f' | format(({source}) | float(0)) }}}}"
         page["_hero_unit"] = ""
         page["_hero_chars"] = 5
-    elif mode == "battery":
+    elif mode == "battery" or (
+        mode == "solar_battery"
+        and not (page.get("solar_stat") or page.get("solar_power_entity"))
+    ):
+        # A battery-only merged screen falls back to the battery layout, so its
+        # hero is the state of charge, not a kW figure.
         page["_hero_template"] = f"{{{{ ({source}) | float(0) | round(0) | int }}}}"
         page["_hero_unit"] = "%"
         page["_hero_chars"] = 3
@@ -177,6 +215,13 @@ def _prepare_overlay_templates(
                 body = f"{body} | replace('-', '')"
             rows[key] = f"{{{{ {body} }}}}"
     page["_row_templates"] = rows
+
+    # The merged screen shows the battery percentage as a live overlay, but font
+    # 184 has no percent glyph, so poll a digit-only value and bake the "%".
+    if soc_entity := page.get("battery_soc"):
+        page["_soc_template"] = (
+            f"{{{{ states('{soc_entity}') | float(0) | round(0) | int }}}}"
+        )
 
 
 def _poll_item(
@@ -238,6 +283,18 @@ def _text(
     draw_pixel_text(draw, xy, text, color, scale, align)
 
 
+def _value_pair_width(unit: str, chars: int, char_width: int) -> int:
+    """The pixel width of a ``_value`` number-and-unit pair.
+
+    Hoist the same width `_value` uses internally so a caller can lay the pair
+    out as part of a wider group, such as centring it beside the battery icon.
+    """
+    unit_width = pixel_text_size(unit, 2)[0] if unit else 0
+    gap = _UNIT_GAP if unit else 0
+    number_width = max(16, chars * char_width)
+    return number_width + gap + unit_width
+
+
 def _value(
     hass: HomeAssistant,
     draw: ImageDraw.ImageDraw,
@@ -256,6 +313,7 @@ def _value(
     entity_id: str | None = None,
     value_template: str | None = None,
     right: int | None = None,
+    left: int | None = None,
 ) -> None:
     """Place one live figure with the unit baked beside it.
 
@@ -270,14 +328,18 @@ def _value(
     than ``chars`` drifts by half the spare cells, a few pixels rather than the
     width of the panel.
 
-    ``right`` anchors the pair's right edge instead of centring it.
+    ``right`` anchors the pair's right edge instead of centring it, and
+    ``left`` anchors the number's left edge, which lets a caller sit the pair
+    beside another element such as the battery icon.
     """
     unit_width, unit_height = pixel_text_size(unit, 2) if unit else (0, 0)
     gap = _UNIT_GAP if unit else 0
     number_width = max(16, chars * char_width)
-    if right is None:
-        left = max(0, (SCREEN_SIZE - (number_width + gap + unit_width)) // 2)
+    if left is not None:
         edge = left + number_width
+    elif right is None:
+        start = max(0, (SCREEN_SIZE - (number_width + gap + unit_width)) // 2)
+        edge = start + number_width
     else:
         edge = right - gap - unit_width
     _poll_item(
@@ -358,11 +420,11 @@ def _draw_price(
     known = low is not None and high is not None and high > low
     position = 0.5
     if known and now is not None:
-        # Quantise to the bar's own resolution. Anything finer only rewrites
-        # the artwork without moving a pixel.
+        # Snap to the bar's own resolution. Anything finer only rewrites the
+        # artwork without moving a pixel. Keep the fine 1/50 step the marker used
+        # before so the position still reads exactly on this hourly data.
         assert low is not None and high is not None
-        raw = max(0.0, min(1.0, (now - low) / (high - low)))
-        position = round(raw * 50) / 50
+        position = quantize_fraction(now, low, high, step=0.02)
     value_color = _hex(_blend(cheap, dear, position)) if known else "#FFFFFF"
 
     _text(draw, (64, 6), str(page.get("name", "Price")), _blend(background, "#FFFFFF", 0.55), 2, "center")
@@ -383,6 +445,17 @@ def _draw_price(
     )
     _text(draw, (bar_x, bar_y + bar_h + 6), format_price(low or 0.0), _rgb(cheap), 2)
     _text(draw, (bar_x + bar_w, bar_y + bar_h + 6), format_price(high or 0.0), _rgb(dear), 2, "right")
+
+    # Bake the hour of the cheapest and priciest price under its figure. These
+    # are baked artwork, not overlays, and a missing or malformed price list
+    # leaves both empty so nothing extra draws.
+    cheapest = str(page.get("cheapest_time") or "")
+    priciest = str(page.get("priciest_time") or "")
+    time_y = bar_y + bar_h + 6 + ENERGY_ROW_HEIGHT + 2
+    if cheapest:
+        _text(draw, (bar_x, time_y), cheapest, _blend(background, cheap, 0.7), 1)
+    if priciest:
+        _text(draw, (bar_x + bar_w, time_y), priciest, _blend(background, dear, 0.7), 1, "right")
 
 
 def _draw_power(
@@ -457,10 +530,9 @@ def _draw_battery(
 
     bar_x, bar_y, bar_w, bar_h = 14, 24, SCREEN_SIZE - 28, 18
     draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], outline=_blend(background, color, 0.5))
-    # Quantise to 10% steps. The bar is the artwork, so a step per percent
-    # re-sent the whole panel for a change nobody can see at arm's length.
-    steps = round(max(0.0, min(100.0, soc)) / 10)
-    filled = int(bar_w * steps / 10)
+    # Snap to 10% steps. The bar is the artwork, so a step per percent re-sent
+    # the whole panel for a change nobody can see at arm's length.
+    filled = int(bar_w * quantize_fraction(soc, 0.0, 100.0, step=0.1))
     if filled > 1:
         draw.rectangle([bar_x + 1, bar_y + 1, bar_x + filled - 1, bar_y + bar_h - 1], fill=_rgb(color))
 
@@ -514,8 +586,227 @@ def _draw_solar(
     _text(draw, (64, 6), str(page.get("name", "Solar")), _blend(background, "#FFFFFF", 0.55), 2, "center")
     _hero(hass, page, draw, items, poll_base, background, y=28, color=color)
     produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
-    if produced is not None:
+    drew_goal = _draw_goal_bar(draw, page, background, color, produced, x=12, y=62, w=SCREEN_SIZE - 24, h=6)
+    if not drew_goal and produced is not None:
         _text(draw, (64, 66), f"{format_energy(produced)} today", _rgb(color), 2, "center")
+
+
+def _draw_goal_bar(
+    draw: ImageDraw.ImageDraw,
+    page: dict[str, Any],
+    background: str,
+    color: str,
+    produced: float | None,
+    *,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+) -> bool:
+    """Draw the solar goal bar and its caption, or return False for no goal.
+
+    Fill is today's yield as a fraction of the goal. A cumulative kWh figure
+    only creeps upward, so the fill is not banded: it changes little enough per
+    tick to stay cheap to repaint, and banding would hide honest progress.
+    Returns False when no goal resolves so the caller keeps the plain caption.
+    """
+    goal = as_float(page.get("goal"))
+    if not goal or goal <= 0:
+        return False
+    yield_today = produced or 0.0
+    fraction = min(1.0, max(0.0, yield_today / goal))
+    draw.rectangle([x, y, x + w, y + h], outline=_blend(background, color, 0.5))
+    filled = int(w * fraction)
+    if filled > 1:
+        draw.rectangle([x + 1, y + 1, x + filled - 1, y + h - 1], fill=_rgb(color))
+    caption = f"{yield_today:.1f} / {goal:g} kWh today"
+    _text(draw, (64, y + h + 3), caption, _rgb(color), 1, "center")
+    return True
+
+
+def _battery_band_icon(soc: float, charging: bool) -> str:
+    """The MDI battery icon for a state of charge, banded to the nearest 10%.
+
+    The icon is baked artwork that swaps image, so banding to a decile holds it
+    still until the charge crosses a band. MDI spells a full battery ``battery``
+    and an empty one ``battery-outline`` rather than ``battery-100``/``-0``, so
+    map the ends onto the names that actually exist.
+    """
+    band = max(0, min(100, round(soc / 10) * 10))
+    if charging:
+        if band <= 0:
+            return "mdi:battery-charging-outline"
+        return f"mdi:battery-charging-{band}"
+    if band >= 100:
+        return "mdi:battery"
+    if band <= 0:
+        return "mdi:battery-outline"
+    return f"mdi:battery-{band}"
+
+
+def _draw_power_bar(
+    draw: ImageDraw.ImageDraw,
+    page: dict[str, Any],
+    background: str,
+    *,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    rate: float,
+    charging: bool,
+    color: str,
+) -> None:
+    """A bipolar bar: charging fills left of a marked zero, discharging right.
+
+    The zero point sits where 0 W falls inside the charging-to-discharging
+    range. Both the zero marker and the fill snap to the bar's own resolution so
+    a live wattage does not repaint the artwork on every reading.
+    """
+    low = as_float(page.get("_power_min"), -1000.0) or -1000.0
+    high = as_float(page.get("_power_max"), 1000.0) or 1000.0
+    if high <= low:  # never divide by zero, even on a flat or missing range
+        high = low + 1.0
+    zero_px = x + int(quantize_fraction(0.0, low, high, step=0.1) * w)
+    rate_px = x + int(quantize_fraction(rate, low, high, step=0.1) * w)
+
+    draw.rectangle([x, y, x + w, y + h], outline=_blend(background, "#FFFFFF", 0.4))
+    lo_px, hi_px = sorted((zero_px, rate_px))
+    if hi_px - lo_px >= 1:
+        draw.rectangle([lo_px, y + 1, hi_px, y + h - 1], fill=_rgb(color))
+    # The zero marker rides above and below the bar so it reads against the fill.
+    draw.rectangle([zero_px - 1, y - 2, zero_px + 1, y + h + 2], fill=_blend(background, "#FFFFFF", 0.85))
+
+
+def _draw_solar_battery(
+    hass: HomeAssistant,
+    page: dict[str, Any],
+    draw: ImageDraw.ImageDraw,
+    items: list[dict[str, Any]],
+    poll_base: str,
+    background: str,
+) -> None:
+    """Solar on top with its goal bar, battery below with an SoC icon and bar.
+
+    Falls back to the full-height solar layout when there is no battery, the
+    full-height battery layout when there is no solar, and draws nothing when
+    neither side has a source.
+    """
+    has_solar = bool(page.get("solar_stat") or page.get("solar_power_entity"))
+    has_battery = bool(page.get("battery_soc") or page.get("battery_power_entity"))
+    if has_solar and not has_battery:
+        _draw_solar(hass, page, draw, items, poll_base, background)
+        return
+    if has_battery and not has_solar:
+        _draw_battery(hass, page, draw, items, poll_base, background)
+        return
+    if not has_solar and not has_battery:
+        return
+
+    solar_color = str(page.get("color", ENERGY_COLORS["solar"]))
+    totals: dict[str, float] = page.get("_totals") or {}
+    curve = [v for v in (page.get("_curve") or []) if isinstance(v, int | float)]
+
+    # The dim day curve sits behind the solar half only. Keep it short so its
+    # top stays below the goal caption at y=42, or the number would cross the
+    # silhouette. That leaves the bar and its caption reading as one unit.
+    solar_bottom = 60
+    curve_height = 10
+    if curve:
+        peak = max(max(curve), 1.0)
+        step = SCREEN_SIZE / len(curve)
+        faint = _blend(background, solar_color, 0.3)
+        for index, value in enumerate(curve):
+            height = int((value / peak) * curve_height)
+            if height <= 0:
+                continue
+            x0 = int(index * step)
+            x1 = max(x0, int((index + 1) * step) - 1)
+            draw.rectangle([x0, solar_bottom - height, x1, solar_bottom], fill=faint)
+
+    _text(draw, (64, 1), str(page.get("name", "Energy")), _blend(background, "#FFFFFF", 0.5), 1, "center")
+    _hero(hass, page, draw, items, poll_base, background, y=12, color=solar_color)
+    produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
+    drew_goal = _draw_goal_bar(draw, page, background, solar_color, produced, x=12, y=34, w=SCREEN_SIZE - 24, h=5)
+    if not drew_goal and produced is not None:
+        _text(draw, (64, 42), f"{format_energy(produced)} today", _rgb(solar_color), 1, "center")
+
+    draw.line([(6, solar_bottom), (SCREEN_SIZE - 6, solar_bottom)], fill=_blend(background, "#FFFFFF", 0.25))
+
+    rate = as_float(page.get("_battery_power"), 0.0) or 0.0
+    soc = as_float(page.get("_battery_soc"), 0.0) or 0.0
+    charging = rate > 0 if page.get("invert_power") else rate < 0
+    bat_color = ENERGY_COLORS["battery_in"] if charging else ENERGY_COLORS["battery_out"]
+    bat_color = str(page.get("charge_color", bat_color) if charging else page.get("discharge_color", bat_color))
+
+    # Treat the icon and the percentage as one group and centre it, so the icon
+    # sits beside the figure it describes instead of drifting to the far edge.
+    # The band icon carries the charge and the direction, which frees the row of
+    # the charging/discharging word the standalone battery screen still spends.
+    icon_size = 26
+    icon_y = 66
+    icon_gap = 6
+    soc_font = int(page.get("row_font", ENERGY_ROW_FONT))
+    pair_width = _value_pair_width("%", 3, ENERGY_ROW_CHAR_WIDTH)
+    group_width = icon_size + icon_gap + pair_width
+    group_x = max(0, (SCREEN_SIZE - group_width) // 2)
+    draw_icon(draw, _battery_band_icon(soc, charging), (group_x, icon_y), icon_size, _rgb(bat_color))
+
+    # Live percentage beside the icon, sat on the icon's vertical centre. Font
+    # 184 has no percent glyph, so poll a digit-only value and bake the "%".
+    _value(
+        hass,
+        draw,
+        items,
+        poll_base,
+        background,
+        text_id=2,
+        y=icon_y + (icon_size - ENERGY_ROW_HEIGHT) // 2,
+        color=bat_color,
+        unit="%",
+        chars=3,
+        font=soc_font,
+        height=ENERGY_ROW_HEIGHT,
+        char_width=ENERGY_ROW_CHAR_WIDTH,
+        entity_id=None if page.get("_soc_template") else page.get("battery_soc"),
+        value_template=page.get("_soc_template"),
+        left=group_x + icon_size + icon_gap,
+    )
+
+    # Live power value above the bar. The sign is stripped (font 184 has no
+    # minus), so colour and fill direction carry charging versus discharging.
+    _value(
+        hass,
+        draw,
+        items,
+        poll_base,
+        background,
+        text_id=3,
+        y=94,
+        color=bat_color,
+        unit="kW",
+        chars=5,
+        font=int(page.get("row_font", ENERGY_ROW_FONT)),
+        height=ENERGY_ROW_HEIGHT,
+        char_width=ENERGY_ROW_CHAR_WIDTH,
+        entity_id=None
+        if (page.get("_row_templates") or {}).get("power")
+        else (str(page["power_entity"]) if page.get("power_entity") else None),
+        value_template=(page.get("_row_templates") or {}).get("power"),
+    )
+
+    _draw_power_bar(
+        draw,
+        page,
+        background,
+        x=12,
+        y=114,
+        w=SCREEN_SIZE - 24,
+        h=10,
+        rate=rate,
+        charging=charging,
+        color=bat_color,
+    )
 
 
 _DRAWERS = {
@@ -523,6 +814,7 @@ _DRAWERS = {
     "power": _draw_power,
     "battery": _draw_battery,
     "solar": _draw_solar,
+    "solar_battery": _draw_solar_battery,
 }
 
 

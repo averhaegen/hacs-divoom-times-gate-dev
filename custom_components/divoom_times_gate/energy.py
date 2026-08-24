@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
+import math
 from typing import Any
 
 from homeassistant.const import UnitOfEnergy
@@ -45,6 +46,7 @@ class EnergySources:
     grid_export_stat: str | None = None
     solar_power: str | None = None
     solar_stat: str | None = None
+    solar_forecast_entries: list[str] = field(default_factory=list)
     battery_soc: str | None = None
     battery_power: str | None = None
     battery_in_stat: str | None = None
@@ -95,6 +97,14 @@ def parse_sources(preferences: dict[str, Any]) -> EnergySources:
             found.solar_power = (
                 _clean(source.get("stat_rate")) or _clean(power.get("stat_rate")) or found.solar_power
             )
+            # The energy config already records which config entries produce a
+            # solar forecast, so read the goal source from there rather than
+            # guessing it from a platform name. The key can be None or absent.
+            forecast = source.get("config_entry_solar_forecast")
+            if isinstance(forecast, list):
+                for entry in forecast:
+                    if entry_id := _clean(entry):
+                        found.solar_forecast_entries.append(entry_id)
         elif kind == "battery":
             found.battery_soc = _clean(source.get("stat_soc")) or found.battery_soc
             found.battery_power = (
@@ -299,3 +309,96 @@ async def async_day_curve(hass: HomeAssistant, statistic_id: str) -> list[float]
     ]
     cache[statistic_id] = {"at": now, "values": curve}
     return curve
+
+
+POWER_RANGE_DAYS = 7
+# A symmetric fallback span so the bar has a real range when the recorder gives
+# nothing. The exact number is unit-blind (the sensor may report W or kW), so it
+# only needs to be non-zero: the zero marker still lands at centre and a value
+# only barely moves the fill, which is the honest reading for "range unknown".
+_POWER_RANGE_FALLBACK = 1000.0
+
+
+def _tidy_step(magnitude: float) -> float:
+    """A rounding step that keeps the bar's ends tidy at the value's scale.
+
+    A range in watts wants rounding to hundreds; the same code in kilowatts
+    wants tenths. Pick the step from the larger end so both ends round to the
+    same grid.
+    """
+    if magnitude >= 1000:
+        return 100.0
+    if magnitude >= 100:
+        return 10.0
+    if magnitude >= 10:
+        return 1.0
+    return 0.1
+
+
+def round_power_range(lo: float, hi: float) -> tuple[float, float]:
+    """Round a charging/discharging range outward to tidy ends.
+
+    Rounding outward never clips a real reading off the end of the bar, and a
+    tidy end keeps the zero marker landing on a predictable band.
+    """
+    step = _tidy_step(max(abs(lo), abs(hi)))
+    low = math.floor(lo / step) * step
+    high = math.ceil(hi / step) * step
+    if high <= low:  # a flat sensor, or a single sample: keep a non-zero span
+        high = low + step
+    return low, high
+
+
+async def async_power_range(
+    hass: HomeAssistant, statistic_id: str, current: float | None = None
+) -> tuple[float, float]:
+    """Charging/discharging bounds for a battery power bar, last seven days.
+
+    The bipolar bar needs a minimum (charging, negative) and a maximum
+    (discharging, positive) to place its zero point. Reading them from
+    long-term statistics means the user never configures them, and reading the
+    seven-day min/max keeps a single spike from squashing the everyday range.
+
+    Cached on the same clock as the daily totals so the bounds do not re-read
+    the recorder on every refresh tick. Falls back to a symmetric range around
+    the current value, then to a default span, so the caller never divides by
+    zero.
+    """
+    fallback_span = abs(current) if current else _POWER_RANGE_FALLBACK
+    fallback = (-fallback_span, fallback_span)
+    if not statistic_id:
+        return fallback
+
+    from homeassistant.components.recorder import get_instance
+    from homeassistant.components.recorder.statistics import statistics_during_period
+
+    now = dt_util.utcnow()
+    cache: dict[str, Any] = hass.data.setdefault("divoom_times_gate_energy_power_range", {})
+    cached = cache.get(statistic_id)
+    if cached is not None and now - cached["at"] < timedelta(seconds=TOTALS_CACHE_SECONDS):
+        bounds: tuple[float, float] = cached["values"]
+        return bounds
+
+    start = now - timedelta(days=POWER_RANGE_DAYS)
+    try:
+        rows = await get_instance(hass).async_add_executor_job(
+            statistics_during_period,
+            hass,
+            start,
+            now,
+            {statistic_id},
+            "day",
+            None,
+            {"min", "max"},
+        )
+    except Exception as err:  # noqa: BLE001 - recorder may be absent
+        _LOGGER.debug("energy power range unavailable: %s", err)
+        return fallback
+
+    lows = [v for e in rows.get(statistic_id, []) if (v := as_float(e.get("min"))) is not None]
+    highs = [v for e in rows.get(statistic_id, []) if (v := as_float(e.get("max"))) is not None]
+    if not lows or not highs:
+        return fallback
+    result = round_power_range(min(lows), max(highs))
+    cache[statistic_id] = {"at": now, "values": result}
+    return result

@@ -97,6 +97,27 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
         )
         panel["price_min_template"] = f"{{{{ {series} | min | default('') }}}}"
         panel["price_max_template"] = f"{{{{ {series} | max | default('') }}}}"
+        # Knowing the price is 0.03 is half the information; knowing it lands at
+        # 13:00 is the half that changes behaviour. Sort the same list by price
+        # and read the time off the cheapest and priciest entry. A missing or
+        # malformed list renders empty, and the drawer then draws nothing.
+        entries = (
+            f"((state_attr('{forecast}', 'prices_today') or "
+            f"state_attr('{forecast}', 'prices') or []) "
+            f"| selectattr('price', 'defined') | list)"
+        )
+        panel["cheapest_time_template"] = (
+            f"{{% set p = {entries} %}}"
+            "{% if p %}"
+            "{{ ((p | sort(attribute='price') | first).time | as_datetime | as_local).strftime('%H:%M') }}"
+            "{% endif %}"
+        )
+        panel["priciest_time_template"] = (
+            f"{{% set p = {entries} %}}"
+            "{% if p %}"
+            "{{ ((p | sort(attribute='price') | last).time | as_datetime | as_local).strftime('%H:%M') }}"
+            "{% endif %}"
+        )
     graph: dict[str, Any] = {
         "page_type": "card",
         "card": "graph",
@@ -154,34 +175,7 @@ def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
         "export_color": ENERGY_COLORS["grid_export"],
     }
 
-    battery: dict[str, Any] = (
-        {
-            "page_type": "card",
-            "card": "energy_panel",
-            "mode": "battery",
-            "name": "Battery",
-            "entity_id": found.battery_soc,
-            "power_entity": found.battery_power,
-            "battery_power_entity": found.battery_power,
-        }
-        if found.has_battery
-        else {"page_type": "off"}
-    )
-
-    solar: dict[str, Any] = (
-        {
-            "page_type": "card",
-            "card": "energy_panel",
-            "mode": "solar",
-            "name": "Solar",
-            "entity_id": found.solar_power,
-            "solar_power_entity": found.solar_power,
-            "solar_stat": found.solar_stat,
-            "color": ENERGY_COLORS["solar"],
-        }
-        if found.has_solar
-        else {"page_type": "off"}
-    )
+    solar_battery = _solar_battery_page(found)
 
     footer: list[dict[str, Any]] = []
     if found.gas_stat:
@@ -193,14 +187,91 @@ def build_energy_preset(found: EnergySources) -> list[dict[str, Any]]:
     if not footer:
         price_graph["footer_height"] = 0
 
-    return [price_panel, power, battery, solar, price_graph]
+    # Merging solar and battery frees the fifth slot. Leave it off for now; a
+    # later change fills it with a history graph.
+    return [price_panel, power, solar_battery, price_graph, {"page_type": "off"}]
+
+
+def _solar_battery_page(found: EnergySources) -> dict[str, Any]:
+    """The merged solar-and-battery screen, or an off page when neither exists.
+
+    The drawer chooses its own layout from the fields present: solar only,
+    battery only, or both. It only needs a page here when at least one side has
+    a source, so a home with neither still gets a blank screen instead of a
+    broken one.
+    """
+    if not found.has_solar and not found.has_battery:
+        return {"page_type": "off"}
+    page: dict[str, Any] = {
+        "page_type": "card",
+        "card": "energy_panel",
+        "mode": "solar_battery",
+        "name": "Energy",
+        # A static goal of 0 means "no goal", so the solar half keeps its plain
+        # "x kWh today" caption. async_build_energy_preset fills goal_template in
+        # when it finds a Forecast.Solar production-today sensor.
+        "goal": 0,
+    }
+    if found.has_solar:
+        page.update(
+            {
+                "entity_id": found.solar_power,
+                "solar_power_entity": found.solar_power,
+                "solar_stat": found.solar_stat,
+                "color": ENERGY_COLORS["solar"],
+            }
+        )
+    if found.has_battery:
+        page.update(
+            {
+                "battery_soc": found.battery_soc,
+                "power_entity": found.battery_power,
+                "battery_power_entity": found.battery_power,
+            }
+        )
+        if not found.has_solar:
+            # Battery only: the hero is the state of charge, so point the panel's
+            # value entity at the SoC sensor.
+            page["entity_id"] = found.battery_soc
+    return page
+
+
+def _forecast_solar_goal_template(hass: HomeAssistant, found: EnergySources) -> str | None:
+    """A goal template pointing at a solar forecast production-today sensor.
+
+    The energy configuration already records which config entries produce the
+    solar forecast, so resolve those entry ids to an entity rather than guessing
+    one from a platform name. Match a ``energy_production_today`` suffix on
+    either the entity id or the unique id so a forecast entity with another
+    suffix cannot stand in for it.
+    """
+    if not found.solar_forecast_entries:
+        return None
+
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    for entry_id in found.solar_forecast_entries:
+        for entry in er.async_entries_for_config_entry(registry, entry_id):
+            unique_id = entry.unique_id or ""
+            if entry.entity_id.endswith("energy_production_today") or unique_id.endswith(
+                "energy_production_today"
+            ):
+                return f"{{{{ states('{entry.entity_id}') | float(0) }}}}"
+    return None
 
 
 async def async_build_energy_preset(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Discover the energy configuration and turn it into five screens."""
     from .energy import async_discover
 
-    return build_energy_preset(await async_discover(hass))
+    found = await async_discover(hass)
+    screens = build_energy_preset(found)
+    if template := _forecast_solar_goal_template(hass, found):
+        for page in screens:
+            if page.get("mode") == "solar_battery":
+                page["goal_template"] = template
+    return screens
 
 
 def with_energy_preset(

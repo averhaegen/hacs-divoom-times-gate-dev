@@ -7,6 +7,28 @@ price keeps three because day-ahead electricity prices live between -0.01 and
 """
 from __future__ import annotations
 
+import math
+
+
+def quantize_fraction(value: float, lo: float, hi: float, step: float = 0.1) -> float:
+    """Map ``value`` into a 0..1 fraction of ``[lo, hi]`` snapped down to ``step``.
+
+    The coordinator repaints a panel whenever ``md5(background_gif + repr(items))``
+    changes, so a bar or marker drawn at continuous resolution re-sends the whole
+    JPEG on almost every tick. Snapping the fraction to a coarse step holds the
+    artwork still until the value actually crosses a band.
+
+    The result is clamped at both ends and safe when ``hi == lo`` (a zero-width
+    range has no position, so it reads as empty rather than dividing by zero).
+    """
+    if hi <= lo:
+        return 0.0
+    fraction = max(0.0, min(1.0, (value - lo) / (hi - lo)))
+    # Floor to the step so a value only moves the bar once it has fully entered
+    # the next band. The small epsilon absorbs float error at exact multiples.
+    snapped = math.floor(fraction / step + 1e-9) * step
+    return max(0.0, min(1.0, snapped))
+
 
 def as_float(value: object, default: float | None = None) -> float | None:
     """Parse a state string into a float, or return ``default``."""
