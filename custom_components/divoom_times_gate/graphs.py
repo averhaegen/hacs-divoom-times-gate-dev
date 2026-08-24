@@ -40,7 +40,9 @@ from .units import as_float, format_auto
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_COLOR = "#FFB300"
-DEFAULT_NEGATIVE_COLOR = "#4ADE80"
+# Negative values need a colour of their own. Sharing the positive colour hid
+# a negative day-ahead price, which is exactly the hour worth spotting.
+DEFAULT_NEGATIVE_COLOR = "#38BDF8"
 DEFAULT_BACKGROUND = "#000000"
 AXIS_WIDTH = 24  # right-hand gutter for y-axis labels
 XLABEL_HEIGHT = 9  # bottom strip for hour labels
@@ -205,6 +207,37 @@ async def _footer_totals(hass: HomeAssistant, page: dict[str, Any]) -> dict[str,
         return {}
 
 
+def _high_threshold(page: dict[str, Any], values: list[float]) -> float | None:
+    """The value at which a column switches to ``high_color``.
+
+    ``high_value`` sets it outright. Without one, fall back to the mean of the
+    series, which on a day-ahead price curve separates the expensive hours from
+    the rest without the page having to know what a price is.
+    """
+    if not page.get("high_color"):
+        return None
+    if (fixed := as_float(page.get("high_value"))) is not None:
+        return fixed
+    return sum(values) / len(values) if values else None
+
+
+def _now_column(page: dict[str, Any], count: int) -> int | None:
+    """The column index holding the current time, for ``marker: now``.
+
+    A forward price curve can cover 48 hours, so the marker cannot be a fixed
+    index. Read it off the timestamps the prepare step attached.
+    """
+    times = [dt_util.parse_datetime(t) for t in page.get("_times") or []]
+    stamps = [t for t in times if t is not None]
+    if not stamps or count <= 0:
+        return None
+    now = dt_util.utcnow()
+    index = max(
+        (i for i, when in enumerate(stamps) if when <= now), default=None
+    )
+    return None if index is None else min(index, count - 1)
+
+
 def _axis_bounds(page: dict[str, Any], values: list[float]) -> tuple[float, float]:
     low = min(values)
     high = max(values)
@@ -238,11 +271,14 @@ def render_graph(
         stat_type: mean                 # mean | change | min | max | sum | state
         style: area                     # area | line | bar
         color: "#FFB300"
-        negative_color: "#4ADE80"       # values below zero
+        negative_color: "#38BDF8"       # values below zero
+        high_color: "#EF4444"           # values at or above high_value
+        high_value: 0.25                # defaults to the series mean
         title: Verbruik                 # baked into the background
         unit: W                         # drives the axis label formatting
         axis: true                      # right-hand min/max labels
-        marker: 24                      # highlight this column index
+        marker: now                     # column index, or "now" from _times
+        x_labels: true                  # hour labels along the bottom
         value: true                     # live value overlay (type-23)
         value_entity: sensor.house_power
         footer_height: 0                # rows reserved at the bottom
@@ -293,28 +329,50 @@ def render_graph(
     zero_y = to_y(0.0) if low < 0 < high else bottom - 1
     positive = _rgb(color)
     negative = _rgb(negative_color)
+    high_ink = _rgb(str(page["high_color"])) if page.get("high_color") else None
+    threshold = _high_threshold(page, values)
 
-    previous: tuple[int, int] | None = None
-    for index, value in enumerate(columns):
-        x = left + index
-        y = to_y(value)
-        ink = positive if value >= 0 else negative
-        if style == "line":
-            if previous is not None:
-                draw.line([previous, (x, y)], fill=ink)
-            else:
-                draw.point((x, y), fill=ink)
-            previous = (x, y)
-        elif style == "bar" and index % 2:
-            continue  # 1px gap between bars
-        else:
+    def ink_for(value: float) -> tuple[int, int, int]:
+        if value < 0:
+            return negative
+        if high_ink is not None and threshold is not None and value >= threshold:
+            return high_ink
+        return positive
+
+    if style == "bar":
+        # One rectangle per source value rather than per screen column: drawing
+        # every other resampled column left a 50% dither instead of bars.
+        count = len(values)
+        for index, value in enumerate(values):
+            x0 = left + index * width // count
+            x1 = left + (index + 1) * width // count - 1
+            if x1 - x0 >= 2:
+                x1 -= 1  # 1px gap once a bar is wide enough to spare it
+            y = to_y(value)
             y0, y1 = sorted((y, zero_y))
-            draw.rectangle([x, y0, x, y1], fill=ink)
+            draw.rectangle([x0, y0, max(x1, x0), y1], fill=ink_for(value))
+    else:
+        previous: tuple[int, int] | None = None
+        for index, value in enumerate(columns):
+            x = left + index
+            y = to_y(value)
+            if style == "line":
+                if previous is not None:
+                    draw.line([previous, (x, y)], fill=ink_for(value))
+                else:
+                    draw.point((x, y), fill=ink_for(value))
+                previous = (x, y)
+            else:
+                y0, y1 = sorted((y, zero_y))
+                draw.rectangle([x, y0, x, y1], fill=ink_for(value))
 
     if low < 0 < high:
         draw.line([(left, zero_y), (right - 1, zero_y)], fill=_blend(background, "#FFFFFF", 0.35))
 
-    if (marker := page.get("marker")) is not None:
+    marker = page.get("marker")
+    if str(marker).lower() == "now":
+        marker = _now_column(page, len(values))
+    if marker is not None:
         # Highlight one column, e.g. the current hour on a forward price curve.
         position = int(marker) * width // max(1, len(values))
         marker_x = left + max(0, min(width - 1, position))

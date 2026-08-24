@@ -45,13 +45,23 @@ DEFAULT_DURATION = 15  # seconds a page shows before a screen rotates to the nex
 
 # Device font ids passed to Draw/SendHttpItemList. See docs/API.md §4.9 for the
 # ids this firmware renders. Cards keep font 4, which every page written before
-# these constants existed relied on. The energy panels and the graph carry
-# larger numbers in a smaller slot, so they use 160 for values and 2 for the
-# label above them, which stay legible where 4 blurs.
+# these constants existed relied on.
+#
+# The energy panels split their text three ways. The one figure that matters on
+# a panel uses 246 (18x22), the largest font that reads across a room; its
+# charset is `0123456789.`, so the unit is baked into the artwork beside it and
+# the value arrives as digits only. Secondary rows use 248 (11x11), whose
+# charset carries `%`, `W` and a sign, so a row renders complete and still
+# stays smaller than the headline. Font 2 (16x16) is a full bitmap font and
+# remains the fallback for text that needs letters, such as the graph footer.
 DEFAULT_DEVICE_FONT = 4
 DEFAULT_LABEL_FONT = 2
 ENERGY_FONT = 160
 ENERGY_LABEL_FONT = 2
+ENERGY_HERO_FONT = 246
+ENERGY_HERO_HEIGHT = 22
+ENERGY_ROW_FONT = 248
+ENERGY_ROW_HEIGHT = 12
 
 SCREEN_COUNT = 5
 SCREEN_SIZE = 128

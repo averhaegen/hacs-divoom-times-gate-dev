@@ -87,20 +87,26 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
         "unit": "EUR/kWh",
     }
     if forecast:
-        today = f"(state_attr('{forecast}', 'prices_today') or [])"
-        panel["price_min_template"] = (
-            f"{{{{ {today} | map(attribute='price') | list | min | default(0) }}}}"
+        # Some forecast sensors publish only `prices`, which may run past
+        # midnight. Prefer today's list and fall back rather than leaving the
+        # range at zero, which would draw a confident 0.000 to 0.000 bar.
+        series = (
+            f"((state_attr('{forecast}', 'prices_today') or "
+            f"state_attr('{forecast}', 'prices') or []) "
+            f"| map(attribute='price') | list)"
         )
-        panel["price_max_template"] = (
-            f"{{{{ {today} | map(attribute='price') | list | max | default(0) }}}}"
-        )
+        panel["price_min_template"] = f"{{{{ {series} | min | default('') }}}}"
+        panel["price_max_template"] = f"{{{{ {series} | max | default('') }}}}"
     graph: dict[str, Any] = {
         "page_type": "card",
         "card": "graph",
-        "name": "Day ahead",
+        "title": "Day ahead",
         "style": "bar",
         "color": "#4ADE80",
         "high_color": "#EF4444",
+        "marker": "now",
+        "x_labels": True,
+        "unit": "EUR/kWh",
         "entity_id": found.price_now,
         "value": True,
         "footer_height": 32,

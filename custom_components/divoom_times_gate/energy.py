@@ -251,3 +251,37 @@ async def async_daily_totals(
     cache["at"] = now
     cache["values"] = {**cache.get("values", {}), **totals}
     return totals
+
+
+async def async_day_curve(hass: HomeAssistant, statistic_id: str) -> list[float]:
+    """Hourly means since local midnight, for the curve behind a panel.
+
+    The solar panel draws the day's shape behind its headline figure. That is
+    artwork, so it may only move when the hour turns; caching it on the same
+    clock as the daily totals keeps the background from being re-sent on every
+    refresh tick.
+    """
+    if not statistic_id:
+        return []
+
+    from homeassistant.components.recorder import get_instance
+    from homeassistant.components.recorder.statistics import statistics_during_period
+
+    now = dt_util.utcnow()
+    cache: dict[str, Any] = hass.data.setdefault("divoom_times_gate_energy_curves", {})
+    cached = cache.get(statistic_id)
+    if cached is not None and now - cached["at"] < timedelta(seconds=TOTALS_CACHE_SECONDS):
+        values: list[float] = cached["values"]
+        return values
+
+    start = dt_util.start_of_local_day()
+    rows = await get_instance(hass).async_add_executor_job(
+        statistics_during_period, hass, start, now, {statistic_id}, "hour", None, {"mean"}
+    )
+    curve = [
+        value
+        for entry in rows.get(statistic_id, [])
+        if (value := as_float(entry.get("mean"))) is not None
+    ]
+    cache[statistic_id] = {"at": now, "values": curve}
+    return curve
