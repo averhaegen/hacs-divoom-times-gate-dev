@@ -32,7 +32,7 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 
-from .cards import _blend, _encode_gif, _rgb, draw_glyph_text, draw_pixel_text
+from .cards import _blend, _encode_gif, _rgb, draw_pixel_text
 from .const import ENERGY_FONT, ENERGY_LABEL_FONT, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_auto
@@ -313,8 +313,8 @@ def render_graph(
     height = max(1, bottom - top)
 
     if not values:
-        draw_glyph_text(
-            draw, (left + 4, top + height // 2 - 5), "no data", (120, 120, 120), "pico_8", 2
+        draw_pixel_text(
+            draw, (left + 4, top + height // 2 - 4), "no data", (120, 120, 120), 2
         )
         return _encode_gif(img), items
 
@@ -381,8 +381,8 @@ def render_graph(
     unit = page.get("unit")
     if show_axis:
         axis_ink = _blend(background, "#FFFFFF", 0.55)
-        draw_glyph_text(draw, (right + 2, top), format_auto(high, unit)[:6], axis_ink)
-        draw_glyph_text(draw, (right + 2, bottom - 6), format_auto(low, unit)[:6], axis_ink)
+        draw_pixel_text(draw, (right + 2, top), format_auto(high, unit)[:6], axis_ink, 1)
+        draw_pixel_text(draw, (right + 2, bottom - 6), format_auto(low, unit)[:6], axis_ink, 1)
 
     if page.get("x_labels"):
         label_ink = _blend(background, "#FFFFFF", 0.45)
@@ -393,7 +393,7 @@ def render_graph(
                 when = dt_util.as_local(times[index])  # type: ignore[arg-type]
                 text = when.strftime("%H")
                 x = left + int(fraction * (width - 10))
-                draw_glyph_text(draw, (x, bottom + 1), text, label_ink)
+                draw_pixel_text(draw, (x, bottom + 1), text, label_ink, 1)
 
     if show_value:
         entity_id = str(page.get("value_entity") or page.get("entity_id") or "")
@@ -457,12 +457,11 @@ def _draw_footer_slots(
         slot_color = str(slot.get("color", "#FFFFFF"))
         x = index * cell
         if label := slot.get("name"):
-            draw_glyph_text(
+            draw_pixel_text(
                 draw,
                 (x + 3, band_top + 3),
                 str(label)[:10],
                 _blend(background, slot_color, 0.75),
-                "pico_8",
                 1,
             )
         total = totals.get(str(slot["stat"])) if slot.get("stat") else None
@@ -473,12 +472,11 @@ def _draw_footer_slots(
             text = f"{total:.0f}" if unit == "L" else f"{total:.1f}"
             if unit:
                 text = f"{text} {unit}"
-            draw_glyph_text(
+            draw_pixel_text(
                 draw,
                 (x + 3, band_top + 12),
                 text,
                 _blend(background, slot_color, 1.0),
-                "pico_8",
                 2,
             )
             continue
