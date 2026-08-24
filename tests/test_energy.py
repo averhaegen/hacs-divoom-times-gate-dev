@@ -441,3 +441,35 @@ async def test_energy_panel_centres_a_value_against_its_unit(hass) -> None:
     assert hero["font"] == ENERGY_HERO_FONT
     assert hero["TextWidth"] == 5 * ENERGY_HERO_CHAR_WIDTH
     assert hero["x"] == SCREEN_SIZE - (hero["x"] + hero["TextWidth"])
+
+
+async def test_daily_totals_ask_the_recorder_for_kilowatt_hours(hass) -> None:
+    """A watt hour meter must not read a thousand times too high.
+
+    The recorder converts to the sensor's own unit unless it is told
+    otherwise, so the request pins energy to kWh.
+    """
+    captured: dict[str, object] = {}
+
+    def fake_statistics(hass, start, end, statistic_ids, period, units, types):
+        captured["units"] = units
+        captured["types"] = types
+        return {"sensor.solar": [{"change": 12.0}, {"change": 18.618}]}
+
+    class _Recorder:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    hass.data.pop("divoom_times_gate_energy_totals", None)
+    with (
+        patch(
+            "homeassistant.components.recorder.statistics.statistics_during_period",
+            fake_statistics,
+        ),
+        patch("homeassistant.components.recorder.get_instance", return_value=_Recorder()),
+    ):
+        totals = await energy.async_daily_totals(hass, ["sensor.solar"])
+
+    assert captured["units"] == {"energy": "kWh"}
+    assert captured["types"] == {"change"}
+    assert totals["sensor.solar"] == pytest.approx(30.618)

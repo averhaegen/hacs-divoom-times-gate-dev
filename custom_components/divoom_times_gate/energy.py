@@ -16,6 +16,7 @@ from datetime import timedelta
 import logging
 from typing import Any
 
+from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -219,6 +220,12 @@ async def async_daily_totals(
     This reads the same long-term statistics the energy dashboard reads, so
     the totals on the panel match the totals on the dashboard. Results are
     cached briefly because a daily total barely moves between refresh ticks.
+
+    Energy statistics come back in kilowatt hours whatever the sensor reports,
+    because the panels label every energy figure ``kWh``. Without that the
+    recorder returns the sensor's own unit and a meter reporting watt hours
+    reads a thousand times too high. Other unit classes, such as the volume
+    behind a gas or water meter, keep the unit the sensor uses.
     """
     wanted = {stat for stat in statistic_ids if stat}
     if not wanted:
@@ -239,7 +246,14 @@ async def async_daily_totals(
 
     start = dt_util.start_of_local_day()
     rows = await get_instance(hass).async_add_executor_job(
-        statistics_during_period, hass, start, now, wanted, "hour", None, {"change"}
+        statistics_during_period,
+        hass,
+        start,
+        now,
+        wanted,
+        "hour",
+        {"energy": UnitOfEnergy.KILO_WATT_HOUR},
+        {"change"},
     )
     totals: dict[str, float] = {}
     for stat, entries in rows.items():
