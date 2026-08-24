@@ -373,6 +373,40 @@ async def test_the_face_form_lists_the_configured_favorites(
     }
 
 
+async def test_a_screen_can_be_filled_from_a_template(hass, mock_config_entry) -> None:
+    """The per-screen menu reuses the starter registry, one screen at a time."""
+    hass.states.async_set("person.alex", "home")
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5}, CONF_ACTIVE_PRESET: DEFAULT_PRESET},
+    )
+    result = await pick(hass, result, "screen_1")
+    assert "screen_template" in result["menu_options"]
+
+    result = await pick(hass, result, "screen_template")
+    result = await submit(hass, result, {"starter": "presence"})
+
+    screens = result["data"][CONF_PRESETS][DEFAULT_PRESET]
+    assert screens[1]["card"] == "sensor_grid"
+    assert screens[1]["slots"] == [{"entity_id": "person.alex"}]
+    assert screens[0] == OFF
+
+
+async def test_the_template_entry_is_hidden_when_nothing_is_found(
+    hass, mock_config_entry
+) -> None:
+    """An empty Home Assistant has nothing to generate from, so do not offer it."""
+    result = await open_options(
+        hass,
+        mock_config_entry,
+        {CONF_PRESETS: {DEFAULT_PRESET: [OFF] * 5}, CONF_ACTIVE_PRESET: DEFAULT_PRESET},
+    )
+    result = await pick(hass, result, "screen_1")
+
+    assert "screen_template" not in result["menu_options"]
+
+
 # --- layouts ---------------------------------------------------------------
 
 

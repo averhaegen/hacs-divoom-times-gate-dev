@@ -24,6 +24,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from .cards import MAX_SLOTS
 from .const import SCREEN_COUNT
 from .defaults import DEFAULT_CLOCK_FACE
 
@@ -38,7 +39,9 @@ class Starter:
     name: str
     screens: int  # 1 for a single screen, SCREEN_COUNT for a whole set
     async_available: Callable[[HomeAssistant], Awaitable[str | None]]
-    async_build: Callable[[HomeAssistant], Awaitable[list[dict[str, Any]]]]
+    # One entry per screen. A screen is a page dict, or a list of pages that
+    # rotate, exactly as the options flow stores it.
+    async_build: Callable[[HomeAssistant], Awaitable[list[Any]]]
 
 
 def pad(pages: list[Any]) -> list[Any]:
@@ -94,7 +97,7 @@ async def _energy_available(hass: HomeAssistant) -> str | None:
     return describe_energy(await async_discover(hass))
 
 
-async def _energy_build(hass: HomeAssistant) -> list[dict[str, Any]]:
+async def _energy_build(hass: HomeAssistant) -> list[Any]:
     from .presets import async_build_energy_preset
 
     return pad(await async_build_energy_preset(hass))
@@ -140,11 +143,166 @@ async def _clock_weather_available(hass: HomeAssistant) -> str | None:
     return f"clock, {entity_id}" if entity_id else "clock"
 
 
-async def _clock_weather_build(hass: HomeAssistant) -> list[dict[str, Any]]:
+async def _clock_weather_build(hass: HomeAssistant) -> list[Any]:
     pages = [clock_page()]
     if entity_id := first_entity(hass, "weather"):
         pages.append(sensor_card("Weather", weather_slots(entity_id)))
     return pad(pages)
+
+
+# --- single-screen starters ------------------------------------------------
+#
+# These fill one screen, so they show up both in the setup picker and in a
+# screen's own menu under "Fill from a template". They stay close to plain
+# entity_id slots wherever they can, because a slot that only names an entity
+# is one the per-screen form can still edit afterwards.
+
+_OUTDOOR_WORDS = (
+    "outdoor",
+    "outside",
+    "garden",
+    "balcony",
+    "terrace",
+    "buiten",
+    "tuin",
+)
+
+
+def _area_name(hass: HomeAssistant, entity_id: str) -> str:
+    """The area an entity sits in, through its device when it has no area."""
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    entry = er.async_get(hass).async_get(entity_id)
+    if entry is None:
+        return ""
+    area_id = entry.area_id
+    if area_id is None and entry.device_id:
+        device = dr.async_get(hass).async_get(entry.device_id)
+        area_id = device.area_id if device else None
+    if area_id is None:
+        return ""
+    area = ar.async_get(hass).async_get_area(area_id)
+    return area.name if area else ""
+
+
+def _is_outdoor(hass: HomeAssistant, entity_id: str) -> bool:
+    area = _area_name(hass, entity_id).lower()
+    return any(word in area for word in _OUTDOOR_WORDS)
+
+
+def _by_device_class(hass: HomeAssistant, domain: str, *classes: str) -> list[str]:
+    """Entity ids in ``domain`` carrying one of these device classes."""
+    wanted = set(classes)
+    return sorted(
+        state.entity_id
+        for state in hass.states.async_all(domain)
+        if state.attributes.get("device_class") in wanted
+    )
+
+
+def _slots(entity_ids: list[str]) -> list[dict[str, Any]]:
+    """Plain slots, so the per-screen form can still edit what is generated."""
+    return [{"entity_id": entity_id} for entity_id in entity_ids[:MAX_SLOTS]]
+
+
+async def _weather_available(hass: HomeAssistant) -> str | None:
+    return first_entity(hass, "weather")
+
+
+async def _weather_build(hass: HomeAssistant) -> list[Any]:
+    entity_id = first_entity(hass, "weather")
+    if entity_id is None:
+        return [dict(OFF_PAGE)]
+    return [sensor_card("Weather", weather_slots(entity_id))]
+
+
+def _climate_air_entities(hass: HomeAssistant) -> list[str]:
+    """Room comfort, indoors first, because that is what people look at."""
+    found = [state.entity_id for state in hass.states.async_all("climate")]
+    found += _by_device_class(
+        hass, "sensor", "temperature", "humidity", "carbon_dioxide"
+    )
+    indoor = [entity_id for entity_id in found if not _is_outdoor(hass, entity_id)]
+    outdoor = [entity_id for entity_id in found if _is_outdoor(hass, entity_id)]
+    return indoor + outdoor
+
+
+async def _climate_air_available(hass: HomeAssistant) -> str | None:
+    found = _climate_air_entities(hass)
+    return f"{len(found)} entities" if found else None
+
+
+async def _climate_air_build(hass: HomeAssistant) -> list[Any]:
+    found = _climate_air_entities(hass)
+    if not found:
+        return [dict(OFF_PAGE)]
+    return [sensor_card("Climate", _slots(found))]
+
+
+def _presence_entities(hass: HomeAssistant) -> list[str]:
+    """Who is home, and what is standing open while they are not."""
+    found = [state.entity_id for state in hass.states.async_all("person")]
+    if not found:
+        found = [state.entity_id for state in hass.states.async_all("device_tracker")]
+    found += [state.entity_id for state in hass.states.async_all("alarm_control_panel")]
+    found += _by_device_class(hass, "binary_sensor", "door", "window")
+    return found
+
+
+async def _presence_available(hass: HomeAssistant) -> str | None:
+    found = _presence_entities(hass)
+    return f"{len(found)} entities" if found else None
+
+
+async def _presence_build(hass: HomeAssistant) -> list[Any]:
+    found = _presence_entities(hass)
+    if not found:
+        return [dict(OFF_PAGE)]
+    return [sensor_card("Presence", _slots(found))]
+
+
+def _native_clock_page() -> dict[str, Any]:
+    """A clock the device draws itself, out of ``NATIVE_KIND_TYPES``."""
+    return {
+        "page_type": "dispdata_text",
+        "items": [
+            {"kind": "time_short", "x": 0, "y": 30, "font": 4, "align": 3},
+            {"kind": "weekday_full", "x": 0, "y": 66, "align": 3},
+            {"kind": "month_day", "x": 0, "y": 86, "align": 3},
+        ],
+    }
+
+
+def _calendar_slots(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """The next event per calendar. A calendar's state is on or off, so the
+    title has to come out of its attributes."""
+    slots = []
+    for state in sorted(hass.states.async_all("calendar"), key=lambda s: s.entity_id):
+        slots.append(
+            {
+                "name": state.name,
+                "entity_id": state.entity_id,
+                "icon": "mdi:calendar",
+                "value_template": (
+                    f"{{{{ state_attr('{state.entity_id}', 'message') or '-' }}}}"
+                ),
+            }
+        )
+    return slots[:MAX_SLOTS]
+
+
+async def _calendar_clock_available(hass: HomeAssistant) -> str | None:
+    slots = _calendar_slots(hass)
+    return f"clock, {len(slots)} calendars" if slots else None
+
+
+async def _calendar_clock_build(hass: HomeAssistant) -> list[Any]:
+    pages: list[dict[str, Any]] = [{**_native_clock_page(), "duration": 20}]
+    if slots := _calendar_slots(hass):
+        pages.append({**sensor_card("Agenda", slots), "duration": 20})
+    return [pages]  # one screen rotating through its pages
 
 
 STARTERS: tuple[Starter, ...] = (
@@ -161,6 +319,34 @@ STARTERS: tuple[Starter, ...] = (
         screens=SCREEN_COUNT,
         async_available=_clock_weather_available,
         async_build=_clock_weather_build,
+    ),
+    Starter(
+        key="weather",
+        name="Weather",
+        screens=1,
+        async_available=_weather_available,
+        async_build=_weather_build,
+    ),
+    Starter(
+        key="climate_air",
+        name="Climate and air",
+        screens=1,
+        async_available=_climate_air_available,
+        async_build=_climate_air_build,
+    ),
+    Starter(
+        key="presence",
+        name="Presence",
+        screens=1,
+        async_available=_presence_available,
+        async_build=_presence_build,
+    ),
+    Starter(
+        key="calendar_clock",
+        name="Calendar and clock",
+        screens=1,
+        async_available=_calendar_clock_available,
+        async_build=_calendar_clock_build,
     ),
 )
 

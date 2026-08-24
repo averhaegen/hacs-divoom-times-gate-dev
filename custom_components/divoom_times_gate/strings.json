@@ -25,6 +25,10 @@
         "menu_options": {
           "starter_energy": "Energy: price, house power, battery, solar and a day-ahead price graph",
           "starter_clock_weather": "Clock and weather",
+          "starter_weather": "Weather on one screen",
+          "starter_climate_air": "Climate and air on one screen: thermostats, temperature, humidity and CO2",
+          "starter_presence": "Presence on one screen: who is home, the alarm, and open doors and windows",
+          "starter_calendar_clock": "Calendar and clock on one screen, alternating",
           "starter_none": "Leave empty for now"
         }
       },
@@ -57,6 +61,7 @@
         "title": "Screen 1",
         "description": "Screen 1 of layout **{preset}**, currently {current}. {reason}",
         "menu_options": {
+          "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
           "screen_face": "Native face",
           "screen_off": "Off",
@@ -67,6 +72,7 @@
         "title": "Screen 2",
         "description": "Screen 2 of layout **{preset}**, currently {current}. {reason}",
         "menu_options": {
+          "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
           "screen_face": "Native face",
           "screen_off": "Off",
@@ -77,6 +83,7 @@
         "title": "Screen 3",
         "description": "Screen 3 of layout **{preset}**, currently {current}. {reason}",
         "menu_options": {
+          "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
           "screen_face": "Native face",
           "screen_off": "Off",
@@ -87,6 +94,7 @@
         "title": "Screen 4",
         "description": "Screen 4 of layout **{preset}**, currently {current}. {reason}",
         "menu_options": {
+          "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
           "screen_face": "Native face",
           "screen_off": "Off",
@@ -97,10 +105,18 @@
         "title": "Screen 5",
         "description": "Screen 5 of layout **{preset}**, currently {current}. {reason}",
         "menu_options": {
+          "screen_template": "Fill from a template",
           "screen_sensors": "Sensors",
           "screen_face": "Native face",
           "screen_off": "Off",
           "screen_yaml": "Edit as YAML"
+        }
+      },
+      "screen_template": {
+        "title": "Fill from a template",
+        "description": "Fill screen {screen} from what Home Assistant already knows. Only templates that found something are listed. What they write is ordinary configuration from then on, so you can edit it afterwards and nothing regenerates it.",
+        "data": {
+          "starter": "Template"
         }
       },
       "screen_sensors": {
@@ -189,7 +205,8 @@
       "too_many_entities": "A screen holds at most 8 entities."
     },
     "abort": {
-      "no_faces": "No favorite faces are configured. Add some under Settings and faces first."
+      "no_faces": "No favorite faces are configured. Add some under Settings and faces first.",
+      "no_starters": "No template found anything to show on a single screen."
     }
   }
 }

@@ -66,6 +66,7 @@ from .starters import (
 )
 
 PRESET_NAME = "preset_name"
+STARTER_KEY = "starter"
 STARTER_NONE = "starter_none"
 
 
@@ -176,7 +177,9 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
         options: dict[str, Any] = {}
         if starter := get_starter(key):
             options = {
-                CONF_PRESETS: {DEFAULT_PRESET: await starter.async_build(self.hass)},
+                CONF_PRESETS: {
+                    DEFAULT_PRESET: pad(await starter.async_build(self.hass))
+                },
                 CONF_ACTIVE_PRESET: DEFAULT_PRESET,
             }
         return self.async_create_entry(
@@ -192,6 +195,26 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         return await self._finish("clock_weather")
+
+    async def async_step_starter_weather(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._finish("weather")
+
+    async def async_step_starter_climate_air(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._finish("climate_air")
+
+    async def async_step_starter_presence(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._finish("presence")
+
+    async def async_step_starter_calendar_clock(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._finish("calendar_clock")
 
     async def async_step_starter_none(
         self, user_input: dict[str, Any] | None = None
@@ -445,10 +468,50 @@ class DivoomTimesGateOptionsFlow(OptionsFlow):
             if reason is not None
             else ["screen_sensors", "screen_face", "screen_off", "screen_yaml"]
         )
+        if reason is None and await async_available_starters(self.hass, screens=1):
+            menu.insert(0, "screen_template")
         return self.async_show_menu(
             step_id=f"screen_{index}",
             menu_options=menu,
             description_placeholders=placeholders,
+        )
+
+    async def async_step_screen_template(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Fill this one screen from a starter, then leave it alone forever.
+
+        What a starter writes is ordinary configuration from that point on.
+        Nothing regenerates it, so a later edit is never overwritten.
+        """
+        self._ensure()
+        available = await async_available_starters(self.hass, screens=1)
+        if not available:
+            return self.async_abort(reason="no_starters")
+        if user_input is not None:
+            starter = get_starter(str(user_input[STARTER_KEY]))
+            if starter is not None:
+                built = await starter.async_build(self.hass)
+                return self._write(self._index, built[0])
+        schema = vol.Schema(
+            {
+                vol.Required(STARTER_KEY, default=available[0][0].key): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(
+                                value=starter.key, label=f"{starter.name}: {found}"
+                            )
+                            for starter, found in available
+                        ],
+                        mode=SelectSelectorMode.LIST,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="screen_template",
+            data_schema=schema,
+            description_placeholders=self._screen_placeholders(),
         )
 
     def _screen_placeholders(self) -> dict[str, str]:

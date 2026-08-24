@@ -559,6 +559,8 @@ tells you where to go without opening anything first.
   Each one opens a small menu: **Sensors** for a grid of up to eight entity
   states with a colour theme, **Native face** for one of the device's own
   faces, **Off** for a black screen, and **Edit as YAML** for everything else.
+  **Fill from a template** appears when Home Assistant holds something a
+  single-screen template can use, and writes that screen once.
 - **Build energy screens** generates five screens and writes them to the layout
   you name in that step, defaulting to `energy`. Your other layouts are left
   alone.

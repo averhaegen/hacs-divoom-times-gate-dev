@@ -230,3 +230,94 @@ async def test_picking_a_starter_writes_five_screens_into_the_default_layout(
     options = result["options"]
     assert options[CONF_ACTIVE_PRESET] == DEFAULT_PRESET
     assert len(options[CONF_PRESETS][DEFAULT_PRESET]) == SCREEN_COUNT
+
+
+# --- single-screen starters ------------------------------------------------
+
+
+async def test_single_screen_starters_return_exactly_one_screen(hass) -> None:
+    """A screens=1 starter fills one screen, so it can be used per screen."""
+    hass.states.async_set("weather.home", "sunny", {"temperature": 4, "humidity": 80})
+    hass.states.async_set("person.alex", "home")
+    hass.states.async_set("calendar.work", "on", {"message": "Standup"})
+    hass.states.async_set(
+        "sensor.living_temp", "20", {"device_class": "temperature"}
+    )
+
+    for starter, _found in await async_available_starters(hass, screens=1):
+        built = await starter.async_build(hass)
+        assert len(built) == 1, starter.key
+
+
+@pytest.mark.parametrize(
+    ("key", "states"),
+    [
+        ("weather", {"weather.home": ("sunny", {})}),
+        (
+            "climate_air",
+            {"sensor.co2": ("600", {"device_class": "carbon_dioxide"})},
+        ),
+        ("presence", {"person.alex": ("home", {})}),
+        ("calendar_clock", {"calendar.work": ("on", {"message": "Standup"})}),
+    ],
+)
+async def test_a_starter_is_hidden_until_it_finds_something(hass, key, states) -> None:
+    starter = get_starter(key)
+    assert starter is not None
+    assert await starter.async_available(hass) is None
+
+    for entity_id, (state, attributes) in states.items():
+        hass.states.async_set(entity_id, state, attributes)
+    assert await starter.async_available(hass) is not None
+
+
+async def test_generated_slots_stay_editable_by_the_form(hass) -> None:
+    """Plain entity_id slots keep the per-screen form available afterwards."""
+    from custom_components.divoom_times_gate import page_forms
+
+    hass.states.async_set("person.alex", "home")
+    hass.states.async_set("binary_sensor.front", "on", {"device_class": "door"})
+    starter = get_starter("presence")
+    assert starter is not None
+
+    built = await starter.async_build(hass)
+    assert page_forms.unsupported_reason(built[0]) is None
+
+
+async def test_the_calendar_starter_rotates_a_native_clock_and_the_agenda(
+    hass,
+) -> None:
+    """The clock half is drawn by the device, so it costs no polling."""
+    hass.states.async_set("calendar.work", "on", {"message": "Standup"})
+    starter = get_starter("calendar_clock")
+    assert starter is not None
+
+    screen = (await starter.async_build(hass))[0]
+    assert [page["page_type"] for page in screen] == ["dispdata_text", "card"]
+    assert {item["kind"] for item in screen[0]["items"]} == {
+        "time_short",
+        "weekday_full",
+        "month_day",
+    }
+
+
+async def test_climate_air_puts_indoor_entities_before_outdoor_ones(hass) -> None:
+    """Room comfort is what people look at, so it goes first."""
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import entity_registry as er
+
+    areas = ar.async_get(hass)
+    garden = areas.async_create("Garden")
+    registry = er.async_get(hass)
+    outside = registry.async_get_or_create(
+        "sensor", "demo", "outside", suggested_object_id="outside_temp"
+    )
+    registry.async_update_entity(outside.entity_id, area_id=garden.id)
+    hass.states.async_set(outside.entity_id, "4", {"device_class": "temperature"})
+    hass.states.async_set("sensor.a_living_temp", "20", {"device_class": "temperature"})
+
+    starter = get_starter("climate_air")
+    assert starter is not None
+    slots = (await starter.async_build(hass))[0]["slots"]
+
+    assert [slot["entity_id"] for slot in slots][-1] == outside.entity_id
