@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
-from .cards import _blend, _encode_gif, _hex, _rgb, draw_glyph_text
+from .cards import _blend, _encode_gif, _hex, _rgb
 from .const import ENERGY_COLORS, ENERGY_FONT, ENERGY_LABEL_FONT, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
 from .units import as_float, format_energy, format_price
@@ -29,6 +30,21 @@ from .units import as_float, format_energy, format_price
 _LOGGER = logging.getLogger(__name__)
 
 MODES = ("price", "power", "battery", "solar")
+
+# Pixel Operator SC Bold (CC0, Jayvee Enaguas) draws the baked-in artwork
+# labels. It is a pixel face, so it stays crisp at these sizes where a hinted
+# desktop font would blur, and the bold weight holds up against the panel's
+# bloom better than the regular one. The superscripts it lacks fall back to
+# plain digits.
+_TTF_PATH = Path(__file__).parent / "fonts" / "PixelOperatorSC-Bold.ttf"
+_TTF_SUBSTITUTES = str.maketrans({"\u00b3": "3", "\u00b2": "2"})
+_TTF_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+
+
+def _ttf_font(size: int) -> ImageFont.FreeTypeFont:
+    if size not in _TTF_CACHE:
+        _TTF_CACHE[size] = ImageFont.truetype(_TTF_PATH, size)
+    return _TTF_CACHE[size]
 
 
 async def async_prepare_energy_panel(
@@ -132,12 +148,30 @@ def _text(
     scale: int = 2,
     align: str = "left",
 ) -> None:
-    """Draw a baked-in label with a hard-edged bitmap font.
+    """Draw a baked-in label in Pixel Operator SC.
 
-    Everything drawn into the artwork uses this rather than Pillow's default
-    font, which anti-aliases and turns to mush on the panel.
+    Only the artwork uses this. The live figures stay type-23 overlays the
+    device renders in its own firmware fonts, so they are untouched.
+
+    ``scale`` keeps the old bitmap-font call sites working: one step is 8px of
+    font size, which puts scale 2 within a pixel of the pico_8 metrics the
+    layouts were positioned against. Anti-aliasing is off (``fontmode = "1"``)
+    because a grey edge pixel smears on an LED panel.
+
+    ``xy`` is the top-left of the inked box unless ``align`` moves it:
+    ``center`` treats x as the midpoint, ``right`` as the right edge.
     """
-    draw_glyph_text(draw, xy, text, color, "pico_8", scale, align)
+    font = _ttf_font(8 * max(1, int(scale)))
+    text = str(text).translate(_TTF_SUBSTITUTES)
+    box = font.getbbox(text)
+    left, top, width = int(box[0]), int(box[1]), int(box[2]) - int(box[0])
+    x, y = xy
+    if align == "center":
+        x -= width // 2
+    elif align == "right":
+        x -= width
+    draw.fontmode = "1"
+    draw.text((x - left, y - top), text, font=font, fill=color)
 
 
 def _draw_price(

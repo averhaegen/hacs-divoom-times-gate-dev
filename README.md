@@ -513,7 +513,9 @@ generated pages are ordinary screen configurations, so you can edit any of them
 afterwards and the generator will not touch them again unless you run it again.
 
 Numbers refresh on the device's own poll, roughly every 10 seconds, while the
-artwork behind them is only re-sent when it actually changes.
+artwork behind them is only re-sent when it actually changes. Labels in that
+artwork are drawn in Pixel Operator SC Bold; the numbers themselves are drawn
+by the device in its own firmware font, so they look different by design.
 
 ## Presets
 

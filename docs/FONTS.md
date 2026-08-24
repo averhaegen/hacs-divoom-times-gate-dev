@@ -63,4 +63,8 @@ overflow small rows — use only with few slots:
   defaults are `4` for values and `2` for labels).
 - **Scrolling:** long text only scrolls in **type-23 (polled value)** items,
   not static labels — see docs/API.md §4.10.
+- Device font ids only apply to text the device draws. Labels Home Assistant
+  bakes into the artwork use its own fonts: the energy panels use Pixel
+  Operator SC Bold (`fonts/PixelOperatorSC-Bold.ttf`, CC0) at 8px steps with
+  anti-aliasing off, everything else uses the vendored Pixoo bitmap fonts.
 - Regenerate the catalog anytime: `python3 scripts/get_font_list.py <DEVICE_ID>`.
