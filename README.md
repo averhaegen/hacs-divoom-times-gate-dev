@@ -21,6 +21,12 @@ clock and screens 2–5 are off. The defaults name no entity on purpose. Adding
 the integration ends in a step that offers to fill all five screens from what
 it finds on your system, and **Configure** lets you edit each screen later.
 
+Any clock screen those steps generate picks its face out of Divoom's live
+catalog, so it cannot land on a face that has been retired. That is all it
+proves: the catalog call takes no device id, so every LCD device gets the same
+answer, and a face being listed says nothing about how it renders on your
+hardware. When the cloud does not answer, the shipped face id is used.
+
 > ℹ️ This is an unofficial, community-maintained integration. It is not
 > affiliated with, endorsed by, or supported by Divoom.
 

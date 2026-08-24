@@ -22,11 +22,13 @@ from custom_components.divoom_times_gate.const import (
     DOMAIN,
     SCREEN_COUNT,
 )
+from custom_components.divoom_times_gate.defaults import DEFAULT_CLOCK_FACE
 from custom_components.divoom_times_gate.energy import EnergySources
 from custom_components.divoom_times_gate.starters import (
     STARTERS,
     Starter,
     async_available_starters,
+    async_clock_face,
     get_starter,
     pad,
 )
@@ -321,3 +323,96 @@ async def test_climate_air_puts_indoor_entities_before_outdoor_ones(hass) -> Non
     slots = (await starter.async_build(hass))[0]["slots"]
 
     assert [slot["entity_id"] for slot in slots][-1] == outside.entity_id
+
+
+# --- resolving the clock face ----------------------------------------------
+#
+# The shipped face id is checked against Divoom's live catalog before it is
+# written. That proves the id still exists today. It does not prove the face
+# renders well on any given hardware revision: GetDialType and GetDialList take
+# no DeviceId, so every LCD device gets the same catalog.
+
+
+def patch_catalog(catalog: dict[str, dict[int, str]]):
+    """Patch the per-screen face catalog the resolver reads."""
+    return patch(
+        "custom_components.divoom_times_gate.starters."
+        "async_get_per_screen_face_catalog",
+        AsyncMock(return_value=catalog),
+    )
+
+
+async def test_the_shipped_face_wins_when_it_is_still_in_the_catalog(hass) -> None:
+    """It is the one id verified on a real device, so prefer it."""
+    with patch_catalog(
+        {"Normal": {10: "Classic Digital Clock"}, "Nature&Weather": {152: "Big Time"}}
+    ):
+        assert await async_clock_face(hass) == DEFAULT_CLOCK_FACE
+
+
+async def test_a_retired_face_falls_back_to_the_first_normal_clock(hass) -> None:
+    """Divoom can pull a face. Pixel Art is skipped: it holds blank slots."""
+    with patch_catalog(
+        {
+            "Pixel Art": {1114: "Custom 1 watch face"},
+            "Normal": {10: "Classic Digital Clock", 122: "wrist watch"},
+        }
+    ):
+        assert await async_clock_face(hass) == 10
+
+
+async def test_an_unreachable_cloud_keeps_the_shipped_face(hass) -> None:
+    """Setup must never break on this. An empty catalog means no answer."""
+    with patch_catalog({}):
+        assert await async_clock_face(hass) == DEFAULT_CLOCK_FACE
+
+
+async def test_a_catalog_without_normal_clocks_keeps_the_shipped_face(hass) -> None:
+    with patch_catalog({"Pixel Art": {1114: "Custom 1 watch face"}}):
+        assert await async_clock_face(hass) == DEFAULT_CLOCK_FACE
+
+
+async def test_the_face_is_resolved_once_per_home_assistant(hass) -> None:
+    """Five starters in a row must not mean five round trips to the cloud."""
+    catalog = AsyncMock(return_value={"Normal": {10: "Classic Digital Clock"}})
+    with patch(
+        "custom_components.divoom_times_gate.starters."
+        "async_get_per_screen_face_catalog",
+        catalog,
+    ):
+        first = await async_clock_face(hass)
+        assert [await async_clock_face(hass) for _ in range(4)] == [first] * 4
+
+    assert catalog.await_count == 1
+
+
+async def test_the_clock_and_weather_starter_uses_the_resolved_face(hass) -> None:
+    with patch_catalog({"Normal": {10: "Classic Digital Clock"}}):
+        starter = get_starter("clock_weather")
+        assert starter is not None
+        built = await starter.async_build(hass)
+
+    assert built[0] == {"page_type": "clock", "clock_id": 10}
+
+
+async def test_the_setup_starter_writes_the_resolved_face_into_the_options(
+    hass,
+) -> None:
+    """The choice falls once. After that it is ordinary configuration."""
+    with patch_catalog({"Normal": {10: "Classic Digital Clock"}}):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        with patch_discovery([]), patch_ping(True):
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"],
+                {CONF_IP_ADDRESS: "1.2.3.4", CONF_LOCAL_TOKEN: 1},
+            )
+        with patch_setup():
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"next_step_id": "starter_clock_weather"}
+            )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    screens = result["options"][CONF_PRESETS][DEFAULT_PRESET]
+    assert screens[0] == {"page_type": "clock", "clock_id": 10}

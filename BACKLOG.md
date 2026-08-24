@@ -397,6 +397,17 @@ gallery, experimental native-face authoring). In priority order:
 - [ ] **Per-screen faces are picked from the whole-device catalog.** The device
   reports one face list; whether every id in it renders on a single screen is
   unverified beyond hardware revision 400.
+- [ ] **Face ids are still unverified on hardware other than 400.** A generated
+  clock screen now resolves its face against Divoom's live catalog
+  (`starters.async_clock_face`), which guarantees the id has not been retired
+  and gives a fallback when it has. It guarantees nothing about rendering:
+  `Channel/GetDialType` and `Channel/GetDialList` take no DeviceId, so every
+  LCD device gets the identical catalog. Confirming a face looks right on a
+  402 needs a 402.
+- [ ] **`DEFAULT_SCREENS` still pins face 152 statically.** That path is the
+  coordinator's fallback for an entry with no options at all, and it must not
+  make a cloud call, so it cannot use the resolver. If Divoom ever retires 152,
+  that one path shows a broken face until the user configures a screen.
 
 ## Notes / dead ends
 

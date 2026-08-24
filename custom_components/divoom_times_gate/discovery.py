@@ -17,6 +17,11 @@ _LOGGER = logging.getLogger(__name__)
 _DISCOVERY_URL = "https://app.divoom-gz.com/Device/ReturnSameLANDevice"
 _LCD_INFO_URL = "https://app.divoom-gz.com/Channel/Get5LcdInfoV2"
 _WHOLE_LIST_URL = "https://app.divoom-gz.com/Channel/Get5LcdClockListForCommon"
+_DIAL_TYPE_URL = "https://app.divoom-gz.com/Channel/GetDialType"
+_DIAL_LIST_URL = "https://app.divoom-gz.com/Channel/GetDialList"
+
+# Divoom pages the dial list 30 at a time; a short page is the last page.
+_DIAL_PAGE_SIZE = 30
 
 
 @dataclass(frozen=True)
@@ -126,3 +131,73 @@ async def async_get_whole_faces(
         for c in data.get("ClockList", []):
             out[int(c["ClockId"])] = c.get("ClockName", str(c["ClockId"]))
     return out
+
+
+async def async_get_per_screen_face_catalog(
+    session: aiohttp.ClientSession, *, max_pages: int = 50
+) -> dict[str, dict[int, str]]:
+    """Return ``{category: {clock_id: name}}`` of single-screen faces.
+
+    This is the "Independent Display" catalog, the same one
+    ``scripts/get_face_ids.py`` writes to ``docs/FACES_INDEPENDENT.md``.
+
+    Note what this catalog is not: ``Channel/GetDialType`` and
+    ``Channel/GetDialList`` take no DeviceId, only ``DeviceType: "LCD"``, so
+    every LCD device gets the identical answer. Reading it live tells you a
+    face still exists in today's catalog. It tells you nothing about whether
+    that face renders sensibly on any particular hardware revision.
+
+    Best-effort, like the rest of this module: a failure returns whatever was
+    collected so far rather than raising into setup.
+    """
+    out: dict[str, dict[int, str]] = {}
+    try:
+        async with session.post(
+            _DIAL_TYPE_URL,
+            json={"DeviceType": "LCD"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            data = await resp.json(content_type=None)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("GetDialType failed: %s", err)
+        return out
+
+    for dial_type in data.get("DialTypeList", []):
+        ids: dict[int, str] = {}
+        page, count = 1, _DIAL_PAGE_SIZE
+        while count == _DIAL_PAGE_SIZE and page <= max_pages:
+            try:
+                async with session.post(
+                    _DIAL_LIST_URL,
+                    json={
+                        "DialType": dial_type,
+                        "DeviceType": "LCD",
+                        "Page": page,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    page_data = await resp.json(content_type=None)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("GetDialList %s page %s failed: %s", dial_type, page, err)
+                break
+            dials = page_data.get("DialList", [])
+            count = len(dials)
+            page += 1
+            for dial in dials:
+                try:
+                    ids[int(dial["ClockId"])] = str(dial.get("Name") or "")
+                except (KeyError, TypeError, ValueError):
+                    continue
+        if ids:
+            out[str(dial_type)] = dict(sorted(ids.items()))
+    return out
+
+
+async def async_get_per_screen_faces(
+    session: aiohttp.ClientSession, *, max_pages: int = 50
+) -> dict[int, str]:
+    """Return ``{clock_id: name}`` of single-screen faces, all categories."""
+    flat: dict[int, str] = {}
+    for ids in (await async_get_per_screen_face_catalog(session, max_pages=max_pages)).values():
+        flat.update(ids)
+    return flat

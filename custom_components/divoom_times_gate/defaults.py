@@ -30,6 +30,12 @@ DEFAULT_FACES: dict[str, list[dict[str, Any]]] = {
 # The face the neutral first screen shows. "Big Time" is one of the per-screen
 # favorites above, so the same face is already reachable from the Screen 1
 # select without adding anything.
+#
+# This is the static safety net, used by the coordinator for an entry with no
+# options at all. Anything that generates screens resolves the face against
+# Divoom's live catalog first, through ``starters.async_clock_face``, and falls
+# back to this id when the cloud does not answer. Verified on hardware
+# revision 400 only.
 DEFAULT_CLOCK_FACE = 152
 
 # What an unconfigured device shows: a native clock on screen 1 and black on

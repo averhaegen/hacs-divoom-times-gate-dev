@@ -20,15 +20,25 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .cards import MAX_SLOTS
-from .const import SCREEN_COUNT
+from .const import DOMAIN, SCREEN_COUNT
 from .defaults import DEFAULT_CLOCK_FACE
+from .discovery import async_get_per_screen_face_catalog
+
+_LOGGER = logging.getLogger(__name__)
 
 OFF_PAGE: dict[str, Any] = {"page_type": "off"}
+
+# Divoom's own category names, as returned by Channel/GetDialType.
+_NORMAL_CATEGORY = "Normal"
+
+_FACE_CACHE_KEY = "starter_clock_face"
 
 
 @dataclass(frozen=True)
@@ -55,6 +65,54 @@ def pad(pages: list[Any]) -> list[Any]:
 def clock_page(clock_id: int = DEFAULT_CLOCK_FACE) -> dict[str, Any]:
     """A native device face. The device draws it, Home Assistant does not."""
     return {"page_type": "clock", "clock_id": clock_id}
+
+
+async def _pick_clock_face(hass: HomeAssistant) -> int:
+    """Choose a face id that is still in Divoom's catalog right now."""
+    catalog = await async_get_per_screen_face_catalog(async_get_clientsession(hass))
+    if not catalog:
+        _LOGGER.debug("Face catalog unavailable, using face %s", DEFAULT_CLOCK_FACE)
+        return DEFAULT_CLOCK_FACE
+    if any(DEFAULT_CLOCK_FACE in ids for ids in catalog.values()):
+        return DEFAULT_CLOCK_FACE
+    # "Normal" holds the ordinary clocks. "Pixel Art" is skipped on purpose: it
+    # carries the Custom, Visualizer and Cloud Channel slots, which stay blank
+    # until they are configured in the Divoom app.
+    if normal := catalog.get(_NORMAL_CATEGORY):
+        chosen = next(iter(normal))
+        _LOGGER.debug(
+            "Face %s is gone from the catalog, using %s instead",
+            DEFAULT_CLOCK_FACE,
+            chosen,
+        )
+        return chosen
+    _LOGGER.debug("No Normal faces in the catalog, using face %s", DEFAULT_CLOCK_FACE)
+    return DEFAULT_CLOCK_FACE
+
+
+async def async_clock_face(hass: HomeAssistant) -> int:
+    """The face a generated clock screen gets, resolved once per Home Assistant.
+
+    Divoom can retire a face, and the shipped default was only ever verified on
+    one device, so the id is checked against the live catalog instead of being
+    trusted forever. Be clear about what that buys: ``Channel/GetDialType`` and
+    ``Channel/GetDialList`` take no DeviceId, so the catalog is the same for
+    every LCD device. This guarantees the id still exists today. It is not
+    evidence that the face renders well on a given hardware revision.
+
+    The cloud not answering is not an error here. Setup falls back to the
+    shipped default and carries on.
+    """
+    cache: dict[str, Any] = hass.data.setdefault(DOMAIN, {})
+    cached = cache.get(_FACE_CACHE_KEY)
+    if cached is None:
+        cached = cache[_FACE_CACHE_KEY] = await _pick_clock_face(hass)
+    return int(cached)
+
+
+async def async_clock_page(hass: HomeAssistant) -> dict[str, Any]:
+    """A native clock page on a face that is still in today's catalog."""
+    return clock_page(await async_clock_face(hass))
 
 
 def sensor_card(
@@ -144,7 +202,7 @@ async def _clock_weather_available(hass: HomeAssistant) -> str | None:
 
 
 async def _clock_weather_build(hass: HomeAssistant) -> list[Any]:
-    pages = [clock_page()]
+    pages = [await async_clock_page(hass)]
     if entity_id := first_entity(hass, "weather"):
         pages.append(sensor_card("Weather", weather_slots(entity_id)))
     return pad(pages)
