@@ -35,7 +35,7 @@ from PIL import Image, ImageDraw
 from .cards import _blend, _encode_gif, _rgb, draw_pixel_text, pixel_text_size
 from .const import ENERGY_FONT, ENERGY_LABEL_FONT, SCREEN_SIZE
 from .dispdata import register_allowed_entity, register_value_template
-from .units import as_float, format_auto
+from .units import as_float, format_axis
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,8 +44,7 @@ DEFAULT_COLOR = "#FFB300"
 # a negative day-ahead price, which is exactly the hour worth spotting.
 DEFAULT_NEGATIVE_COLOR = "#38BDF8"
 DEFAULT_BACKGROUND = "#000000"
-AXIS_WIDTH = 24  # right-hand gutter for y-axis labels
-XLABEL_HEIGHT = 9  # bottom strip for hour labels
+XLABEL_HEIGHT = 12  # bottom strip for hour labels, sized for scale 2 text
 STAT_TYPES = ("mean", "change", "min", "max", "sum", "state")
 
 
@@ -255,6 +254,23 @@ def _axis_bounds(page: dict[str, Any], values: list[float]) -> tuple[float, floa
     return low, high
 
 
+def _draw_axis_label(
+    draw: ImageDraw.ImageDraw, background: str, text: str, y: int
+) -> None:
+    """Draw one y-axis label over the plot, right-aligned against the edge.
+
+    The label sits on a pad in the background colour so it stays legible over a
+    bar it covers. The pad is only as wide as the text, so it hides a couple of
+    columns rather than a gutter's worth of them.
+    """
+    if not text:
+        return
+    width = pixel_text_size(text, 2)[0]
+    x = SCREEN_SIZE - 2
+    draw.rectangle([x - width - 2, y - 1, SCREEN_SIZE - 1, y + 12], fill=background)
+    draw_pixel_text(draw, (x, y), text, _blend(background, "#FFFFFF", 0.75), 2, "right")
+
+
 def render_graph(
     hass: HomeAssistant,
     page: dict[str, Any],
@@ -281,6 +297,8 @@ def render_graph(
         x_labels: true                  # hour labels along the bottom
         value: true                     # live value overlay (type-23)
         value_entity: sensor.house_power
+        value_unit: EUR/kWh             # baked beside the value, keeps the
+                                        # polled string to bare digits
         footer_height: 0                # rows reserved at the bottom
     """
     values: list[float] = [float(v) for v in page.get("_values") or []]
@@ -307,7 +325,11 @@ def render_graph(
     footer = int(page.get("footer_height", 0))
     show_axis = bool(page.get("axis", True))
     left = 1
-    right = SCREEN_SIZE - (AXIS_WIDTH if show_axis else 1)
+    # The axis labels are drawn over the plot on their own pad rather than in a
+    # gutter beside it. A gutter wide enough for "0.32" at a readable size cost
+    # a fifth of the plot, and a label small enough to fit the old 24px gutter
+    # was unreadable across a room.
+    right = SCREEN_SIZE - 1
     bottom = SCREEN_SIZE - footer - (XLABEL_HEIGHT if page.get("x_labels") else 1)
     width = max(1, right - left)
     height = max(1, bottom - top)
@@ -346,7 +368,7 @@ def render_graph(
         for index, value in enumerate(values):
             x0 = left + index * width // count
             x1 = left + (index + 1) * width // count - 1
-            if x1 - x0 >= 2:
+            if x1 - x0 >= 3:
                 x1 -= 1  # 1px gap once a bar is wide enough to spare it
             y = to_y(value)
             y0, y1 = sorted((y, zero_y))
@@ -376,13 +398,16 @@ def render_graph(
         # Highlight one column, e.g. the current hour on a forward price curve.
         position = int(marker) * width // max(1, len(values))
         marker_x = left + max(0, min(width - 1, position))
-        draw.line([(marker_x, top), (marker_x, bottom - 1)], fill=_rgb("#FFFFFF"))
+        # The marker carries the colour of the value it marks, so the line above
+        # the bar says what the price is doing as well as where it sits.
+        index = max(0, min(len(values) - 1, int(marker)))
+        marker_ink = ink_for(values[index]) if values else _rgb("#FFFFFF")
+        draw.line([(marker_x, top), (marker_x, bottom - 1)], fill=marker_ink)
 
     unit = page.get("unit")
     if show_axis:
-        axis_ink = _blend(background, "#FFFFFF", 0.55)
-        draw_pixel_text(draw, (right + 2, top), format_auto(high, unit)[:6], axis_ink, 1)
-        draw_pixel_text(draw, (right + 2, bottom - 6), format_auto(low, unit)[:6], axis_ink, 1)
+        _draw_axis_label(draw, background, format_axis(high, unit), top)
+        _draw_axis_label(draw, background, format_axis(low, unit), bottom - 12)
 
     if page.get("x_labels"):
         label_ink = _blend(background, "#FFFFFF", 0.45)
@@ -392,8 +417,8 @@ def render_graph(
                 index = min(len(times) - 1, int(fraction * (len(times) - 1)))
                 when = dt_util.as_local(times[index])  # type: ignore[arg-type]
                 text = when.strftime("%H")
-                x = left + int(fraction * (width - 10))
-                draw_pixel_text(draw, (x, bottom + 1), text, label_ink, 1)
+                x = left + int(fraction * (width - 18))
+                draw_pixel_text(draw, (x, bottom + 1), text, label_ink, 2)
 
     if show_value:
         entity_id = str(page.get("value_entity") or page.get("entity_id") or "")
@@ -409,6 +434,22 @@ def render_graph(
         else:
             url = ""
         if url:
+            # A baked unit keeps the polled string to bare digits. Serving the
+            # entity's own state appends its unit, and a device font without
+            # lowercase glyphs turned "EUR/kWh" into stray characters.
+            unit_text = str(page.get("value_unit") or "")
+            block_width = SCREEN_SIZE - 4
+            if unit_text:
+                unit_width = pixel_text_size(unit_text, 2)[0]
+                block_width = SCREEN_SIZE - 6 - unit_width
+                draw_pixel_text(
+                    draw,
+                    (SCREEN_SIZE - 2, max(0, value_y) + 4),
+                    unit_text,
+                    _blend(background, "#FFFFFF", 0.45),
+                    2,
+                    "right",
+                )
             items.append(
                 {
                     "TextId": 1,
@@ -417,10 +458,10 @@ def render_graph(
                     "y": max(0, value_y),
                     "dir": 0,
                     "font": int(page.get("font", ENERGY_FONT)),
-                    "TextWidth": SCREEN_SIZE - 4,
+                    "TextWidth": block_width,
                     "Textheight": 16,
                     "speed": 50,
-                    "align": int(page.get("align", 1)),
+                    "align": int(page.get("align", 5 if unit_text else 1)),
                     "color": color,
                     "update_time": int(page.get("update_time", 10)),
                     "TextString": url,
@@ -460,9 +501,9 @@ def _draw_footer_slots(
             draw_pixel_text(
                 draw,
                 (x + 3, band_top + 3),
-                str(label)[:10],
+                str(label)[:8],
                 _blend(background, slot_color, 0.75),
-                1,
+                2,
             )
         total = totals.get(str(slot["stat"])) if slot.get("stat") else None
         if total is not None:
@@ -474,7 +515,7 @@ def _draw_footer_slots(
                 text = f"{text} {unit}"
             draw_pixel_text(
                 draw,
-                (x + 3, band_top + 12),
+                (x + 3, band_top + 16),
                 text,
                 _blend(background, slot_color, 1.0),
                 2,
@@ -623,15 +664,28 @@ def render_energy_history(
     # Title, and a two-word legend in the series colours so a glance across the
     # room decodes the plot. The colour carries the meaning, so no swatch. If a
     # title is set the legend tucks in beside it; without one the legend leads.
+    # Title and unit on one row, the two-word legend in the series colours on the
+    # next. Every string reads at scale 2, which is the smallest size legible
+    # from across a room, and three of them no longer fit one 128px row.
     top = 2
-    legend_x = 2
     if title := str(page.get("title") or ""):
         draw_pixel_text(draw, (2, top), title, _blend(background, solar_color, 0.75), 2)
-        legend_x = 2 + pixel_text_size(title, 2)[0] + 6
-    draw_pixel_text(draw, (legend_x, top + 3), "solar", solar_ink, 1)
-    legend_x += pixel_text_size("solar", 1)[0] + 4
-    draw_pixel_text(draw, (legend_x, top + 3), "use", consumption_ink, 1)
-    top += 13 if title else 9
+    if legend_unit := str(page.get("unit") or ""):
+        draw_pixel_text(
+            draw,
+            (SCREEN_SIZE - 2, top),
+            legend_unit,
+            _blend(background, "#FFFFFF", 0.45),
+            2,
+            "right",
+        )
+    if title or legend_unit:
+        top += 11
+    legend_x = 2
+    draw_pixel_text(draw, (legend_x, top), "solar", solar_ink, 2)
+    legend_x += pixel_text_size("solar", 2)[0] + 6
+    draw_pixel_text(draw, (legend_x, top), "use", consumption_ink, 2)
+    top += 11
 
     left = 1
     bottom = SCREEN_SIZE - XLABEL_HEIGHT
@@ -655,17 +709,11 @@ def render_energy_history(
     peak = max(max(present), 0.001)
     columns = len(solar or consumption or [])
 
-    # Every bucket is an hour's change in kWh, not a rate, so the axis reads in
-    # kWh. Size the right gutter to the real label width instead of a fixed
-    # count of characters, or a two-digit "12.4kWh" would lose its trailing "h".
-    unit = page.get("unit")
-    top_label = format_auto(peak, unit)
-    bottom_label = format_auto(0.0, unit)
-    gutter = max(
-        AXIS_WIDTH,
-        max(pixel_text_size(top_label, 1)[0], pixel_text_size(bottom_label, 1)[0]) + 3,
-    )
-    right = SCREEN_SIZE - gutter
+    # Every bucket is an hour's change in kWh, not a rate. The peak reads over
+    # the plot at the same size as the day-ahead graph's axis, and the unit sits
+    # once on the legend row rather than on both labels. A zero baseline needs
+    # no label, so the bottom one is gone.
+    right = SCREEN_SIZE - 1
     width = max(1, right - left)
     height = max(1, bottom - top)
 
@@ -709,14 +757,12 @@ def render_energy_history(
                 draw.point(point, fill=consumption_ink)
             previous = point
 
-    axis_ink = _blend(background, "#FFFFFF", 0.55)
-    draw_pixel_text(draw, (right + 2, top), top_label, axis_ink, 1)
-    draw_pixel_text(draw, (right + 2, bottom - 6), bottom_label, axis_ink, 1)
+    _draw_axis_label(draw, background, f"{peak:.1f}", top)
 
     label_ink = _blend(background, "#FFFFFF", 0.45)
     for fraction in (0.0, 0.5, 1.0):
         hour = int(fraction * (columns - 1))
-        x = left + int(fraction * (width - 10))
-        draw_pixel_text(draw, (x, bottom + 1), f"{hour:02d}", label_ink, 1)
+        x = left + int(fraction * (width - 18))
+        draw_pixel_text(draw, (x, bottom + 1), f"{hour:02d}", label_ink, 2)
 
     return _encode_gif(img), items

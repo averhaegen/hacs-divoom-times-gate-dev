@@ -91,3 +91,15 @@ def format_auto(value: float, unit: str | None) -> str:
     if not normalized:
         return f"{value:g}"
     return f"{value:g}{normalized}"
+
+
+def format_axis(value: float, unit: str | None) -> str:
+    """Format a graph's y-axis label, kept short enough to read at a glance.
+
+    An axis label only has to say roughly how high the plot reaches, so a price
+    drops its third decimal: "0.32" reads across a room where "0.318" does not.
+    Every other unit keeps its usual formatting, which is already compact.
+    """
+    if "/kwh" in (unit or "").strip().lower():
+        return f"{value:.2f}"
+    return format_auto(value, unit)[:6]

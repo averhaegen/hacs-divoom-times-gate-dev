@@ -14,6 +14,7 @@ from custom_components.divoom_times_gate.graphs import (
 )
 from custom_components.divoom_times_gate.units import (
     format_auto,
+    format_axis,
     format_energy,
     format_power,
     format_price,
@@ -114,6 +115,36 @@ async def test_render_graph_uses_a_value_template_endpoint_when_given_one(hass) 
         },
     )
     assert "/dispdata_tpl/" in items[0]["TextString"]
+
+
+async def test_render_graph_narrows_the_value_block_to_fit_a_baked_unit(hass) -> None:
+    """The unit is artwork, so the polled string stays bare digits.
+
+    Serving the entity's own state appends its unit, which a device font
+    without lowercase glyphs renders as stray characters.
+    """
+    _, plain = _render(
+        hass, {"_values": [1, 2, 3], "entity_id": "sensor.price", "value": True}
+    )
+    _, with_unit = _render(
+        hass,
+        {
+            "_values": [1, 2, 3],
+            "entity_id": "sensor.price",
+            "value": True,
+            "value_unit": "EUR/kWh",
+        },
+    )
+
+    assert with_unit[0]["TextWidth"] < plain[0]["TextWidth"]
+    assert with_unit[0]["align"] == 5  # right, so the number meets its unit
+
+
+def test_format_axis_drops_a_price_to_two_decimals() -> None:
+    """An axis label only says how high the plot reaches, so it reads short."""
+    assert format_axis(0.318, "EUR/kWh") == "0.32"
+    # Every other unit keeps the formatting it already had.
+    assert format_axis(1500.0, "W") == format_auto(1500.0, "W")
 
 
 async def test_render_graph_draws_negative_values_in_the_negative_colour(hass) -> None:

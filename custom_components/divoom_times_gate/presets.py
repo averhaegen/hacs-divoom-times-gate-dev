@@ -170,7 +170,16 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
         "unit": "EUR/kWh",
         "entity_id": found.price_now,
         "value": True,
+        "value_unit": "EUR/kWh",
     }
+    if found.price_now:
+        # Serving the entity's state appends its unit and every decimal the
+        # sensor publishes, which read as "0.17251EUR/kWh" in a device font
+        # without lowercase glyphs. Round here and bake the unit into the
+        # artwork instead.
+        graph["value_template"] = (
+            f"{{{{ '%.3f' | format(states('{found.price_now}') | float(0)) }}}}"
+        )
     if forecast:
         graph["data_template"] = f"{{{{ {prices} }}}}"
     return panel, graph

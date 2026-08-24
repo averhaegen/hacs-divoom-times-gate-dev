@@ -1248,6 +1248,34 @@ async def test_card_publishes_a_background_and_sends_an_item_list(
     assert dispdata_coordinator.last_frames[0] is not None
 
 
+async def test_a_card_without_overlays_pushes_artwork_instead_of_an_item_list(
+    dispdata_coordinator,
+) -> None:
+    """An empty ItemList crashes the panel, so a card with no overlays sends a JPEG.
+
+    The 24 hour history card bakes every figure into its artwork, so it returns
+    no items to poll.
+    """
+    gif = render_gif()
+    set_pages(dispdata_coordinator, {"page_type": "card", "card": "sensor_grid"})
+
+    with (
+        patch.dict(
+            "custom_components.divoom_times_gate.cards.CARD_RENDERERS",
+            {"sensor_grid": lambda hass, page, poll_base: (gif, [])},
+        ),
+        patch(f"{COORD}.publish_card_background") as publish,
+    ):
+        data = await dispdata_coordinator._async_update_data()
+
+    assert set(data.values()) == {0}
+    command = batched_commands(dispdata_coordinator.device)[0]
+    assert command["Command"] == "Draw/SendHttpGif"
+    # Nothing polls the background, so there is no need to serve it either.
+    assert publish.call_count == 0
+    assert dispdata_coordinator.last_frames[0] is not None
+
+
 async def test_an_unchanged_card_does_not_flash_the_screen(
     dispdata_coordinator,
 ) -> None:

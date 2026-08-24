@@ -470,9 +470,10 @@ def _draw_price(
         color = _blend(cheap, dear, step / max(1, bar_w - 1))
         draw.line([(bar_x + step, bar_y), (bar_x + step, bar_y + bar_h)], fill=color)
     marker = bar_x + int(position * (bar_w - 1))
-    draw.rectangle(
-        [marker - 1, bar_y - 4, marker + 1, bar_y + bar_h + 4], fill="#FFFFFF"
-    )
+    # The marker overhangs the bar's top edge only. Overhanging the bottom too
+    # left two pixels between it and the minimum price below, which reads as the
+    # marker sitting on the text.
+    draw.rectangle([marker - 1, bar_y - 4, marker + 1, bar_y + bar_h], fill="#FFFFFF")
     _text(draw, (bar_x, bar_y + bar_h + 6), format_price(low or 0.0), _rgb(cheap), 2)
     _text(draw, (bar_x + bar_w, bar_y + bar_h + 6), format_price(high or 0.0), _rgb(dear), 2, "right")
 
@@ -483,9 +484,9 @@ def _draw_price(
     priciest = str(page.get("priciest_time") or "")
     time_y = bar_y + bar_h + 6 + ENERGY_ROW_HEIGHT + 2
     if cheapest:
-        _text(draw, (bar_x, time_y), cheapest, _blend(background, cheap, 0.7), 1)
+        _text(draw, (bar_x, time_y), cheapest, _blend(background, cheap, 0.7), 2)
     if priciest:
-        _text(draw, (bar_x + bar_w, time_y), priciest, _blend(background, dear, 0.7), 1, "right")
+        _text(draw, (bar_x + bar_w, time_y), priciest, _blend(background, dear, 0.7), 2, "right")
 
 
 def _draw_grid_totals(
@@ -519,22 +520,21 @@ def _draw_grid_totals(
     # Size the arrow so its visible glyph matches the figure height beside it,
     # not a round number. The webfont draws a bold arrow at about three quarters
     # of its point size, so scale the point size up by four thirds to land the
-    # glyph on the same optical line. The whole line still has to fit 128px:
-    # a down arrow, a figure, an up arrow, a figure and the trailing unit.
+    # glyph on the same optical line. The figures own the row: at a readable
+    # size the unit no longer fits beside them, so it sits centred underneath.
     text_h = pixel_text_size("0", scale)[1]
     icon = round(text_h * 4 / 3)
     suffix = "kWh today"
-    suffix_w = pixel_text_size(suffix, 1)[0]
     widths = [icon + gap + pixel_text_size(text, scale)[0] for _, text, _ in blocks]
-    total_w = sum(widths) + span * (len(blocks) - 1) + gap + suffix_w
+    total_w = sum(widths) + span * (len(blocks) - 1)
     x = max(0, (SCREEN_SIZE - total_w) // 2)
     for (name, text, color), width in zip(blocks, widths, strict=True):
         draw_icon(draw, name, (x, y), icon, _rgb(color))
         _text(draw, (x + icon + gap, y), text, _rgb(color), scale)
         x += width + span
-    # The unit trails the last number, sat on its baseline and dimmed so the
-    # figures stay the thing the eye lands on.
-    _text(draw, (x - span + gap, y + text_h - pixel_text_size(suffix, 1)[1]), suffix, _blend(background, "#FFFFFF", 0.5), 1)
+    # The unit sits on its own row, dimmed, so the figures stay the thing the
+    # eye lands on.
+    _text(draw, (SCREEN_SIZE // 2, y + icon + 3), suffix, _blend(background, "#FFFFFF", 0.5), scale, "center")
 
 
 def _draw_power(
@@ -685,8 +685,8 @@ def _draw_goal_bar(
     filled = int(w * fraction)
     if filled > 1:
         draw.rectangle([x + 1, y + 1, x + filled - 1, y + h - 1], fill=_rgb(color))
-    caption = f"{yield_today:.1f} / {goal:g} kWh today"
-    _text(draw, (64, y + h + 3), caption, _rgb(color), 1, "center")
+    caption = f"{yield_today:.1f} / {goal:g} kWh"
+    _text(draw, (64, y + h + 3), caption, _rgb(color), 2, "center")
     return True
 
 
@@ -790,12 +790,12 @@ def _draw_solar_battery(
             x1 = max(x0, int((index + 1) * step) - 1)
             draw.rectangle([x0, solar_bottom - height, x1, solar_bottom], fill=faint)
 
-    _text(draw, (64, 1), str(page.get("name", "Energy")), _blend(background, "#FFFFFF", 0.5), 1, "center")
+    _text(draw, (64, 1), str(page.get("name", "Energy")), _blend(background, "#FFFFFF", 0.5), 2, "center")
     _hero(hass, page, draw, items, poll_base, background, y=12, color=solar_color)
     produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
     drew_goal = _draw_goal_bar(draw, page, background, solar_color, produced, x=12, y=34, w=SCREEN_SIZE - 24, h=5)
     if not drew_goal and produced is not None:
-        _text(draw, (64, 42), f"{format_energy(produced)} today", _rgb(solar_color), 1, "center")
+        _text(draw, (64, 42), f"{format_energy(produced)} today", _rgb(solar_color), 2, "center")
 
     draw.line([(6, solar_bottom), (SCREEN_SIZE - 6, solar_bottom)], fill=_blend(background, "#FFFFFF", 0.25))
 

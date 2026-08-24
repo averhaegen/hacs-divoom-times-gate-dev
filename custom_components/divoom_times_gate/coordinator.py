@@ -679,13 +679,23 @@ class TimesGateCoordinator(DataUpdateCoordinator[dict[int | str, str]]):
         if self._last_hashes.get(screen) == signature:
             return "unchanged", None, None
 
+        # Preview: show the HA-rendered background (values live on-device).
+        # PIL work, so run it off the event loop like the renderer call above.
+        preview_jpeg = await self.hass.async_add_executor_job(_gif_to_jpeg, gif)
+
+        if not items:
+            # A card whose figures are all baked artwork has nothing for the
+            # device to poll, and Draw/SendHttpItemList with an empty ItemList
+            # crashes the panel (reported on the 24 hour history screen, which
+            # is the only card that renders no overlays). Push the artwork the
+            # ordinary way instead: same picture, no item list.
+            self.record_frame(screen, preview_jpeg)
+            return "pending", self.device.build_jpeg(preview_jpeg, screen), signature
+
         publish_card_background(self.hass, digest, gif)
         background_url = f"{base_url}/api/divoom_times_gate/cardbg/{secret}/{digest}.gif"
         command = self.device.build_item_list(screen, items, background_gif=background_url)
 
-        # Preview: show the HA-rendered background (values live on-device).
-        # PIL work, so run it off the event loop like the renderer call above.
-        preview_jpeg = await self.hass.async_add_executor_job(_gif_to_jpeg, gif)
         self.record_frame(screen, preview_jpeg)
         return "pending", command, signature
 

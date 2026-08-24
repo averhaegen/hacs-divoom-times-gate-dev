@@ -327,6 +327,12 @@ def test_build_play_gif_selects_one_screen_via_lcd_array(device) -> None:
     assert payload["FileName"] == ["http://x/a.gif"]
 
 
+def test_build_item_list_rejects_an_empty_item_list(device) -> None:
+    """An empty ItemList crashes the panel, so it never leaves the client."""
+    with pytest.raises(ValueError, match="at least one item"):
+        device.build_item_list(0, [])
+
+
 def test_build_item_list_sets_new_flag_from_background_gif(device) -> None:
     """A background GIF means a full repaint (NewFlag 1); items-only is 0."""
     with_bg = device.build_item_list(0, [{"TextId": 1}], "http://ha/bg.gif")

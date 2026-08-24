@@ -199,6 +199,12 @@ class TimesGate:
         """
         if screen not in range(SCREEN_COUNT):
             raise ValueError(f"Screen must be 0-{SCREEN_COUNT - 1}, got {screen}")
+        if not items:
+            # An empty ItemList crashes the panel (seen on the 24 hour history
+            # card, which draws every figure as artwork). A page with nothing to
+            # poll has no item list to send: push the artwork with
+            # Draw/SendHttpGif instead.
+            raise ValueError("build_item_list needs at least one item")
         payload: CommandPayload = {
             "Command": "Draw/SendHttpItemList",
             "LcdIndex": screen,
