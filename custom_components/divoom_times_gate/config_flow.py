@@ -55,9 +55,11 @@ from .presets import (
     describe_page,
     read_presets,
 )
+from .starters import async_available_starters, get_starter
 
 PRESET_ACTION = "preset_action"
 PRESET_NAME = "preset_name"
+STARTER_NONE = "starter_none"
 
 
 class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -65,6 +67,8 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     _discovered: list[DiscoveredDevice] = []
+    _entry_title: str = ""
+    _entry_data: dict[str, Any] | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -93,20 +97,23 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_DEVICE_ID: match.device_id if match else 0,
                     }
                 )
-                title = f"{match.name} ({ip})" if match else f"Times Gate ({ip})"
-                return self.async_create_entry(
-                    title=title,
-                    data={
-                        CONF_IP_ADDRESS: ip,
-                        CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
-                        CONF_HARDWARE: hardware,
-                        CONF_MAC: match.mac if match else "",
-                        CONF_DEVICE_ID: match.device_id if match else 0,
-                        CONF_REFRESH_INTERVAL: user_input.get(
-                            CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
-                        ),
-                    },
+                self._entry_title = (
+                    f"{match.name} ({ip})" if match else f"Times Gate ({ip})"
                 )
+                self._entry_data = {
+                    CONF_IP_ADDRESS: ip,
+                    CONF_LOCAL_TOKEN: int(user_input[CONF_LOCAL_TOKEN]),
+                    CONF_HARDWARE: hardware,
+                    CONF_MAC: match.mac if match else "",
+                    CONF_DEVICE_ID: match.device_id if match else 0,
+                    CONF_REFRESH_INTERVAL: user_input.get(
+                        CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
+                    ),
+                }
+                # The device answers, so the entry is a given. Ask what to put
+                # on the screens before creating it: an options flow is a
+                # second trip most users never take.
+                return await self.async_step_starter()
             errors["base"] = "cannot_connect"
 
         # Discovered devices become a dropdown (still allows typing an IP manually).
@@ -136,6 +143,54 @@ class DivoomTimesGateConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_starter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer to fill the five screens before the entry is created.
+
+        Only starters that found something are listed, so the menu never
+        promises content the system cannot produce.
+        """
+        available = await async_available_starters(self.hass)
+        found = "; ".join(f"{s.name}: {desc}" for s, desc in available)
+        return self.async_show_menu(
+            step_id="starter",
+            menu_options=[f"starter_{s.key}" for s, _ in available] + [STARTER_NONE],
+            description_placeholders={"found": found or "nothing"},
+        )
+
+    async def _finish(self, key: str) -> ConfigFlowResult:
+        """Create the entry, with the chosen starter's screens as its options.
+
+        The screens land in the ``default`` layout as ordinary configuration.
+        Nothing regenerates them afterwards, so later edits stick.
+        """
+        options: dict[str, Any] = {}
+        if starter := get_starter(key):
+            options = {
+                CONF_PRESETS: {DEFAULT_PRESET: await starter.async_build(self.hass)},
+                CONF_ACTIVE_PRESET: DEFAULT_PRESET,
+            }
+        return self.async_create_entry(
+            title=self._entry_title, data=self._entry_data or {}, options=options
+        )
+
+    async def async_step_starter_energy(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._finish("energy")
+
+    async def async_step_starter_clock_weather(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._finish("clock_weather")
+
+    async def async_step_starter_none(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Create the entry with no screen configuration at all."""
+        return await self._finish("")
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]

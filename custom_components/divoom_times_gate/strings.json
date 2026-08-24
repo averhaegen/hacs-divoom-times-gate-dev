@@ -19,6 +19,15 @@
           "refresh_interval": "Refresh interval (seconds)"
         }
       },
+      "starter": {
+        "title": "Fill the screens",
+        "description": "Pick what to put on the five screens. Found: {found}. Whatever you pick is written once as ordinary screen configuration, so you can edit any screen afterwards and nothing overwrites it. You can also leave the screens empty and configure them later under Configure.",
+        "menu_options": {
+          "starter_energy": "Energy: price, house power, battery, solar and a day-ahead price graph",
+          "starter_clock_weather": "Clock and weather",
+          "starter_none": "Leave empty for now"
+        }
+      },
       "reauth_confirm": {
         "title": "Reauthenticate Times Gate",
         "description": "The Times Gate at {ip_address} rejected the stored LocalToken. This happens after you re-pair the device in the Divoom app. Enter the current LocalToken shown in the Divoom app under Device settings.",

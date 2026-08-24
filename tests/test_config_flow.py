@@ -55,6 +55,15 @@ def patch_setup():
     )
 
 
+async def leave_screens_empty(hass, result):
+    """Walk the starter menu past the last user step without generating pages."""
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "starter"
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "starter_none"}
+    )
+
+
 # --- user step -------------------------------------------------------------
 
 
@@ -98,6 +107,7 @@ async def test_user_step_creates_entry_from_a_discovered_device(hass) -> None:
             result["flow_id"],
             {CONF_IP_ADDRESS: "192.168.1.25", CONF_LOCAL_TOKEN: 123456},
         )
+        result = await leave_screens_empty(hass, result)
         await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -127,6 +137,7 @@ async def test_user_step_accepts_a_manually_typed_ip(hass) -> None:
                 CONF_REFRESH_INTERVAL: 30,
             },
         )
+        result = await leave_screens_empty(hass, result)
         await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -170,6 +181,7 @@ async def test_user_step_recovers_after_a_failed_attempt(hass) -> None:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {CONF_IP_ADDRESS: "192.168.1.25", CONF_LOCAL_TOKEN: 123456}
         )
+        result = await leave_screens_empty(hass, result)
         await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
