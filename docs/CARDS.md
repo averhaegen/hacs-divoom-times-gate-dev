@@ -26,7 +26,7 @@ The 8-slot ceiling is a readability choice, not a device limit.
 
 ```yaml
 page_type: card
-card: sensor_grid        # currently the only card type
+card: sensor_grid        # see the other card types below
 theme: dark              # dark | light | navy | forest | sunset | terminal | cyberpunk | neon | sci_fi
 # background: "#0B1E3B"  # override the theme's canvas colour
 # primary: "#FFB300"     # override the theme's icon/value colour
@@ -113,6 +113,118 @@ depends on device firmware support — not observed on all units yet.)
   reachable from the device over LAN (same requirement as dispdata_text).
 - The screen-preview image entity shows the rendered background; live
   values exist only on the device.
+
+## `energy_panel`
+
+The energy panels the **Build energy screens** step generates (see
+[the README](../README.md#energy-screens)). Each panel is a hybrid card like
+`sensor_grid`: HA bakes the background (title, bars, icons, daily totals read
+from the recorder), the device polls the live figures as type-23 items. Live
+values read in kW; the daily totals baked behind them read in kWh, so a
+watt-hour meter no longer reads a thousand times too high.
+
+A panel picks its layout from `mode`:
+
+| Mode | Layout |
+|---|---|
+| `price` | Current price large, a min-to-max bar marking where it sits, and the clock time of the cheapest and priciest hour under the bar. |
+| `power` | House load large, one line of today's grid import and export each behind an arrow, then the gas and water footer band. |
+| `battery` | State-of-charge bar, percentage large, watts with a direction word. |
+| `solar` | Current production large, today's yield below, the day's curve behind. |
+| `solar_battery` | Solar on top with a goal bar, battery below with a charge-level icon and a bipolar power bar. Falls back to the plain `solar` or `battery` layout when only one side has a source, and to a blank screen when neither does. |
+
+The generator writes these pages for you. Document them here so you can edit a
+generated page or hand-write one.
+
+### `solar_battery` page schema
+
+```yaml
+page_type: card
+card: energy_panel
+mode: solar_battery
+name: Energy              # default "Energy"; the generator writes "Solar" or
+                         # "Battery" for a single-source home
+# --- solar half (optional; omit to draw the battery half full height) ---
+solar_power_entity: sensor.solar_power   # live production, the hero figure
+solar_stat: sensor.solar_energy          # production statistic: today's yield + day curve
+color: "#FF9800"         # solar accent; default the dashboard's solar orange
+goal: 0                  # today's target in kWh for the goal bar. 0 or absent
+                         # means no goal: the caption stays "x.x kWh today"
+# goal_template: >-       # a template producing the goal number; overrides `goal`.
+#   {{ states('sensor.solar_energy_production_today') | float(0) }}
+                         # the generator fills this from the Forecast.Solar entity
+                         # recorded under `config_entry_solar_forecast`
+# --- battery half (optional; omit to draw the solar half full height) ---
+battery_soc: sensor.battery_soc          # state of charge: icon, percentage, bar
+battery_power_entity: sensor.battery_power  # power: sign picks charge vs discharge
+power_entity: sensor.battery_power       # the live power figure drawn above the bar
+# power_min: -2500       # bipolar bar's charging (negative) end, in the sensor's
+# power_max: 800         # own unit, and its discharging (positive) end. Both
+                         # optional: without them the ends come from the sensor's
+                         # own minimum and maximum over the last seven days, and
+                         # fall back to a symmetric span when the recorder is empty
+# invert_power: false    # true when a positive reading means charging
+# charge_color: "#F06292"    # override the charging colour (default pink)
+# discharge_color: "#4DB6AC"  # override the discharging colour (default teal)
+# row_font: 184          # device font id for the percentage and power figures
+# background: "#000000"
+```
+
+**Optional keys and what happens without them.** With no `solar_stat` and no
+`solar_power_entity` the panel draws the battery half full height; with no
+`battery_soc` and no `battery_power_entity` it draws the solar half full height;
+with neither side it draws nothing. Without `goal` or `goal_template` (or with
+`goal: 0`) the solar half keeps its plain `x.x kWh today` caption instead of a
+progress bar. Without `power_min` / `power_max` the bipolar bar reads its ends
+from the last seven days of recorder statistics, so you never configure them by
+hand. The charge direction rides the battery icon (an MDI battery band), so no
+direction word is spent; font 184 carries no minus glyph, so the power figure's
+sign is stripped and colour plus fill direction carry charge versus discharge.
+
+### `price` page keys for the cheapest and priciest hour
+
+The `price` mode gained the clock time of the day's cheapest and priciest hour,
+baked under the min and max prices:
+
+```yaml
+cheapest_time: "13:00"   # baked under the low price; empty draws nothing
+priciest_time: "07:00"   # baked under the high price; empty draws nothing
+# cheapest_time_template / priciest_time_template: templates the generator writes
+# to read the time off the day-ahead price list. A missing or malformed list
+# renders empty, and the panel then draws no time.
+```
+
+## `energy_history`
+
+The fifth energy screen: today's production and consumption per hour on the same
+24 hour axis the day-ahead price graph uses, so the two read as a pair. It draws
+two series only, because four filled areas at 128 pixels read as mud: solar
+production as bars, house consumption as a line on top. Consumption is derived
+per hour the way the house panel derives it (import minus export plus solar plus
+battery discharge minus battery charge). The background is baked artwork; there
+are no live overlays.
+
+```yaml
+page_type: card
+card: energy_history
+title: Today             # optional; the legend tucks in beside it, or leads without one
+unit: kWh                # axis unit label
+solar_stat: sensor.solar_energy       # solar production statistic (the bars)
+import_stat: sensor.from_grid         # the four consumption statistics below are
+export_stat: sensor.to_grid           # summed per hour into the consumption line
+battery_in_stat: sensor.battery_charge
+battery_out_stat: sensor.battery_discharge
+solar_color: "#FF9800"   # bars; default #FFB300
+consumption_color: "#FFFFFF"  # line; default white
+# background: "#000000"
+```
+
+**Optional keys and what happens without them.** The graph draws whichever
+series it has data for. With no `solar_stat` it draws consumption alone; with no
+grid or battery statistic it draws solar alone rather than a line that only
+mirrors the bars; with neither it prints `no data`. Hours later than the current
+hour stay empty rather than drawing a zero. A `title` is optional: set it and the
+`solar`/`use` legend tucks in beside it, leave it out and the legend leads.
 
 ## Other page types
 

@@ -18,8 +18,9 @@ give you pixel-level drawing.
 
 Out of the box, before you configure anything, screen 1 shows a native device
 clock and screens 2–5 are off. The defaults name no entity on purpose. Adding
-the integration ends in a step that offers to fill all five screens from what
-it finds on your system, and **Configure** lets you edit each screen later.
+the integration ends in a step that reports what it found and lets you pick
+which screens to fill from your system, and **Configure** lets you edit each
+screen later.
 
 Any clock screen those steps generate picks its face out of Divoom's live
 catalog, so it cannot land on a face that has been retired. That is all it
@@ -507,21 +508,36 @@ Times Gate itself — Home Assistant simply stops managing it locally.
 
 ## Energy screens
 
-Open the integration options and pick **Build energy screens**. The integration
-reads your Home Assistant energy dashboard configuration and fills all five
-screens:
+Open the integration options and pick **Build energy screens**. The step runs
+in two parts. The first reads your Home Assistant energy dashboard
+configuration and reports, per screen, the entity or statistic it will read,
+and names the missing source for any screen that stays blank. The second offers
+a checkbox for each screen the discovery can fill. Clear one and that slot is
+written as a blank you can fill by hand, so the order never shifts. The five
+screens are:
 
 1. Current electricity price, with a bar marking where it sits between today's
-   cheapest and dearest hour.
-2. House load, with import and export below it and today's totals per direction.
-3. Battery charge, coloured pink while charging and teal while discharging.
-4. Solar production, with today's yield and the day's curve behind it.
-5. The day-ahead price graph, with gas and water along the bottom.
+   cheapest and dearest hour, and the clock time each of those falls on.
+2. House load, with today's grid import and export on one line, each behind an
+   arrow, and the gas and water totals along the bottom.
+3. Solar and battery on one screen: solar production with a goal bar reading
+   toward today's Forecast.Solar target, and the battery below it with a
+   charge-level icon that carries the charge direction and a bipolar power bar.
+4. The day-ahead price graph.
+5. A 24 hour history of today's solar production and house consumption, one bar
+   per hour from local midnight.
+
+A home missing solar or a battery still gets the merged screen, drawn with only
+the half it has. A home with neither gets a blank slot there instead.
 
 Gas often has no entity at all: some integrations, Niko Home Control among
 them, publish it straight into long-term statistics. The device can only poll
 entities, so such a value is read from the recorder and drawn into the artwork
 instead, refreshing whenever the statistic moves rather than every 10 seconds.
+
+Today's energy totals read in kilowatt hours from the recorder, whatever unit
+the meter reports, so a meter that counts in watt hours no longer reads a
+thousand times too high. Gas and water keep the unit their meter reports.
 
 Colours follow the ones the energy dashboard uses, so blue means import and
 purple means export. Screens for a source you do not have stay blank. The
@@ -574,9 +590,9 @@ tells you where to go without opening anything first.
   faces, **Off** for a black screen, and **Edit as YAML** for everything else.
   **Fill from a template** appears when Home Assistant holds something a
   single-screen template can use, and writes that screen once.
-- **Build energy screens** generates five screens and writes them to the layout
-  you name in that step, defaulting to `energy`. Your other layouts are left
-  alone.
+- **Build energy screens** reports what the energy discovery found, then lets
+  you pick which screens to write to the layout you name in that step,
+  defaulting to `energy`. Your other layouts are left alone.
 - **Layout** appears once you have more than one layout. It switches between
   them, saves the current screens as a copy, or deletes one.
 - **Favorite faces** picks which native device faces show up in the dropdowns.

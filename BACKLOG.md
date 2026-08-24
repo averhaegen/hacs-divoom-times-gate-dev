@@ -375,6 +375,48 @@ gallery, experimental native-face authoring). In priority order:
   `Device/CreateLocalClock` is proven; `device.py` already routes 402
   there). Needs access to a HW 402 device.
 
+## Energy screens (spec review 2026-08-24, see `.agents/notes/energy-spec-review.md`)
+
+Shipped from the review's "simpler path that captures most of the value", plus
+the solar/battery merge and the history card the review flagged but that were
+built anyway:
+
+- [x] **`units.quantize_fraction`** — one shared helper for the SoC bar, the
+  price marker and the bipolar power bar, so a live value only repaints the
+  artwork once it crosses a band.
+- [x] **Cheapest and priciest hour on the price screen.** The clock time of the
+  day's low and high price, baked under each figure. Highest value-per-hour item
+  in the review.
+- [x] **Solar goal bar and battery charge-level icon.** The goal bar reads
+  toward today's Forecast.Solar target (`config_entry_solar_forecast`), and an
+  MDI battery band icon carries the charge direction in place of the word.
+- [x] **Merged `solar_battery` screen with a bipolar power bar.** Solar and
+  battery share one screen; the bar's charging and discharging ends come from
+  the sensor's own seven-day min/max, with `power_min`/`power_max` overrides.
+  Font 184 has no minus glyph, so the power figure strips its sign and leans on
+  colour and fill direction.
+- [x] **24 hour history graph on the fifth screen.** Two series only (solar
+  production, derived house consumption), 24 hourly buckets from local midnight,
+  on the same axis as the day-ahead price graph. The review's redesign of the
+  power-flow idea: more buckets, fewer series.
+- [x] **Compact house screen.** Import and export collapse onto one line, each
+  behind an MDI arrow, and the gas and water footer moves here from the price
+  graph, which goes back to full height.
+- [x] **Two-step energy config flow.** The first step reports the entity or
+  statistic behind each screen and the missing source for any blank one; the
+  second offers a checkbox per fillable screen, and a cleared screen is written
+  off in its own slot so the order never shifts.
+- [x] **Today's totals read in kWh.** The recorder is asked for kilowatt hours
+  whatever the meter reports, so a watt-hour meter no longer reads a thousand
+  times too high. Gas and water keep the meter's own unit.
+- [ ] **Dropped: capaciteitstarief half-circle gauge (spec §7).** The review
+  cut it: at 128px a horizontal banded bar reads fill fraction as well as a 180°
+  arc for a fraction of the code, and the audience is BE-only manual YAML.
+- [ ] **Dropped: six-block power-flow card (spec §8).** The review cut it: six
+  4-hour buckets flatten the solar midday peak and four overlaid filled series
+  read as mud at 128px. The 24 hour history card above carries the honest
+  version (two series, 24 buckets).
+
 ## Configuration UX (left over after the 2026-08 redesign)
 
 - [ ] **A second layout cannot be created from the menu.** The layout entry is

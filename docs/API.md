@@ -466,6 +466,17 @@ each drew in its built-in colour (`288` red, `298` light grey, `476` white neon 
 `428` cyan neon glow). Only `246`, `584`, `608` and `184` honoured the requested colour.
 Pick from those four when a panel needs its own accent.
 
+**Only four dot-carrying fonts honour `color`** ✅ (charsets checked against the
+cloud font catalogue in §4.9). Of every font that carries a decimal point, only
+`246`, `584`, `608` and `184` honour the item `color` field; the rest bake their
+own colour, so a panel that needs a per-value accent has to pick from those four.
+Two of the four matter for signed values. Font `184` (`0123456789KMLIVEOFN.`) has
+no minus glyph and no lowercase letters, so it cannot draw a negative number or a
+lowercase unit; a panel using it strips the sign and carries direction some other
+way (colour, a word, an icon). Font `584` (7x22, charset `0123456789-.km`) is the
+only colour-honouring font that carries a minus, so it is the one to reach for
+when a signed figure must show its sign in the device font.
+
 ### 4.10 `Draw/SendHttpItemList` — rich item list with on-device data 📄❓
 
 Sends a list of items that can render **device-native elements** (time, date,
