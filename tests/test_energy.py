@@ -435,10 +435,9 @@ async def test_energy_panel_centres_a_value_against_its_unit(hass) -> None:
     )
     _, items = energy_cards.render_energy_panel(hass, page, "http://h/dispdata/s")
 
-    # `align: 2` does not centre on this firmware, so the panel right-aligns the
-    # number and reserves the digits in front of it. See docs/API.md §4.10.
+    # The firmware places text inside the item box itself, so the box is cut to
+    # the number and centred as a whole. See docs/API.md §4.10.
     hero = items[0]
-    assert hero["align"] == 3
     assert hero["font"] == ENERGY_HERO_FONT
-    reserved = 5 * ENERGY_HERO_CHAR_WIDTH
-    assert hero["TextWidth"] - reserved == SCREEN_SIZE - hero["TextWidth"]
+    assert hero["TextWidth"] == 5 * ENERGY_HERO_CHAR_WIDTH
+    assert hero["x"] == SCREEN_SIZE - (hero["x"] + hero["TextWidth"])

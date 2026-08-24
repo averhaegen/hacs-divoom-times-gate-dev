@@ -39,8 +39,10 @@ _LOGGER = logging.getLogger(__name__)
 
 MODES = ("price", "power", "battery", "solar")
 
-# The gap between a number and the unit baked beside it.
-_UNIT_GAP = 4
+# The gap between a number and the unit baked beside it. One pixel, because the
+# device font already leaves a right side bearing inside the last digit's cell
+# and anything wider reads as a space.
+_UNIT_GAP = 1
 
 
 async def async_prepare_energy_panel(
@@ -137,8 +139,8 @@ def _prepare_overlay_templates(
 ) -> None:
     """Build digit-only templates for the values the device renders itself.
 
-    Font 608 draws `0123456789.W` and nothing else, and the dispdata view
-    appends a state's own unit, so polling an entity directly would show
+    Font 184 draws digits, a dot and a handful of capitals, and the dispdata
+    view appends a state's own unit, so polling an entity directly would show
     `0.184k` for `0.184 EUR/kWh`. Render the number here instead and leave the
     unit to the artwork beside it.
     """
@@ -258,14 +260,15 @@ def _value(
     """Place one live figure with the unit baked beside it.
 
     Every device font that carries a decimal point carries no ``k``, so the
-    unit has to be artwork. The number is right-aligned so its last digit
-    always meets that unit, which keeps the pair reading as one figure however
-    many digits arrive.
+    unit has to be artwork, and the number has to land right against it.
 
-    ``align: 2`` does not centre on this firmware (docs/API.md §4.10), so the
-    pair is centred here instead: reserve ``chars`` digit cells, add the unit,
-    and place the block. A value narrower than ``chars`` drifts right of centre
-    by half a digit, which is the cost of never letting the unit move.
+    The device decides where the text sits inside the item box and does not
+    right-align the way `align: 3` suggests: a short value drifts to the middle
+    of whatever box it is given (docs/API.md §4.10). So the box is cut to the
+    number itself, ``chars`` cells wide and no wider, which pins the value
+    beside its unit however the firmware chooses to place it. A value shorter
+    than ``chars`` drifts by half the spare cells, a few pixels rather than the
+    width of the panel.
 
     ``right`` anchors the pair's right edge instead of centring it.
     """
@@ -284,9 +287,9 @@ def _value(
         text_id=text_id,
         entity_id=entity_id,
         value_template=value_template,
-        x=0,
+        x=max(0, edge - number_width),
         y=y,
-        width=edge,
+        width=number_width,
         font=font,
         color=color,
         align=3,

@@ -449,8 +449,8 @@ Notable large fonts ✅:
 | Font | Size | Charset | Why it matters |
 |------|------|---------|----------------|
 | `246` | 18×22 | `0123456789.` | Large clean value |
-| `608` | 16×14 | `0123456789.W` | Energy panel value font; LCD look, honours `color` |
-| `184` | 12×14 | `0123456789KMLIVEOFN.` | Blocky numerals, honours `color` |
+| `608` | 16×14 | `0123456789.W` | LCD look, honours `color` |
+| `184` | 12×14 | `0123456789KMLIVEOFN.` | Energy panel value font; blocky, honours `color` |
 | `606` | 22×23 | `0123456789.W` | Only large font carrying a unit glyph (`W`) |
 | `584` | 7×22 | `0123456789-.km` | Narrow seven-segment/LCD look, has `k` and `m` |
 | `288` | 20×21 | `0123456789KM.` | Uppercase `K`/`M` only |
@@ -529,12 +529,18 @@ not across the full screen. To centre text on the full 128px screen: `x: 0`,
 > rendered. This is the most common reason a type-22 item silently shows nothing:
 > the request still returns `error_code: 0`. When in doubt use `Textheight: 56`.
 
+> ⚠️ **`align: 3` does not right-align a type-23 item** ✅ (2026-08-24, firmware
+> `400`, photographed on device). A four-character value in a 93px-wide box sat
+> near the middle of that box, not against its right edge, leaving roughly 20px
+> of gap before the artwork that was meant to touch it. Alignment appears to
+> place the text within the box rather than flush to a side. The energy panels
+> therefore cut each item box to the width of the value it holds, so a short
+> value can only drift by a few pixels.
+
 > ⚠️ **`align: 2` did not render** ❓ (font `298`, type 22, 2026-08-24). Identical
 > items with `align: 1` and `align: 3` both drew correctly, so this is specific to
-> alignment mode 2. Not retested for type 23, but a type-23 item sent with `align: 2`
-> did not read as centred either, so the energy panels now centre a value themselves:
-> they right-align it (`align: 3`) against a fixed edge and reserve a nominal digit
-> count in front of it.
+> alignment mode 2. A type-23 item sent with `align: 2` did not read as centred
+> either, so the energy panels place a value by sizing its box instead.
 
 > 💡 **Multi-colour scrolling trick** ✅: place two (or more) adjacent scroll blocks
 > (`align: 0`) with the same `speed` and complementary `TextWidth` values that add up

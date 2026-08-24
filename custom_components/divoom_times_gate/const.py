@@ -47,14 +47,14 @@ DEFAULT_DURATION = 15  # seconds a page shows before a screen rotates to the nex
 # ids this firmware renders. Cards keep font 4, which every page written before
 # these constants existed relied on.
 #
-# The energy panels render every live figure in font 608 (16x14), an LCD face
-# whose charset is `0123456789.W`. It was picked over the larger 246 because it
-# reads across a room without crowding a five-digit value, and because it is one
-# of only four dot-carrying fonts that honour the item's `color` rather than
-# baking one in, which the panels need for their accents. No firmware font
-# carries a `k`, so `kW` is baked into the artwork beside the number. Font 2
-# (16x16) is a full bitmap font and remains the fallback for text that needs
-# letters, such as the graph footer.
+# The energy panels render every live figure in font 184 (12x14), a blocky
+# numeral face whose charset is `0123456789KMLIVEOFN.`. It reads cleanly at a
+# distance without a five-digit value crowding the panel, and it is one of only
+# four dot-carrying fonts that honour the item's `color` rather than baking one
+# in, which the panels need for their accents. No firmware font carries a `k`,
+# so `kW` is baked into the artwork beside the number. Font 2 (16x16) is a full
+# bitmap font and remains the fallback for text that needs letters, such as the
+# graph footer.
 #
 # The char widths are the font's cell width from docs/FONTS_CATALOG.md. Layout
 # reserves that many pixels per digit to centre a value against its unit, since
@@ -63,12 +63,12 @@ DEFAULT_DEVICE_FONT = 4
 DEFAULT_LABEL_FONT = 2
 ENERGY_FONT = 160
 ENERGY_LABEL_FONT = 2
-ENERGY_HERO_FONT = 608
+ENERGY_HERO_FONT = 184
 ENERGY_HERO_HEIGHT = 14
-ENERGY_HERO_CHAR_WIDTH = 16
-ENERGY_ROW_FONT = 608
+ENERGY_HERO_CHAR_WIDTH = 12
+ENERGY_ROW_FONT = 184
 ENERGY_ROW_HEIGHT = 14
-ENERGY_ROW_CHAR_WIDTH = 16
+ENERGY_ROW_CHAR_WIDTH = 12
 
 SCREEN_COUNT = 5
 SCREEN_SIZE = 128
