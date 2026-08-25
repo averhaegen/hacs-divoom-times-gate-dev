@@ -225,9 +225,12 @@ consumption_color: "#B4B4B4"  # net line; default const.ENERGY_SOFT_INK
 # background: "#000000"
 ```
 
-The bottom axis labels every sixth hour (00, 06, 12, 18), on the column that
-holds that hour. The day-ahead price graph labels its axis the same way, so the
-two screens read on one time scheme.
+The bottom axis labels every sixth hour (00, 06, 12, 18), and a dotted grey rule
+runs up the panel at each of those hours so you can read which bar belongs to
+which hour. The rule takes the one pixel gap that sits between two bars, so it
+never covers a bar. The day-ahead price graph labels and rules its axis the same
+way, so the two screens read on one time scheme. This card is fixed to 24 hours
+from local midnight; the `graph` page type takes `hours` and `window` instead.
 
 **Optional keys and what happens without them.** The graph draws whichever
 sources the home reports and nothing else, so a grid-only meter draws a

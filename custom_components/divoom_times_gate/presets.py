@@ -167,6 +167,11 @@ def _price_pages(found: EnergySources) -> tuple[dict[str, Any], dict[str, Any]]:
         "high_color": "#EF4444",
         "marker": "now",
         "x_labels": True,
+        # Today from local midnight, the same window the history screen draws,
+        # so the two 24 hour screens line up hour for hour. Set `window: rolling`
+        # on the page to follow the next 24 hours of the forecast instead.
+        "hours": 24,
+        "window": "static",
         "unit": "EUR/kWh",
         "entity_id": found.price_now,
         "value": True,

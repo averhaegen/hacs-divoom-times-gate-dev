@@ -140,6 +140,56 @@ def _resample(values: list[float], columns: int) -> list[float]:
     return out
 
 
+WINDOW_MODES = ("rolling", "static")
+
+
+def _window_bounds(page: dict[str, Any], now: datetime) -> tuple[datetime, datetime, str]:
+    """The recorder window this page asks for, as ``(start, end, mode)``.
+
+    ``hours`` is how much time the graph covers and ``window`` is where that time
+    sits: ``rolling`` ends at now, ``static`` starts at local midnight so the
+    axis holds still all day instead of sliding under the bars.
+    """
+    hours = float(page.get("hours", 24))
+    mode = str(page.get("window", "rolling")).lower()
+    if mode not in WINDOW_MODES:
+        raise ValueError(f"graph: unknown window {mode!r}")
+    if mode == "static":
+        start = dt_util.as_utc(dt_util.start_of_local_day(dt_util.as_local(now)))
+        return start, start + timedelta(hours=hours), mode
+    return now - timedelta(hours=hours), now, mode
+
+
+def _trim_to_window(
+    values: list[float], times: list[datetime], page: dict[str, Any], now: datetime
+) -> tuple[list[float], list[datetime]]:
+    """Cut a timestamped series down to the window the page asks for.
+
+    A recorder query is already bounded, but a ``data_template`` renders whatever
+    the source sensor publishes, which for a day-ahead price sensor is often
+    today and tomorrow. A series without timestamps is left alone, because
+    trimming it would guess at which end to cut.
+
+    A rolling window over a series that runs past now anchors on the current hour
+    and looks forward, since that is the half of a forecast worth reading. A
+    rolling window over past data ends at now.
+    """
+    if not times or len(times) != len(values):
+        return values, times
+    start, end, mode = _window_bounds(page, now)
+    if mode == "rolling" and max(times) > now:
+        start = now.replace(minute=0, second=0, microsecond=0)
+        end = start + timedelta(hours=float(page.get("hours", 24)))
+    kept = [
+        (value, when)
+        for value, when in zip(values, times, strict=True)
+        if start <= when < end
+    ]
+    if not kept:
+        return values, times
+    return [value for value, _ in kept], [when for _, when in kept]
+
+
 async def async_prepare_graph(hass: HomeAssistant, page: dict[str, Any]) -> dict[str, Any]:
     """Fetch the series on the event loop and attach it to the page.
 
@@ -147,13 +197,14 @@ async def async_prepare_graph(hass: HomeAssistant, page: dict[str, Any]) -> dict
     executor-side renderer only ever sees plain numbers.
     """
     hours = float(page.get("hours", 24))
-    end = dt_util.utcnow()
-    start = end - timedelta(hours=hours)
+    now = dt_util.utcnow()
+    start, end, _mode = _window_bounds(page, now)
     values: list[float] = []
     times: list[datetime] = []
 
     if template := page.get("data_template"):
         values, times = _series_from_template(Template(str(template), hass).async_render())
+        values, times = _trim_to_window(values, times, page, now)
     else:
         statistic_id = str(page.get("statistic_id") or page.get("entity_id") or "")
         if not statistic_id:
@@ -271,6 +322,44 @@ def _draw_axis_label(
     draw_pixel_text(draw, (x, y), text, _blend(background, "#FFFFFF", 0.75), 2, "right")
 
 
+def _hour_marks(hours: list[int], left: int, width: int, step: int = 6) -> list[tuple[int, int]]:
+    """The ``(index, x)`` boundary of every column that starts a ``step`` hour block.
+
+    Bars fill their column except for the last pixel, which is the gap to the
+    next bar. The rule takes that gap pixel, so it runs between two bars rather
+    than over the first one, and still reads as the moment the hour begins.
+    """
+    marks: list[tuple[int, int]] = []
+    columns = len(hours)
+    for index, hour in enumerate(hours):
+        if hour % step or (index and hours[index - 1] == hour):
+            continue
+        marks.append((index, max(left, left + index * width // columns - 1)))
+    return marks
+
+
+def _draw_hour_grid(
+    draw: ImageDraw.ImageDraw,
+    background: str,
+    hours: list[int],
+    left: int,
+    width: int,
+    top: int,
+    bottom: int,
+    step: int = 6,
+) -> None:
+    """Dot a faint vertical rule down each labelled hour.
+
+    The rule lands on the same column as its label, so a bar can be read back to
+    the hour it belongs to. It dots every other row and draws before the series
+    so a bar covers it rather than the other way round.
+    """
+    ink = _blend(background, ENERGY_SOFT_INK, 0.35)
+    for _index, x in _hour_marks(hours, left, width, step):
+        for y in range(top, bottom, 2):
+            draw.point((x, y), fill=ink)
+
+
 def _draw_hour_labels(
     draw: ImageDraw.ImageDraw,
     background: str,
@@ -289,15 +378,12 @@ def _draw_hour_labels(
     if not hours:
         return
     label_ink = _blend(background, "#FFFFFF", 0.45)
-    columns = len(hours)
     cursor = 0
-    for index, hour in enumerate(hours):
-        if hour % step or (index and hours[index - 1] == hour):
-            continue
-        text = f"{hour:02d}"
+    for index, mark in _hour_marks(hours, left, width, step):
+        text = f"{hours[index]:02d}"
         text_width = pixel_text_size(text, 2)[0]
-        centre = left + (2 * index + 1) * width // (2 * columns)
-        x = max(0, min(SCREEN_SIZE - text_width, centre - text_width // 2))
+        # The label starts where its rule does, so the two read as one tick.
+        x = max(0, min(SCREEN_SIZE - text_width, mark))
         if x < cursor:
             continue
         draw_pixel_text(draw, (x, bottom + 1), text, label_ink, 2)
@@ -316,7 +402,12 @@ def render_graph(
         page_type: card
         card: graph
         entity_id: sensor.house_power   # or statistic_id, or data_template
-        hours: 24                       # window, ignored for data_template
+        hours: 24                       # length of the window, in hours
+        window: rolling                 # rolling ends at now; static starts at
+                                        # local midnight. A series that runs
+                                        # past now (a price forecast) anchors a
+                                        # rolling window on the current hour and
+                                        # looks forward instead.
         stat_type: mean                 # mean | change | min | max | sum | state
         style: area                     # area | line | bar
         color: "#FFB300"
@@ -377,6 +468,17 @@ def render_graph(
     low, high = _axis_bounds(page, columns)
     span = high - low
 
+    # One hour per plotted column, so both the rule and the label under it land
+    # on the column that holds that hour.
+    hours: list[int] = []
+    if page.get("x_labels"):
+        times = [dt_util.parse_datetime(t) for t in page.get("_times") or []]
+        if times and all(times):
+            hours = [
+                dt_util.as_local(times[min(len(times) - 1, index * len(times) // width)]).hour  # type: ignore[arg-type]
+                for index in range(width)
+            ]
+
     def to_y(value: float) -> int:
         ratio = (value - low) / span
         return int(bottom - 1 - max(0.0, min(1.0, ratio)) * (height - 1))
@@ -424,6 +526,11 @@ def render_graph(
     if low < 0 < high:
         draw.line([(left, zero_y), (right - 1, zero_y)], fill=_blend(background, "#FFFFFF", 0.35))
 
+    # The rules draw over the series, not under it: their job is to say which
+    # hour a bar belongs to, which they cannot do from behind a filled bar.
+    if hours:
+        _draw_hour_grid(draw, background, hours, left, width, top, bottom)
+
     marker = page.get("marker")
     if str(marker).lower() == "now":
         marker = _now_column(page, len(values))
@@ -431,10 +538,9 @@ def render_graph(
         # Highlight one column, e.g. the current hour on a forward price curve.
         position = int(marker) * width // max(1, len(values))
         marker_x = left + max(0, min(width - 1, position))
-        # The marker carries the colour of the value it marks, so the line above
-        # the bar says what the price is doing as well as where it sits.
-        index = max(0, min(len(values) - 1, int(marker)))
-        marker_ink = ink_for(values[index]) if values else _rgb("#FFFFFF")
+        # A grey marker reads as "you are here" against every bar colour. Taking
+        # the marked bar's own colour hid the line inside that bar.
+        marker_ink = _blend(background, ENERGY_SOFT_INK, 0.7)
         draw.line([(marker_x, top), (marker_x, bottom - 1)], fill=marker_ink)
 
     unit = page.get("unit")
@@ -442,16 +548,8 @@ def render_graph(
         _draw_axis_label(draw, background, format_axis(high, unit), top)
         _draw_axis_label(draw, background, format_axis(low, unit), bottom - 12)
 
-    if page.get("x_labels"):
-        times = [dt_util.parse_datetime(t) for t in page.get("_times") or []]
-        if times and all(times):
-            # One hour per plotted column, so a label lands on the column that
-            # holds that hour rather than at a fixed fraction of the axis.
-            hours = [
-                dt_util.as_local(times[min(len(times) - 1, index * len(times) // width)]).hour  # type: ignore[arg-type]
-                for index in range(width)
-            ]
-            _draw_hour_labels(draw, background, hours, left, width, bottom)
+    if hours:
+        _draw_hour_labels(draw, background, hours, left, width, bottom)
 
     if show_value:
         entity_id = str(page.get("value_entity") or page.get("entity_id") or "")
@@ -931,6 +1029,8 @@ def render_energy_history(
                     draw.rectangle([x0, to_y(far), x1, max(to_y(far), to_y(near) - 1)], fill=ink)
                 else:
                     draw.rectangle([x0, min(to_y(-far), to_y(-near) + 1), x1, to_y(-far)], fill=ink)
+
+    _draw_hour_grid(draw, background, list(range(columns)), left, width, top, bottom)
 
     # The zero rule only earns its row once something draws below it.
     if peak_down > 0:

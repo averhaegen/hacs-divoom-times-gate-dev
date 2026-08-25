@@ -184,3 +184,100 @@ def test_format_auto_picks_the_formatter_from_the_unit() -> None:
     assert format_auto(2.5, "kW") == "2.5kW"
     assert format_auto(55, "%") == "55%"
     assert format_auto(0.184, "EUR/kWh") == "0.184"
+
+
+def test_hour_marks_sit_in_the_gap_before_the_hour() -> None:
+    """A rule takes the gap pixel between two bars, not the bar itself."""
+    from custom_components.divoom_times_gate.graphs import _hour_marks
+
+    marks = _hour_marks(list(range(24)), left=1, width=120)
+
+    assert [index for index, _x in marks] == [0, 6, 12, 18]
+    # 120px over 24 columns is 5px an hour, so hour 6 starts 30px in and its
+    # rule takes the pixel before that. Hour 0 has no gap to its left.
+    assert [x for _index, x in marks] == [1, 30, 60, 90]
+
+
+def test_window_bounds_static_starts_at_local_midnight() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    now = dt_util.utcnow()
+    start, end, mode = _window_bounds({"hours": 24, "window": "static"}, now)
+
+    assert mode == "static"
+    assert dt_util.as_local(start).hour == 0
+    assert (end - start).total_seconds() == 24 * 3600
+
+
+def test_window_bounds_rolling_ends_at_now() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    now = dt_util.utcnow()
+    start, end, mode = _window_bounds({"hours": 6}, now)
+
+    assert mode == "rolling"
+    assert end == now
+    assert (end - start).total_seconds() == 6 * 3600
+
+
+def test_window_bounds_reject_an_unknown_window() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    with pytest.raises(ValueError, match="unknown window"):
+        _window_bounds({"window": "sliding"}, dt_util.utcnow())
+
+
+def test_trim_to_window_cuts_a_forecast_down_to_the_next_day() -> None:
+    """A 48 hour price list draws 24 hours from the current hour."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _trim_to_window
+
+    now = dt_util.utcnow()
+    start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=4)
+    times = [start + timedelta(hours=index) for index in range(48)]
+    values = [float(index) for index in range(48)]
+
+    kept_values, kept_times = _trim_to_window(values, times, {"hours": 24}, now)
+
+    assert len(kept_values) == 24
+    assert kept_times[0] == now.replace(minute=0, second=0, microsecond=0)
+
+
+def test_trim_to_window_static_keeps_today_only() -> None:
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _trim_to_window
+
+    now = dt_util.utcnow()
+    midnight = dt_util.as_utc(dt_util.start_of_local_day(dt_util.as_local(now)))
+    times = [midnight + timedelta(hours=index) for index in range(48)]
+    values = [float(index) for index in range(48)]
+
+    kept_values, kept_times = _trim_to_window(
+        values, times, {"hours": 24, "window": "static"}, now
+    )
+
+    assert len(kept_values) == 24
+    assert kept_times[0] == midnight
+    assert dt_util.as_local(kept_times[-1]).hour == 23
+
+
+def test_trim_to_window_leaves_a_series_without_timestamps_alone() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _trim_to_window
+
+    values = [1.0, 2.0, 3.0]
+
+    assert _trim_to_window(values, [], {"hours": 1}, dt_util.utcnow()) == (values, [])

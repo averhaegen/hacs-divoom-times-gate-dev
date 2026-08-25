@@ -32,6 +32,7 @@ from .const import (
     ENERGY_ROW_CHAR_WIDTH,
     ENERGY_ROW_FONT,
     ENERGY_ROW_HEIGHT,
+    ENERGY_SOFT_INK,
     SCREEN_SIZE,
 )
 from .dispdata import register_allowed_entity, register_value_template
@@ -313,6 +314,29 @@ def _text(
     draw_pixel_text(draw, xy, text, color, scale, align)
 
 
+def _title(
+    draw: ImageDraw.ImageDraw,
+    background: str,
+    text: str,
+    color: str,
+    y: int,
+    icon: str | None = None,
+) -> None:
+    """Draw a card header: left aligned, in a dimmed version of the card's colour.
+
+    Every card and both 24 hour graphs share this treatment, so a screen is
+    identified the same way wherever the eye lands first. An icon draws ahead of
+    the text at the text's own height, which keeps the pair on one optical line.
+    """
+    ink = _blend(background, color, 0.75)
+    x = 2
+    if icon:
+        size = round(pixel_text_size(text or "0", 2)[1] * 4 / 3)
+        if draw_icon(draw, icon, (x, y - 1), size, ink):
+            x += size + 3
+    _text(draw, (x, y), text, ink, 2)
+
+
 def _value_pair_width(unit: str, chars: int, char_width: int) -> int:
     """The pixel width of a ``_value`` number-and-unit pair.
 
@@ -457,7 +481,7 @@ def _draw_price(
         position = quantize_fraction(now, low, high, step=0.02)
     value_color = _hex(_blend(cheap, dear, position)) if known else "#FFFFFF"
 
-    _text(draw, (64, 6), str(page.get("name", "Price")), _blend(background, "#FFFFFF", 0.55), 2, "center")
+    _title(draw, background, str(page.get("name", "Price")), cheap, 6)
     _hero(hass, page, draw, items, poll_base, background, y=28, color=value_color)
     _text(draw, (64, 54), str(page.get("unit", "EUR/kWh")), _blend(background, "#FFFFFF", 0.45), 2, "center")
 
@@ -473,7 +497,7 @@ def _draw_price(
     # The marker overhangs the bar's top edge only. Overhanging the bottom too
     # left two pixels between it and the minimum price below, which reads as the
     # marker sitting on the text.
-    draw.rectangle([marker - 1, bar_y - 4, marker + 1, bar_y + bar_h], fill="#FFFFFF")
+    draw.rectangle([marker - 1, bar_y - 4, marker + 1, bar_y + bar_h], fill=_rgb(ENERGY_SOFT_INK))
     _text(draw, (bar_x, bar_y + bar_h + 6), format_price(low or 0.0), _rgb(cheap), 2)
     _text(draw, (bar_x + bar_w, bar_y + bar_h + 6), format_price(high or 0.0), _rgb(dear), 2, "right")
 
@@ -550,7 +574,7 @@ def _draw_power(
     export_color = str(page.get("export_color", ENERGY_COLORS["grid_export"]))
     totals: dict[str, float] = page.get("_totals") or {}
 
-    _text(draw, (64, 6), str(page.get("name", "House")), _blend(background, "#FFFFFF", 0.55), 2, "center")
+    _title(draw, background, str(page.get("name", "House")), import_color, 6, "mdi:home-lightning-bolt")
     # The live house load is the hero and stays a polled overlay. The freed rows
     # give it and the footer room, so sit it high and let the line breathe below.
     _hero(hass, page, draw, items, poll_base, background, y=34, color="#FFFFFF")
@@ -592,7 +616,7 @@ def _draw_battery(
     color = ENERGY_COLORS["battery_in"] if charging else ENERGY_COLORS["battery_out"]
     color = str(page.get("charge_color", color) if charging else page.get("discharge_color", color))
 
-    _text(draw, (64, 4), str(page.get("name", "Battery")), _blend(background, "#FFFFFF", 0.55), 2, "center")
+    _title(draw, background, str(page.get("name", "Battery")), color, 4, _battery_band_icon(soc, charging))
 
     bar_x, bar_y, bar_w, bar_h = 14, 24, SCREEN_SIZE - 28, 18
     draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], outline=_blend(background, color, 0.5))
@@ -649,7 +673,7 @@ def _draw_solar(
             x1 = max(x0, int((index + 1) * step) - 1)
             draw.rectangle([x0, SCREEN_SIZE - height, x1, SCREEN_SIZE], fill=faint)
 
-    _text(draw, (64, 6), str(page.get("name", "Solar")), _blend(background, "#FFFFFF", 0.55), 2, "center")
+    _title(draw, background, str(page.get("name", "Solar")), color, 6, "mdi:weather-sunny")
     _hero(hass, page, draw, items, poll_base, background, y=28, color=color)
     produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
     drew_goal = _draw_goal_bar(draw, page, background, color, produced, x=12, y=62, w=SCREEN_SIZE - 24, h=6)
@@ -736,12 +760,12 @@ def _draw_power_bar(
     zero_px = x + int(quantize_fraction(0.0, low, high, step=0.1) * w)
     rate_px = x + int(quantize_fraction(rate, low, high, step=0.1) * w)
 
-    draw.rectangle([x, y, x + w, y + h], outline=_blend(background, "#FFFFFF", 0.4))
+    draw.rectangle([x, y, x + w, y + h], outline=_blend(background, ENERGY_SOFT_INK, 0.5))
     lo_px, hi_px = sorted((zero_px, rate_px))
     if hi_px - lo_px >= 1:
         draw.rectangle([lo_px, y + 1, hi_px, y + h - 1], fill=_rgb(color))
     # The zero marker rides above and below the bar so it reads against the fill.
-    draw.rectangle([zero_px - 1, y - 2, zero_px + 1, y + h + 2], fill=_blend(background, "#FFFFFF", 0.85))
+    draw.rectangle([zero_px - 1, y - 2, zero_px + 1, y + h + 2], fill=_rgb(ENERGY_SOFT_INK))
 
 
 def _draw_solar_battery(
@@ -790,14 +814,14 @@ def _draw_solar_battery(
             x1 = max(x0, int((index + 1) * step) - 1)
             draw.rectangle([x0, solar_bottom - height, x1, solar_bottom], fill=faint)
 
-    _text(draw, (64, 1), str(page.get("name", "Energy")), _blend(background, "#FFFFFF", 0.5), 2, "center")
+    _title(draw, background, str(page.get("name", "Energy")), solar_color, 1, "mdi:weather-sunny")
     _hero(hass, page, draw, items, poll_base, background, y=12, color=solar_color)
     produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
     drew_goal = _draw_goal_bar(draw, page, background, solar_color, produced, x=12, y=34, w=SCREEN_SIZE - 24, h=5)
     if not drew_goal and produced is not None:
         _text(draw, (64, 42), f"{format_energy(produced)} today", _rgb(solar_color), 2, "center")
 
-    draw.line([(6, solar_bottom), (SCREEN_SIZE - 6, solar_bottom)], fill=_blend(background, "#FFFFFF", 0.25))
+    draw.line([(6, solar_bottom), (SCREEN_SIZE - 6, solar_bottom)], fill=_blend(background, ENERGY_SOFT_INK, 0.35))
 
     rate = as_float(page.get("_battery_power"), 0.0) or 0.0
     soc = as_float(page.get("_battery_soc"), 0.0) or 0.0
