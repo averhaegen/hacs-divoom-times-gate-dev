@@ -131,7 +131,7 @@ A panel picks its layout from `mode`:
 | `power` | House load large, one line of today's grid import and export each behind an arrow, then the gas and water footer band. |
 | `battery` | State-of-charge bar, percentage large, watts with a direction word. |
 | `solar` | Current production large, today's yield below, the day's curve behind. |
-| `solar_battery` | Solar on top with a goal bar, battery below with a charge-level icon and a bipolar power bar. Falls back to the plain `solar` or `battery` layout when only one side has a source, and to a blank screen when neither does. |
+| `solar_battery` | Solar on top with a sun icon beside its live figure and a goal bar under it, battery below with a charge-level icon and a bipolar power bar. Both halves lead with an icon next to the figure it describes, so the two rows read alike. Falls back to the plain `solar` or `battery` layout when only one side has a source, and to a blank screen when neither does. |
 
 The generator writes these pages for you. Document them here so you can edit a
 generated page or hand-write one.
@@ -146,7 +146,7 @@ name: Energy              # default "Energy"; the generator writes "Solar" or
                          # "Battery" for a single-source home
 # --- solar half (optional; omit to draw the battery half full height) ---
 solar_power_entity: sensor.solar_power   # live production, the hero figure
-solar_stat: sensor.solar_energy          # production statistic: today's yield + day curve
+solar_stat: sensor.solar_energy          # production statistic: today's yield
 color: "#FF9800"         # solar accent; default the dashboard's solar orange
 goal: 0                  # today's target in kWh for the goal bar. 0 or absent
                          # means no goal: the caption stays "x.x kWh today"
@@ -180,6 +180,8 @@ from the last seven days of recorder statistics, so you never configure them by
 hand. The charge direction rides the battery icon (an MDI battery band), so no
 direction word is spent; font 184 carries no minus glyph, so the power figure's
 sign is stripped and colour plus fill direction carry charge versus discharge.
+The combined card draws no day curve: the solar half spends its rows on the icon
+row and the goal bar. The single-source `solar` layout still draws the curve.
 
 ### `price` page keys for the cheapest and priciest hour
 
@@ -193,6 +195,61 @@ priciest_time: "07:00"   # baked under the high price; empty draws nothing
 # to read the time off the day-ahead price list. A missing or malformed list
 # renders empty, and the panel then draws no time.
 ```
+
+## `graph`
+
+A single series over time: an area, a line or one bar per hour, with optional
+axis labels, an hour axis and a live value overlay. The day-ahead price screen is
+this card.
+
+```yaml
+page_type: card
+card: graph
+entity_id: sensor.house_power   # or statistic_id, or data_template
+stat_type: mean                 # mean | change | min | max | sum | state
+period: 5minute                 # recorder resolution; defaults to 5minute up to
+                                # 26 hours of window and hour above that
+style: area                     # area | line | bar
+hours: 24                       # length of the window, in hours
+window: rolling                 # rolling | static
+hours_back: 6                   # rolling only, see below
+hours_forward: 24
+color: "#FFB300"
+negative_color: "#38BDF8"       # values below zero
+high_color: "#EF4444"           # values at or above high_value
+high_value: 0.25                # defaults to the series mean
+# color_template: >-            # a template returning a colour, rendered per tick
+title: Verbruik                 # baked into the background
+unit: W                         # drives the axis label formatting
+axis: true                      # right-hand min/max labels
+marker: now                     # column index, or "now" from the timestamps
+x_labels: true                  # hour labels along the bottom
+value: true                     # live value overlay (type-23)
+value_entity: sensor.house_power
+value_unit: EUR/kWh             # baked beside the value, keeps the polled
+                                # string to bare digits
+footer_height: 0                # rows reserved at the bottom
+```
+
+**Where the window sits.** `window: rolling` ends at now and reads `hours` of
+history. `window: static` starts at local midnight, so the axis holds still all
+day instead of sliding under the bars. A series that runs past now, such as a
+day-ahead price list, anchors a rolling window on the current whole hour and
+looks forward, which is how a 48 hour price sensor draws the next 24 hours.
+
+`hours_back` and `hours_forward` hang a rolling window off the current whole hour
+instead of ending it at now, so `hours_back: 6` with `hours_forward: 24` reads
+six hours of history and a day of forecast in one panel. Either key on its own is
+enough; the other side is then zero. A static window ignores both, and the
+recorder resolution follows the window rather than `hours`, since an offset
+window can span more time than `hours` names.
+
+**The hour axis.** With `x_labels: true` the card labels every sixth hour (00,
+06, 12, 18) and dots a faint grey rule up the panel at each of them. The rule
+takes the one pixel gap between two bars, so it runs between bars instead of over
+one, draws over the series rather than behind it, and carries on down beside its
+own label. The `energy_history` card uses the same axis, so the two screens read
+on one time scheme.
 
 ## `energy_history`
 
@@ -228,9 +285,10 @@ consumption_color: "#B4B4B4"  # net line; default const.ENERGY_SOFT_INK
 The bottom axis labels every sixth hour (00, 06, 12, 18), and a dotted grey rule
 runs up the panel at each of those hours so you can read which bar belongs to
 which hour. The rule takes the one pixel gap that sits between two bars, so it
-never covers a bar. The day-ahead price graph labels and rules its axis the same
-way, so the two screens read on one time scheme. This card is fixed to 24 hours
-from local midnight; the `graph` page type takes `hours` and `window` instead.
+never covers a bar, and it runs on past the plot beside its own label. The
+day-ahead price graph labels and rules its axis the same way, so the two screens
+read on one time scheme. This card is fixed to 24 hours from local midnight; the
+`graph` card takes `hours`, `window`, `hours_back` and `hours_forward` instead.
 
 **Optional keys and what happens without them.** The graph draws whichever
 sources the home reports and nothing else, so a grid-only meter draws a

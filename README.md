@@ -520,12 +520,16 @@ screens are:
    cheapest and dearest hour, and the clock time each of those falls on.
 2. House load, with today's grid import and export on one line, each behind an
    arrow, and the gas and water totals along the bottom.
-3. Solar and battery on one screen: solar production with a goal bar reading
-   toward today's Forecast.Solar target, and the battery below it with a
-   charge-level icon that carries the charge direction and a bipolar power bar.
-4. The day-ahead price graph.
-5. A 24 hour history of today's solar production and house consumption, one bar
-   per hour from local midnight.
+3. Solar and battery on one screen: solar production behind a sun icon with a
+   goal bar reading toward today's Forecast.Solar target, and the battery below
+   it with a charge-level icon that carries the charge direction and a bipolar
+   power bar. Both rows lead with an icon beside the figure it describes.
+4. The day-ahead price graph, the next 24 hours with an hour axis at 00, 06, 12
+   and 18.
+5. A 24 hour history of today's energy, one stacked bar per hour from local
+   midnight: solar, grid import and battery discharge above the zero rule, grid
+   export and battery charge below it, so the height of a bar is what the house
+   used. Bands only appear for the sources the home reports.
 
 A home missing solar or a battery still gets the merged screen, drawn with only
 the half it has. A home with neither gets a blank slot there instead.

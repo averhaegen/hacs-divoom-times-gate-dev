@@ -401,6 +401,11 @@ built anyway:
   import and battery discharge up, grid export and battery charge down, with the
   derived house consumption as a light grey line over the top. Only the sources
   the home reports get a band or a legend entry.
+- [x] **Hour axis and window options on the graph cards.** Both 24 hour graphs
+  label every sixth hour and dot a grey rule at it, taking the gap between two
+  bars and running on beside the label. The `graph` card takes `hours`,
+  `window` (rolling or static) and the `hours_back`/`hours_forward` offsets, so
+  a 48 hour price forecast can draw six hours of history and a day ahead.
 - [x] **Compact house screen.** Import and export collapse onto one line, each
   behind an MDI arrow, and the gas and water footer moves here from the price
   graph, which goes back to full height.

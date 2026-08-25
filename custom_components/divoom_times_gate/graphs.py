@@ -142,6 +142,10 @@ def _resample(values: list[float], columns: int) -> list[float]:
 
 WINDOW_MODES = ("rolling", "static")
 
+# How far an hour rule runs past the plot: down the side of its own label, so
+# the tick and the number it names read as one mark.
+HOUR_LABEL_HEIGHT = 9
+
 
 def _window_bounds(page: dict[str, Any], now: datetime) -> tuple[datetime, datetime, str]:
     """The recorder window this page asks for, as ``(start, end, mode)``.
@@ -366,16 +370,21 @@ def _draw_hour_grid(
     top: int,
     bottom: int,
     step: int = 6,
+    extend: int = 0,
 ) -> None:
     """Dot a faint vertical rule down each labelled hour.
 
     The rule lands on the same column as its label, so a bar can be read back to
-    the hour it belongs to. It dots every other row and draws before the series
-    so a bar covers it rather than the other way round.
+    the hour it belongs to. It dots every other row and draws over the series,
+    since a rule hidden behind a bar cannot say which hour the bar is.
+
+    ``extend`` carries the rule past the plot and down beside the label, which
+    ties the two together instead of leaving the label floating under a gap.
     """
     ink = _blend(background, ENERGY_SOFT_INK, 0.35)
+    end = min(SCREEN_SIZE, bottom + extend)
     for _index, x in _hour_marks(hours, left, width, step):
-        for y in range(top, bottom, 2):
+        for y in range(top, end, 2):
             draw.point((x, y), fill=ink)
 
 
@@ -550,7 +559,16 @@ def render_graph(
     # The rules draw over the series, not under it: their job is to say which
     # hour a bar belongs to, which they cannot do from behind a filled bar.
     if hours:
-        _draw_hour_grid(draw, background, hours, left, width, top, bottom)
+        _draw_hour_grid(
+            draw,
+            background,
+            hours,
+            left,
+            width,
+            top,
+            bottom,
+            extend=HOUR_LABEL_HEIGHT if page.get("x_labels") else 0,
+        )
 
     marker = page.get("marker")
     if str(marker).lower() == "now":
@@ -1051,7 +1069,9 @@ def render_energy_history(
                 else:
                     draw.rectangle([x0, min(to_y(-far), to_y(-near) + 1), x1, to_y(-far)], fill=ink)
 
-    _draw_hour_grid(draw, background, list(range(columns)), left, width, top, bottom)
+    _draw_hour_grid(
+        draw, background, list(range(columns)), left, width, top, bottom, extend=HOUR_LABEL_HEIGHT
+    )
 
     # The zero rule only earns its row once something draws below it.
     if peak_down > 0:
