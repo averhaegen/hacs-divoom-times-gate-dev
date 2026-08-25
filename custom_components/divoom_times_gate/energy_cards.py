@@ -433,6 +433,7 @@ def _hero(
     *,
     y: int,
     color: str,
+    left: int | None = None,
 ) -> None:
     """The one figure the panel exists for, with its unit beside it."""
     _value(
@@ -451,6 +452,7 @@ def _hero(
         char_width=ENERGY_HERO_CHAR_WIDTH,
         entity_id=page.get("entity_id"),
         value_template=page.get("_hero_template") or page.get("value_template"),
+        left=left,
     )
 
 
@@ -795,31 +797,42 @@ def _draw_solar_battery(
 
     solar_color = str(page.get("color", ENERGY_COLORS["solar"]))
     totals: dict[str, float] = page.get("_totals") or {}
-    curve = [v for v in (page.get("_curve") or []) if isinstance(v, int | float)]
 
-    # The dim day curve sits behind the solar half only. Keep it short so its
-    # top stays below the goal caption at y=42, or the number would cross the
-    # silhouette. That leaves the bar and its caption reading as one unit.
+    # No day curve on this card. The solar half spends its 60 rows on the same
+    # icon-and-figure row the battery half uses, and the silhouette would have
+    # to run under the goal caption to fit. The solar-only screen still draws it.
     solar_bottom = 60
-    curve_height = 10
-    if curve:
-        peak = max(max(curve), 1.0)
-        step = SCREEN_SIZE / len(curve)
-        faint = _blend(background, solar_color, 0.3)
-        for index, value in enumerate(curve):
-            height = int((value / peak) * curve_height)
-            if height <= 0:
-                continue
-            x0 = int(index * step)
-            x1 = max(x0, int((index + 1) * step) - 1)
-            draw.rectangle([x0, solar_bottom - height, x1, solar_bottom], fill=faint)
 
-    _title(draw, background, str(page.get("name", "Energy")), solar_color, 1, "mdi:weather-sunny")
-    _hero(hass, page, draw, items, poll_base, background, y=12, color=solar_color)
+    _title(draw, background, str(page.get("name", "Energy")), solar_color, 1)
+
+    # Both halves of this card lead with a large icon beside their live figure,
+    # so the solar row reads as the same kind of row as the battery row below it
+    # rather than as a heading with a number under it.
+    sun_size = 26
+    sun_y = 12
+    sun_gap = 6
+    hero_width = _value_pair_width(
+        str(page.get("_hero_unit") or ""),
+        int(page.get("_hero_chars") or 5),
+        ENERGY_HERO_CHAR_WIDTH,
+    )
+    sun_group_x = max(0, (SCREEN_SIZE - (sun_size + sun_gap + hero_width)) // 2)
+    draw_icon(draw, "mdi:weather-sunny", (sun_group_x, sun_y), sun_size, _rgb(solar_color))
+    _hero(
+        hass,
+        page,
+        draw,
+        items,
+        poll_base,
+        background,
+        y=sun_y + (sun_size - ENERGY_HERO_HEIGHT) // 2,
+        color=solar_color,
+        left=sun_group_x + sun_size + sun_gap,
+    )
     produced = totals.get(str(page.get("solar_stat"))) if page.get("solar_stat") else None
-    drew_goal = _draw_goal_bar(draw, page, background, solar_color, produced, x=12, y=34, w=SCREEN_SIZE - 24, h=5)
+    drew_goal = _draw_goal_bar(draw, page, background, solar_color, produced, x=12, y=42, w=SCREEN_SIZE - 24, h=5)
     if not drew_goal and produced is not None:
-        _text(draw, (64, 42), f"{format_energy(produced)} today", _rgb(solar_color), 2, "center")
+        _text(draw, (64, 50), f"{format_energy(produced)} today", _rgb(solar_color), 2, "center")
 
     draw.line([(6, solar_bottom), (SCREEN_SIZE - 6, solar_bottom)], fill=_blend(background, ENERGY_SOFT_INK, 0.35))
 

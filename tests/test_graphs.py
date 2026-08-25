@@ -281,3 +281,75 @@ def test_trim_to_window_leaves_a_series_without_timestamps_alone() -> None:
     values = [1.0, 2.0, 3.0]
 
     assert _trim_to_window(values, [], {"hours": 1}, dt_util.utcnow()) == (values, [])
+
+
+def test_window_bounds_hang_a_rolling_window_off_the_current_hour() -> None:
+    """hours_back plus hours_forward straddles now instead of ending at it."""
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    now = dt_util.utcnow()
+    start, end, mode = _window_bounds({"hours_back": 6, "hours_forward": 24}, now)
+
+    anchor = now.replace(minute=0, second=0, microsecond=0)
+    assert mode == "rolling"
+    assert (anchor - start).total_seconds() == 6 * 3600
+    assert (end - anchor).total_seconds() == 24 * 3600
+
+
+def test_window_bounds_take_one_offset_on_its_own() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    now = dt_util.utcnow()
+    start, end, _mode = _window_bounds({"hours_forward": 12}, now)
+
+    assert start == now.replace(minute=0, second=0, microsecond=0)
+    assert (end - start).total_seconds() == 12 * 3600
+
+
+def test_window_bounds_reject_offsets_that_span_no_time() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    with pytest.raises(ValueError, match="no time at all"):
+        _window_bounds({"hours_back": 0, "hours_forward": 0}, dt_util.utcnow())
+
+
+def test_window_bounds_ignore_offsets_on_a_static_window() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _window_bounds
+
+    now = dt_util.utcnow()
+    start, end, _mode = _window_bounds(
+        {"window": "static", "hours": 24, "hours_forward": 6}, now
+    )
+
+    assert dt_util.as_local(start).hour == 0
+    assert (end - start).total_seconds() == 24 * 3600
+
+
+def test_trim_to_window_keeps_both_sides_of_an_offset_window() -> None:
+    """A forecast with history in it keeps the past hours the page asks for."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.divoom_times_gate.graphs import _trim_to_window
+
+    now = dt_util.utcnow()
+    anchor = now.replace(minute=0, second=0, microsecond=0)
+    times = [anchor - timedelta(hours=12) + timedelta(hours=i) for i in range(48)]
+    values = [float(i) for i in range(48)]
+
+    kept_values, kept_times = _trim_to_window(
+        values, times, {"hours_back": 6, "hours_forward": 24}, now
+    )
+
+    assert len(kept_values) == 30
+    assert kept_times[0] == anchor - timedelta(hours=6)
+    assert kept_times[-1] == anchor + timedelta(hours=23)

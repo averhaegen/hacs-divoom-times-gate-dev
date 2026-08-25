@@ -149,6 +149,12 @@ def _window_bounds(page: dict[str, Any], now: datetime) -> tuple[datetime, datet
     ``hours`` is how much time the graph covers and ``window`` is where that time
     sits: ``rolling`` ends at now, ``static`` starts at local midnight so the
     axis holds still all day instead of sliding under the bars.
+
+    A rolling window can straddle now instead of ending at it: ``hours_back``
+    and ``hours_forward`` hang the window off the current whole hour, so
+    ``hours_back: 6`` with ``hours_forward: 24`` reads six hours of history and a
+    day of forecast. Either one on its own is enough; the other side is then
+    zero. Both are ignored by a static window, which is pinned to midnight.
     """
     hours = float(page.get("hours", 24))
     mode = str(page.get("window", "rolling")).lower()
@@ -157,6 +163,14 @@ def _window_bounds(page: dict[str, Any], now: datetime) -> tuple[datetime, datet
     if mode == "static":
         start = dt_util.as_utc(dt_util.start_of_local_day(dt_util.as_local(now)))
         return start, start + timedelta(hours=hours), mode
+    back, forward = page.get("hours_back"), page.get("hours_forward")
+    if back is not None or forward is not None:
+        anchor = now.replace(minute=0, second=0, microsecond=0)
+        start = anchor - timedelta(hours=float(back or 0))
+        end = anchor + timedelta(hours=float(forward or 0))
+        if end <= start:
+            raise ValueError("graph: hours_back and hours_forward add up to no time at all")
+        return start, end, mode
     return now - timedelta(hours=hours), now, mode
 
 
@@ -172,12 +186,14 @@ def _trim_to_window(
 
     A rolling window over a series that runs past now anchors on the current hour
     and looks forward, since that is the half of a forecast worth reading. A
-    rolling window over past data ends at now.
+    rolling window over past data ends at now. A window that already names its
+    own two sides with ``hours_back``/``hours_forward`` is taken as written.
     """
     if not times or len(times) != len(values):
         return values, times
     start, end, mode = _window_bounds(page, now)
-    if mode == "rolling" and max(times) > now:
+    explicit = page.get("hours_back") is not None or page.get("hours_forward") is not None
+    if mode == "rolling" and not explicit and max(times) > now:
         start = now.replace(minute=0, second=0, microsecond=0)
         end = start + timedelta(hours=float(page.get("hours", 24)))
     kept = [
@@ -199,6 +215,9 @@ async def async_prepare_graph(hass: HomeAssistant, page: dict[str, Any]) -> dict
     hours = float(page.get("hours", 24))
     now = dt_util.utcnow()
     start, end, _mode = _window_bounds(page, now)
+    # The window, not the ``hours`` key, decides the recorder resolution: an
+    # offset window can span more time than ``hours`` names.
+    hours = (end - start).total_seconds() / 3600
     values: list[float] = []
     times: list[datetime] = []
 
@@ -408,6 +427,8 @@ def render_graph(
                                         # past now (a price forecast) anchors a
                                         # rolling window on the current hour and
                                         # looks forward instead.
+        hours_back: 6                   # rolling only: hang the window off the
+        hours_forward: 24               # current hour instead of ending at now
         stat_type: mean                 # mean | change | min | max | sum | state
         style: area                     # area | line | bar
         color: "#FFB300"
